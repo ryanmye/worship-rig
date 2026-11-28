@@ -40,7 +40,8 @@ std::uint32_t rankOf(std::uint32_t cp) {
 
 const CollExp *expansionOf(std::uint32_t cp) {
   const CollExp *end = kExpansions + sizeof kExpansions / sizeof kExpansions[0];
-  const CollExp *it = std::lower_bound(kExpansions, end, cp, [](const CollExp &e, std::uint32_t c) { return e.cp < c; });
+  const CollExp *it =
+      std::lower_bound(kExpansions, end, cp, [](const CollExp &e, std::uint32_t c) { return e.cp < c; });
   return it != end && it->cp == cp ? it : nullptr;
 }
 
@@ -125,8 +126,20 @@ int cmpElem(const Elem &a, const Elem &b) {
 
 bool isJsSpace(std::uint32_t c) {
   switch (c) {
-    case 0x09: case 0x0A: case 0x0B: case 0x0C: case 0x0D: case 0x20: case 0xA0: case 0x1680: case 0x2028:
-    case 0x2029: case 0x202F: case 0x205F: case 0x3000: case 0xFEFF:
+    case 0x09:
+    case 0x0A:
+    case 0x0B:
+    case 0x0C:
+    case 0x0D:
+    case 0x20:
+    case 0xA0:
+    case 0x1680:
+    case 0x2028:
+    case 0x2029:
+    case 0x202F:
+    case 0x205F:
+    case 0x3000:
+    case 0xFEFF:
       return true;
     default:
       return c >= 0x2000 && c <= 0x200A;

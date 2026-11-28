@@ -92,7 +92,8 @@ int main(int argc, char **argv) {
   if (cmd == "collate") {
     std::vector<std::pair<std::string, std::string>> v;  // decoded, original line
     for (const std::string &l : lines) v.emplace_back(decodeUtf8(unhex(l)), l);
-    std::stable_sort(v.begin(), v.end(), [](const auto &a, const auto &b) { return jsLocaleCompare(a.first, b.first) < 0; });
+    std::stable_sort(v.begin(), v.end(),
+                     [](const auto &a, const auto &b) { return jsLocaleCompare(a.first, b.first) < 0; });
     for (const auto &p : v) std::cout << p.second << '\n';
     return 0;
   }

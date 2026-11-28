@@ -81,7 +81,8 @@ TEST_SUITE("hostkit-json") {
     CHECK(roundTrip(R"({"b":1,"a":2,"b":3,"1":4,"01":5,"4294967295":6,"4294967294":7,"__proto__":8})") ==
           R"({"1":4,"4294967294":7,"b":3,"a":2,"01":5,"4294967295":6,"__proto__":8})");
     CHECK(roundTrip(R"("\ud800x\udc00")") == R"("\ud800x\udc00")");
-    CHECK(roundTrip(R"("\uD83C\uDFB9\u00e9\u0001\u001f\u2028\/")") == "\"\xF0\x9F\x8E\xB9\xC3\xA9\\u0001\\u001f\xE2\x80\xA8/\"");
+    CHECK(roundTrip(R"("\uD83C\uDFB9\u00e9\u0001\u001f\u2028\/")") ==
+          "\"\xF0\x9F\x8E\xB9\xC3\xA9\\u0001\\u001f\xE2\x80\xA8/\"");
     CHECK(roundTrip("[1e400,-1e400,-0,5.0,1e21,1e-7,123456789012345678901234,0.000001,2.2250738585072011e-308]") ==
           "[null,null,0,5,1e+21,1e-7,1.2345678901234569e+23,0.000001,2.225073858507201e-308]");
     CHECK(roundTrip("[0.1,1.5e300,-1.25e-9,100,1e20,123e-20,9007199254740993,4.9e-324]") ==
@@ -89,15 +90,18 @@ TEST_SUITE("hostkit-json") {
     CHECK(roundTrip(" \t\r\n[true , false,null ] ") == "[true,false,null]");
   }
   TEST_CASE("JSON.parse rejects what V8 rejects") {
-    for (const char *bad : {"", " ", "\xEF\xBB\xBF{}", "[1,]", "{\"a\":1,}", "01", "1.", ".5", "+1", "1e", "NaN",
-                            "\"a\x01\"", "\"\\x\"", "\"\\u12G4\"", "[1]x", "\f1", "tru", "{\"a\" 1}", "[", "\"abc"}) {
+    for (const char *bad :
+         {"",          " ",       "\xEF\xBB\xBF{}", "[1,]", "{\"a\":1,}", "01",  "1.",        ".5", "+1",   "1e", "NaN",
+          "\"a\x01\"", "\"\\x\"", "\"\\u12G4\"",    "[1]x", "\f1",        "tru", "{\"a\" 1}", "[",  "\"abc"}) {
       bool ok = true;
       roundTrip(bad, &ok);
       CHECK_MESSAGE(!ok, bad);
     }
-    CHECK(jsonParse("{\"a\":1,}").error == "Expected double-quoted property name in JSON at position 7 (line 1 column 8)");
+    CHECK(jsonParse("{\"a\":1,}").error ==
+          "Expected double-quoted property name in JSON at position 7 (line 1 column 8)");
     CHECK(jsonParse("[1,]").error == "Unexpected token ']', \"[1,]\" is not valid JSON");
-    CHECK(jsonParse("\r\n[0 1]").error == "Expected ',' or ']' after array element in JSON at position 5 (line 2 column 4)");
+    CHECK(jsonParse("\r\n[0 1]").error ==
+          "Expected ',' or ']' after array element in JSON at position 5 (line 2 column 4)");
     CHECK(jsonParse("NaN").error == "\"NaN\" is not valid JSON");
   }
   TEST_CASE("deeperThan(v, 64): 64 nested arrays pass, 65 do not; deep containers become null") {
@@ -134,33 +138,46 @@ TEST_SUITE("hostkit-json") {
 
 TEST_SUITE("hostkit-text") {
   TEST_CASE("Node's UTF-8 decode (WHATWG: one U+FFFD per maximal invalid subpart)") {
-    CHECK(decodeUtf8("a\xFF" "b") == "a\xEF\xBF\xBD" "b");
+    CHECK(decodeUtf8("a\xFF"
+                     "b") ==
+          "a\xEF\xBF\xBD"
+          "b");
     CHECK(decodeUtf8("\xED\xA0\x80") == "\xEF\xBF\xBD\xEF\xBF\xBD\xEF\xBF\xBD");
     CHECK(decodeUtf8("\xF0\x90\"") == "\xEF\xBF\xBD\"");
     CHECK(decodeUtf8("\xC3") == "\xEF\xBF\xBD");
-    CHECK(decodeUtf8("\xEF\xBB\xBF" "x") == "\xEF\xBB\xBF" "x");  // the BOM stays
+    CHECK(decodeUtf8("\xEF\xBB\xBF"
+                     "x") ==
+          "\xEF\xBB\xBF"
+          "x");  // the BOM stays
   }
   TEST_CASE(".length, .slice(0, n), .trim()") {
     CHECK(jsLength("a\xF0\x9F\x8E\xB9") == 3);
-    CHECK(jsSliceStart("a\xF0\x9F\x8E\xB9" "b", 2) == "a\xED\xA0\xBC");  // a lone high surrogate, as JS leaves it
-    CHECK(q(jsSliceStart("a\xF0\x9F\x8E\xB9" "b", 2)) == "\"a\\ud83c\"");
+    CHECK(jsSliceStart("a\xF0\x9F\x8E\xB9"
+                       "b",
+                       2) == "a\xED\xA0\xBC");  // a lone high surrogate, as JS leaves it
+    CHECK(q(jsSliceStart("a\xF0\x9F\x8E\xB9"
+                         "b",
+                         2)) == "\"a\\ud83c\"");
     CHECK(jsSliceStart("abc", 10) == "abc");
     CHECK(jsTrim("\xE3\x80\x80 \t\xC2\xA0x y\xEF\xBB\xBF\n") == "x y");
-    CHECK(jsTrim("\xE2\x80\x8B" "x") == "\xE2\x80\x8B" "x");  // U+200B is not white space
+    CHECK(jsTrim("\xE2\x80\x8B"
+                 "x") ==
+          "\xE2\x80\x8B"
+          "x");  // U+200B is not white space
   }
   TEST_CASE("localeCompare(numeric, base): ICU order of the names packs use") {
     CHECK(jsLocaleCompare("song2.json", "song10.json") < 0);
     CHECK(jsLocaleCompare("Pack 1", "pack 1") == 0);
     CHECK(jsLocaleCompare("01", "1") == 0);
-    CHECK(jsLocaleCompare("\xC3\xA9tude", "etude") == 0);   // accents are secondary
-    CHECK(jsLocaleCompare("e\xCC\x81", "\xC3\xA9") == 0);    // NFD = NFC
-    CHECK(jsLocaleCompare("\xC3\x9F", "ss") == 0);           // expansion
-    CHECK(jsLocaleCompare("a b", "ab") < 0);                 // space is not ignorable in root
+    CHECK(jsLocaleCompare("\xC3\xA9tude", "etude") == 0);  // accents are secondary
+    CHECK(jsLocaleCompare("e\xCC\x81", "\xC3\xA9") == 0);  // NFD = NFC
+    CHECK(jsLocaleCompare("\xC3\x9F", "ss") == 0);         // expansion
+    CHECK(jsLocaleCompare("a b", "ab") < 0);               // space is not ignorable in root
     CHECK(jsLocaleCompare("_x", "-x") < 0);
-    CHECK(jsLocaleCompare("\xF0\x9F\x8E\xB9", "1") < 0);     // symbols before digits
+    CHECK(jsLocaleCompare("\xF0\x9F\x8E\xB9", "1") < 0);  // symbols before digits
     CHECK(jsLocaleCompare("9", "a") < 0);
     CHECK(jsLocaleCompare("\xEA\xB0\x80\xE6\xBC\xA2", "\xEA\xB0\x81") > 0);  // Hangul as jamo: 가漢 > 각
-    CHECK(jsLocaleCompare("\xD9\xA3", "3") == 0);            // Arabic-Indic three
+    CHECK(jsLocaleCompare("\xD9\xA3", "3") == 0);                            // Arabic-Indic three
   }
 }
 
@@ -170,7 +187,8 @@ TEST_SUITE("hostkit-scan") {
     const std::string a = t.file("root A/Pack \xC3\xA9/songs/one.json",
                                  R"({"app":"worship-rig","kind":"song","schema":2,"song":{"name":"Lantern","id":"x",)"
                                  R"("patch":{"slots":[{}]}},"bank":{"title":"Lantern"}})");
-    const std::string b = t.file("root A/Pack \xC3\xA9/songs/list.json", R"([{"name":"A","patch":{}},{"name":5,"patch":{}}])");
+    const std::string b =
+        t.file("root A/Pack \xC3\xA9/songs/list.json", R"([{"name":"A","patch":{}},{"name":5,"patch":{}}])");
     setMtime(a, 1767341045, 678000000);
     setMtime(b, 1767341045, 678000000);
     const std::string want =
@@ -202,12 +220,14 @@ TEST_SUITE("hostkit-scan") {
     pack("g-dir", nullptr);
     TempDir::mkdirs(t.path + "/r/g-dir/pack.json");
     const std::string out = scan("[" + q(t.path + "/r") + "]");
-    CHECK(out.find(R"("b-invalid/pack.json: Expected property name or '}' in JSON at position 1 (line 1 column 2); read as \"auto\"")") !=
-          std::string::npos);
-    CHECK(out.find(R"("c-array/pack.json: pack.json must be an object such as {\"mode\": \"bank\"}; read as \"auto\"")") !=
+    CHECK(out.find(R"("b-invalid/pack.json: Expected property name or '}' in JSON at position 1 (line 1 column 2); )"
+                   R"(read as \"auto\"")") != std::string::npos);
+    CHECK(out.find(
+              R"("c-array/pack.json: pack.json must be an object such as {\"mode\": \"bank\"}; read as \"auto\"")") !=
           std::string::npos);
     CHECK(out.find(R"("d-big/pack.json: pack.json is too large; read as \"auto\"")") != std::string::npos);
-    CHECK(out.find(R"("e-mode/pack.json: \"mode\" must be \"auto\" or \"bank\"; read as \"auto\"")") != std::string::npos);
+    CHECK(out.find(R"("e-mode/pack.json: \"mode\" must be \"auto\" or \"bank\"; read as \"auto\"")") !=
+          std::string::npos);
     CHECK(out.find(R"({"slug":"f-name","mode":"bank","songs":1,"files":1,"name":")" + std::string(120, 'n') + "\"}") !=
           std::string::npos);
     CHECK(out.find(R"("g-dir/pack.json: EISDIR: illegal operation on a directory, read; read as \"auto\"")") !=
@@ -239,9 +259,12 @@ TEST_SUITE("hostkit-scan") {
     CHECK(out.find("hidden") == std::string::npos);
     CHECK(out.find("folder.json") == std::string::npos);
     CHECK(out.find("nested/") == std::string::npos);
-    CHECK(out.find(R"("P/songs/bad.json: not valid JSON (Unexpected end of JSON input); skipped")") != std::string::npos);
-    CHECK(out.find(R"("P/songs/bom.json: not valid JSON (Unexpected token '﻿', \"﻿{\"app\":\"w\"... is not valid JSON); skipped")") !=
+    CHECK(out.find(R"("P/songs/bad.json: not valid JSON (Unexpected end of JSON input); skipped")") !=
           std::string::npos);
+    CHECK(
+        out.find(
+            R"("P/songs/bom.json: not valid JSON (Unexpected token '﻿', \"﻿{\"app\":\"w\"... is not valid JSON); )"
+            R"(skipped")") != std::string::npos);
     CHECK(out.find(R"("P/songs/huge.json: is larger than 1 MB; skipped")") != std::string::npos);
     CHECK(out.find(R"("P/songs/deep.json: nested too deeply; skipped")") != std::string::npos);
     CHECK(out.find(R"("P/songs/out.json: is a link to a file outside the pack; skipped")") != std::string::npos);
@@ -263,15 +286,18 @@ TEST_SUITE("hostkit-scan") {
     t.file("one/" + longSlug + "/songs/l.json", kSong);
     const std::string roots = "[" + q(t.path + "/one") + "," + q(t.path + "/two/") + "," + q(t.path + "/missing") + "]";
     const std::string out = scan(roots);
-    CHECK(out.find("\"" + t.path + "/two/Cedar: a pack named \\\"Cedar\\\" was already found in an earlier folder; skipped\"") !=
+    CHECK(out.find("\"" + t.path +
+                   "/two/Cedar: a pack named \\\"Cedar\\\" was already found in an earlier folder; skipped\"") !=
           std::string::npos);
     CHECK(out.find("\"" + t.path + "/one/E-link: is a link to a folder outside My Samples (" + t.path +
                    "/elsewhere/E); skipped\"") != std::string::npos);
     CHECK(out.find(R"("col:on: a pack folder name must not contain \":\"; skipped")") != std::string::npos);
     // .slice(0, 40) cuts the emoji's surrogate pair: JSON.stringify escapes the lone half
-    CHECK(out.find("\"" + std::string(39, 'L') + "\\ud83c\xE2\x80\xA6: a pack folder name must be at most 200 characters; skipped\"") !=
+    CHECK(out.find("\"" + std::string(39, 'L') +
+                   "\\ud83c\xE2\x80\xA6: a pack folder name must be at most 200 characters; skipped\"") !=
           std::string::npos);
-    CHECK(out.find("\"packId\":\"\xED\x95\x9C\xEA\xB8\x80 \xF0\x9F\x8E\xB9:\xE8\xB5\x9E\xE7\xBE\x8E.json\"") != std::string::npos);
+    CHECK(out.find("\"packId\":\"\xED\x95\x9C\xEA\xB8\x80 \xF0\x9F\x8E\xB9:\xE8\xB5\x9E\xE7\xBE\x8E.json\"") !=
+          std::string::npos);
     CHECK(out.find("Instruments") == std::string::npos);  // a pack without songs is not a patch pack
     CHECK(rig_hostkit_has_patches(roots.c_str()) == 1);
     CHECK(rig_hostkit_has_patches(("[" + q(t.path + "/two/Instruments") + "]").c_str()) == 0);
@@ -281,12 +307,14 @@ TEST_SUITE("hostkit-scan") {
 
   TEST_CASE("user: instruments are checked only when ids are given") {
     TempDir t;
-    t.file("r/U/songs/u.json", R"({"name":"U","patch":{"slots":[{"instrument":{"id":"user:a"}},{"instrument":{"id":"user:b"}}]}})");
+    t.file("r/U/songs/u.json",
+           R"({"name":"U","patch":{"slots":[{"instrument":{"id":"user:a"}},{"instrument":{"id":"user:b"}}]}})");
     const std::string roots = "[" + q(t.path + "/r") + "]";
     CHECK(scan(roots).find("which no My Samples pack has") == std::string::npos);
     CHECK(scan(roots, "null").find("which no My Samples pack has") == std::string::npos);
     const std::string out = scan(roots, R"(["user:a"])");
-    CHECK(out.find(R"("U/songs/u.json: uses \"user:b\", which no My Samples pack has; it will not sound")") != std::string::npos);
+    CHECK(out.find(R"("U/songs/u.json: uses \"user:b\", which no My Samples pack has; it will not sound")") !=
+          std::string::npos);
     CHECK(out.find("user:a\\\", which") == std::string::npos);
   }
 

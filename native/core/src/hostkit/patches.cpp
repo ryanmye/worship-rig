@@ -82,66 +82,47 @@ struct FsError {
   bool enoent = false;
 };
 
-const char *uvName(int e) {
-  switch (e) {
-    case EACCES: return "EACCES";
-    case EAGAIN: return "EAGAIN";
-    case EBADF: return "EBADF";
-    case EBUSY: return "EBUSY";
-    case EFAULT: return "EFAULT";
-    case EFBIG: return "EFBIG";
-    case EINTR: return "EINTR";
-    case EINVAL: return "EINVAL";
-    case EIO: return "EIO";
-    case EISDIR: return "EISDIR";
-    case ELOOP: return "ELOOP";
-    case EMFILE: return "EMFILE";
-    case ENAMETOOLONG: return "ENAMETOOLONG";
-    case ENFILE: return "ENFILE";
-    case ENODEV: return "ENODEV";
-    case ENOENT: return "ENOENT";
-    case ENOMEM: return "ENOMEM";
-    case ENOTDIR: return "ENOTDIR";
-    case ENXIO: return "ENXIO";
-    case EOVERFLOW: return "EOVERFLOW";
-    case EPERM: return "EPERM";
-    case ETIMEDOUT: return "ETIMEDOUT";
-    default: return "UNKNOWN";
-  }
-}
-
-const char *uvText(int e) {  // libuv uv-common.c UV_ERRNO_MAP
-  switch (e) {
-    case EACCES: return "permission denied";
-    case EAGAIN: return "resource temporarily unavailable";
-    case EBADF: return "bad file descriptor";
-    case EBUSY: return "resource busy or locked";
-    case EFAULT: return "bad address in system call argument";
-    case EFBIG: return "file too large";
-    case EINTR: return "interrupted system call";
-    case EINVAL: return "invalid argument";
-    case EIO: return "i/o error";
-    case EISDIR: return "illegal operation on a directory";
-    case ELOOP: return "too many symbolic links encountered";
-    case EMFILE: return "too many open files";
-    case ENAMETOOLONG: return "name too long";
-    case ENFILE: return "file table overflow";
-    case ENODEV: return "no such device";
-    case ENOENT: return "no such file or directory";
-    case ENOMEM: return "not enough memory";
-    case ENOTDIR: return "not a directory";
-    case ENXIO: return "no such device or address";
-    case EOVERFLOW: return "value too large for defined data type";
-    case EPERM: return "operation not permitted";
-    case ETIMEDOUT: return "connection timed out";
-    default: return "unknown error";
-  }
-}
+struct UvErr {
+  int code;
+  const char *name, *text;
+};
+// libuv uv-common.c UV_ERRNO_MAP (the texts Node's fs errors carry)
+const UvErr kUvErrors[] = {
+    {EACCES, "EACCES", "permission denied"},
+    {EAGAIN, "EAGAIN", "resource temporarily unavailable"},
+    {EBADF, "EBADF", "bad file descriptor"},
+    {EBUSY, "EBUSY", "resource busy or locked"},
+    {EFAULT, "EFAULT", "bad address in system call argument"},
+    {EFBIG, "EFBIG", "file too large"},
+    {EINTR, "EINTR", "interrupted system call"},
+    {EINVAL, "EINVAL", "invalid argument"},
+    {EIO, "EIO", "i/o error"},
+    {EISDIR, "EISDIR", "illegal operation on a directory"},
+    {ELOOP, "ELOOP", "too many symbolic links encountered"},
+    {EMFILE, "EMFILE", "too many open files"},
+    {ENAMETOOLONG, "ENAMETOOLONG", "name too long"},
+    {ENFILE, "ENFILE", "file table overflow"},
+    {ENODEV, "ENODEV", "no such device"},
+    {ENOENT, "ENOENT", "no such file or directory"},
+    {ENOMEM, "ENOMEM", "not enough memory"},
+    {ENOTDIR, "ENOTDIR", "not a directory"},
+    {ENXIO, "ENXIO", "no such device or address"},
+    {EOVERFLOW, "EOVERFLOW", "value too large for defined data type"},
+    {EPERM, "EPERM", "operation not permitted"},
+    {ETIMEDOUT, "ETIMEDOUT", "connection timed out"},
+};
 
 FsError fsError(int e, const char *syscall, const std::string *path) {
   FsError f;
   f.enoent = e == ENOENT;
-  f.message = std::string(uvName(e)) + ": " + uvText(e) + ", " + syscall;
+  const char *name = "UNKNOWN", *text = "unknown error";
+  for (const UvErr &u : kUvErrors) {
+    if (u.code == e) {
+      name = u.name;
+      text = u.text;
+    }
+  }
+  f.message = std::string(name) + ": " + text + ", " + syscall;
   if (path) f.message += " '" + *path + "'";
   return f;
 }
@@ -208,7 +189,8 @@ bool fsReaddir(const std::string &dir, std::vector<Dirent> *out) {
     raw.emplace_back(e->d_name, e->d_type);
   }
   ::closedir(d);
-  std::sort(raw.begin(), raw.end(), [](const auto &a, const auto &b) { return std::strcmp(a.first.c_str(), b.first.c_str()) < 0; });
+  std::sort(raw.begin(), raw.end(),
+            [](const auto &a, const auto &b) { return std::strcmp(a.first.c_str(), b.first.c_str()) < 0; });
   for (auto &r : raw) {
     Dirent x;
     unsigned char t = r.second;
@@ -271,16 +253,19 @@ std::vector<PackDir> listPackDirs(const std::vector<std::string> &roots, std::ve
       if (e.name.rfind('.', 0) == 0 || !(e.isDir || e.isLink)) continue;
       std::string dir;
       struct stat ds;
-      if (!fsRealpath(jsPathJoin(rootReal, e.name), &dir, nullptr) || !fsStat(dir, &ds, nullptr) || !S_ISDIR(ds.st_mode)) {
+      if (!fsRealpath(jsPathJoin(rootReal, e.name), &dir, nullptr) || !fsStat(dir, &ds, nullptr) ||
+          !S_ISDIR(ds.st_mode)) {
         continue;
       }
       if (!within(rootReal, dir)) {
-        errors.push_back(jsPathJoin(root, e.name) + ": is a link to a folder outside My Samples (" + dir + "); skipped");
+        errors.push_back(jsPathJoin(root, e.name) + ": is a link to a folder outside My Samples (" + dir +
+                         "); skipped");
         continue;
       }
       if (slugs.count(e.name)) {
         PackDir p{e.name, dir, rootReal, std::nullopt};
-        p.skip = jsPathJoin(root, e.name) + ": a pack named \"" + e.name + "\" was already found in an earlier folder; skipped";
+        p.skip = jsPathJoin(root, e.name) + ": a pack named \"" + e.name +
+                 "\" was already found in an earlier folder; skipped";
         out.push_back(std::move(p));
         continue;
       }
@@ -381,7 +366,8 @@ std::optional<std::string> checkPatchEntry(const JVal &raw, Entry *e) {
       return "\"patch.slots\" must be a list of 1 to " + std::to_string(kMaxSlots) + " slots";
     }
   }
-  if (const JVal *name = song->get("name"); name && name->type != JVal::Str) return std::string("\"name\" must be text");
+  if (const JVal *name = song->get("name"); name && name->type != JVal::Str)
+    return std::string("\"name\" must be text");
   if (!bankSet) bank = song->get("bank");  // `if (bank === undefined) bank = ownBank`
   e->song = song;
   e->bank = bank && bank->isPlainObj() ? bank : nullptr;
@@ -407,11 +393,16 @@ void stringifyRest(const JVal &song, std::string &out) {
 bool truthy(const JVal *v) {
   if (!v) return false;
   switch (v->type) {
-    case JVal::Null: return false;
-    case JVal::Bool: return v->b;
-    case JVal::Num: return v->num != 0 && !std::isnan(v->num);
-    case JVal::Str: return !v->str.empty();
-    default: return true;
+    case JVal::Null:
+      return false;
+    case JVal::Bool:
+      return v->b;
+    case JVal::Num:
+      return v->num != 0 && !std::isnan(v->num);
+    case JVal::Str:
+      return !v->str.empty();
+    default:
+      return true;
   }
 }
 
@@ -567,14 +558,14 @@ std::string scanUserPatchesJson(const std::vector<std::string> &roots, const Sca
         stringifyRest(*e.song, songJson);
         if (e.bank) jsonStringify(*e.bank, bankJson);
         const std::string schemaJson = e.schema ? jsNumberToString(*e.schema) : std::string();
-        const std::string body = "[" + (e.schema ? schemaJson : "null") + "," + songJson + "," +
-                                 (e.bank ? bankJson : "null") + "]";
+        const std::string body =
+            "[" + (e.schema ? schemaJson : "null") + "," + songJson + "," + (e.bank ? bankJson : "null") + "]";
         const std::string hash = sha1Hex(body).substr(0, 16);
         const std::string packId = p.slug + ":" + file + (isArr ? "#" + std::to_string(i) : "");
-        std::string out = "{\"packId\":" + quoted(packId) + ",\"pack\":" + quoted(p.slug) + ",\"file\":" +
-                          quoted(file) + ",\"n\":" + (isArr ? std::to_string(i) : "null") + ",\"mtime\":" +
-                          jsNumberToString(mtime) + ",\"hash\":" + quoted(hash) + ",\"mode\":" + quoted(meta.mode) +
-                          ",\"song\":" + songJson;
+        std::string out = "{\"packId\":" + quoted(packId) + ",\"pack\":" + quoted(p.slug) +
+                          ",\"file\":" + quoted(file) + ",\"n\":" + (isArr ? std::to_string(i) : "null") +
+                          ",\"mtime\":" + jsNumberToString(mtime) + ",\"hash\":" + quoted(hash) +
+                          ",\"mode\":" + quoted(meta.mode) + ",\"song\":" + songJson;
         if (e.schema) out += ",\"schema\":" + schemaJson;
         if (e.bank) out += ",\"bank\":" + bankJson;
         out.push_back('}');

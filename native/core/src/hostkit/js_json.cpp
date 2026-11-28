@@ -64,7 +64,7 @@ struct ObjBuilder {
         }
       }
     }
-    v.obj.emplace_back(std::move(key), std::move(val));
+    v.obj.push_back(JMember{std::move(key), std::move(val)});
   }
 
   JVal finish() {
@@ -78,7 +78,7 @@ struct ObjBuilder {
     }
     if (any) {  // array-index keys first, ascending; the others keep their insertion order
       std::vector<std::pair<std::uint32_t, std::size_t>> idx;
-      std::vector<std::pair<std::string, JVal>> rest, out;
+      std::vector<JMember> out;
       for (std::size_t i = 0; i < v.obj.size(); ++i) {
         std::uint32_t n;
         if (arrayIndex(v.obj[i].first, &n)) idx.emplace_back(n, i);
@@ -151,8 +151,8 @@ class Parser {
         last = k + 1;
       }
     }
-    return fail(std::string(what) + in + " at position " + std::to_string(u.size()) + " (line " +
-                std::to_string(line) + " column " + std::to_string(u.size() - last + 1) + ")");
+    return fail(std::string(what) + in + " at position " + std::to_string(u.size()) + " (line " + std::to_string(line) +
+                " column " + std::to_string(u.size() - last + 1) + ")");
   }
   /** V8's unexpected-token message: the UTF-16 unit at the cursor and up to 10 units of context each side. */
   bool failToken() {
@@ -248,15 +248,32 @@ class Parser {
       const char e = s_[i_ + 1];
       char lit = 0;
       switch (e) {
-        case '"': lit = '"'; break;
-        case '\\': lit = '\\'; break;
-        case '/': lit = '/'; break;
-        case 'b': lit = '\b'; break;
-        case 'f': lit = '\f'; break;
-        case 'n': lit = '\n'; break;
-        case 'r': lit = '\r'; break;
-        case 't': lit = '\t'; break;
-        case 'u': break;
+        case '"':
+          lit = '"';
+          break;
+        case '\\':
+          lit = '\\';
+          break;
+        case '/':
+          lit = '/';
+          break;
+        case 'b':
+          lit = '\b';
+          break;
+        case 'f':
+          lit = '\f';
+          break;
+        case 'n':
+          lit = '\n';
+          break;
+        case 'r':
+          lit = '\r';
+          break;
+        case 't':
+          lit = '\t';
+          break;
+        case 'u':
+          break;
         default: {
           ++i_;
           std::size_t j = i_;  // V8: an escaped character past Latin-1 is an unexpected token, not a bad escape
@@ -348,7 +365,7 @@ class Parser {
 
   bool literal(const char *word, std::size_t n) {
     for (std::size_t k = 0; k < n; ++k, ++i_) {
-      if (i_ >= s_.size() || s_[i_] != word[k]) return failToken();  // the end of input: "Unexpected end" 
+      if (i_ >= s_.size() || s_[i_] != word[k]) return failToken();  // the end of input: "Unexpected end"
     }
     return true;
   }
@@ -480,7 +497,9 @@ class Parser {
 
 }  // namespace
 
-ParseResult jsonParse(std::string_view text, int maxDepth) { return Parser(text, maxDepth).run(); }
+ParseResult jsonParse(std::string_view text, int maxDepth) {
+  return Parser(text, maxDepth).run();
+}
 
 std::string jsNumberToString(double d) {
   if (std::isnan(d)) return "NaN";
@@ -552,13 +571,27 @@ void jsonQuote(std::string_view s, std::string &out) {
     }
     ++i;
     switch (c) {
-      case '"': out += "\\\""; break;
-      case '\\': out += "\\\\"; break;
-      case '\b': out += "\\b"; break;
-      case '\f': out += "\\f"; break;
-      case '\n': out += "\\n"; break;
-      case '\r': out += "\\r"; break;
-      case '\t': out += "\\t"; break;
+      case '"':
+        out += "\\\"";
+        break;
+      case '\\':
+        out += "\\\\";
+        break;
+      case '\b':
+        out += "\\b";
+        break;
+      case '\f':
+        out += "\\f";
+        break;
+      case '\n':
+        out += "\\n";
+        break;
+      case '\r':
+        out += "\\r";
+        break;
+      case '\t':
+        out += "\\t";
+        break;
       default:
         out += "\\u00";
         out.push_back(hexd[c >> 4]);
@@ -570,12 +603,18 @@ void jsonQuote(std::string_view s, std::string &out) {
 
 void jsonStringify(const JVal &v, std::string &out) {
   switch (v.type) {
-    case JVal::Null: out += "null"; return;
-    case JVal::Bool: out += v.b ? "true" : "false"; return;
+    case JVal::Null:
+      out += "null";
+      return;
+    case JVal::Bool:
+      out += v.b ? "true" : "false";
+      return;
     case JVal::Num:
       out += std::isfinite(v.num) ? jsNumberToString(v.num) : "null";
       return;
-    case JVal::Str: jsonQuote(v.str, out); return;
+    case JVal::Str:
+      jsonQuote(v.str, out);
+      return;
     case JVal::Arr:
       out.push_back('[');
       for (std::size_t i = 0; i < v.arr.size(); ++i) {

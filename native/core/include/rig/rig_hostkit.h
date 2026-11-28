@@ -22,9 +22,9 @@ extern "C" {
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)
-#  define RIG_HOSTKIT_API __attribute__((visibility("default")))
+#define RIG_HOSTKIT_API __attribute__((visibility("default")))
 #else
-#  define RIG_HOSTKIT_API
+#define RIG_HOSTKIT_API
 #endif
 
 /**
@@ -41,7 +41,8 @@ RIG_HOSTKIT_API char *rig_hostkit_scan_patches(const char *roots_json, const cha
  */
 RIG_HOSTKIT_API char *rig_hostkit_user_patches_json(const char *roots_json, const char *user_ids_json);
 
-/** 1 when some pack under the roots has a songs/<name>.json (server.js hasUserPatches: the /api/health flag), else 0. */
+/** 1 when some pack under the roots has a songs/<name>.json (server.js hasUserPatches: the /api/health flag), else 0.
+ */
 RIG_HOSTKIT_API int rig_hostkit_has_patches(const char *roots_json);
 
 /** Release a string returned above (NULL is fine). */

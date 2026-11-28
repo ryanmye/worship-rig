@@ -7,7 +7,9 @@ namespace rig::hostkit {
 
 namespace {
 
-inline std::uint32_t rol(std::uint32_t x, int n) { return (x << n) | (x >> (32 - n)); }
+inline std::uint32_t rol(std::uint32_t x, int n) {
+  return (x << n) | (x >> (32 - n));
+}
 
 void block(std::uint32_t h[5], const unsigned char *p) {
   std::uint32_t w[80];

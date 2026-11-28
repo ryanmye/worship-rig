@@ -25,7 +25,7 @@ inline constexpr std::size_t kSlugMax = 200;
 inline constexpr std::size_t kFileNameMax = 245;
 
 struct ScanOptions {
-  bool checkUserIds = false;               // server.js `userIds` given (not null)
+  bool checkUserIds = false;                // server.js `userIds` given (not null)
   std::unordered_set<std::string> userIds;  // the `user:<id>` refs My Samples has
 };
 

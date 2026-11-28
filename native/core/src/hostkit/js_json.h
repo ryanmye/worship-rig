@@ -17,6 +17,8 @@
 
 namespace rig::hostkit {
 
+struct JMember;
+
 /** A JSON value with JS semantics. Strings are WTF-8 (js_text.h). */
 struct JVal {
   enum Type : std::uint8_t { Null, Bool, Num, Str, Arr, Obj };
@@ -25,11 +27,17 @@ struct JVal {
   double num = 0;
   std::string str;
   std::vector<JVal> arr;
-  std::vector<std::pair<std::string, JVal>> obj;  // in JS property order
+  std::vector<JMember> obj;  // in JS property order (a vector of an incomplete type: fine since C++17)
 
   bool isPlainObj() const { return type == Obj; }
   /** Own property, or nullptr (JS `undefined`). */
   const JVal *get(std::string_view key) const;
+};
+
+/** One property of an object. */
+struct JMember {
+  std::string first;
+  JVal second;
 };
 
 struct ParseResult {
@@ -37,7 +45,7 @@ struct ParseResult {
   bool tooDeep = false;  // valid JSON nested deeper than `maxDepth` (server.js deeperThan): such containers are
                          // null in `value`, the rest is built
   JVal value;
-  std::string error;     // SyntaxError text (V8's wording for the common cases; the position always)
+  std::string error;  // SyntaxError text (V8's wording for the common cases; the position always)
 };
 
 /**

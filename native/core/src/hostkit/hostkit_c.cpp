@@ -77,6 +77,8 @@ int rig_hostkit_has_patches(const char *roots_json) {
   }
 }
 
-void rig_hostkit_free(char *s) { std::free(s); }
+void rig_hostkit_free(char *s) {
+  std::free(s);
+}
 
 }  // extern "C"
