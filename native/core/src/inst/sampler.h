@@ -46,10 +46,9 @@ enum class SamplerOp : std::uint16_t {
   DynamicRange,
 };
 
-// INTERFACE-CHANGE(TOUCH): DECISIONS D43, shared/touch-curve.js DYN_RANGE.max (was 3) and DYN_SPAN_MAX_DB: multi-layer
-// samplers reach 60 dB at 6; no span passes 72 dB (single layer stops at range 3, its pre-D43 maximum)
+// INTERFACE-CHANGE(TOUCH): DECISIONS D43 = 1.1.2, shared/touch-curve.js DYN_RANGE.max (was 3): multi-layer samplers
+// reach 60 dB at 6 (widening downwards only past 3); single layer stops at 3 (72 dB)
 inline constexpr double kDynRangeMax = 6.0;
-inline constexpr double kDynSpanMaxDb = 72.0;
 
 /** Instrument params (Instrument::setParam index = the def's params order: release, tone). */
 enum SamplerParam : std::uint32_t { kSamplerRelease = 0, kSamplerTone = 1, kSamplerParamCount = 2 };

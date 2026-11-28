@@ -471,7 +471,7 @@ async function runMode(mode, browser) {
         assert.equal(await page.textContent('[data-testid="dynamic-range-value"]'), '60 dB');
         const span = await page.textContent('[data-testid="dynamic-range-span"]');
         assert.match(span, /Other sampled sounds: 72 dB \(their most\)/);
-        assert.match(span, /up to \+12\.5 dB/);
+        assert.match(span, /up to \+5\.0 dB/); // 1.1.2: past 3× pianos widen downwards only
         await page.locator(dyn).fill('35.5');
         await until(() => window.__rig.store.get().settings.dynamicRange === 3.55);
         await page.locator(dyn).fill('10');

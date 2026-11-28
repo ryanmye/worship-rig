@@ -180,21 +180,24 @@ export function fitTouch(soft, hard, base) {
  * loud. 1 keeps the built-in spans (multi-layer −10 dB, single layer −24 dB from velocity 0 to full); 2 doubles them
  * around DYN_PIVOT, so soft notes get quieter AND the hardest notes louder than today's full (the master ceiling
  * still catches peaks). Device-local: it is about this player's keyboard and room.
- * TOUCH (D43): the cap went from 3 to 6, so multi-layer instruments reach 60 dB (Pianoteq's default Dynamics); the
- * UI shows it in dB (dynamicsDb). Single-layer spans stop at DYN_SPAN_MAX_DB (see velocityDb).
+ * TOUCH (D43) = 1.1.2 (915f496, the same rule and constants, so a 1.1.2 backup sounds the same in 2.0): the cap went
+ * from 3 to 6; past DYN_UP_MAX the multi-layer span widens downwards only (60 dB at 6×, the hardest note stays at the
+ * +5 dB of 3×), and the single-layer span stops at 3× (72 dB). The UI shows it in dB (dynamicsDb).
  */
 export const DYN_RANGE = Object.freeze({ min: 1, max: 6, default: 1, step: 0.05 });
+/**
+ * 1.1.2 (Ryan, FP-10: "soft notes too loud"): past this range the span only grows downwards (soft quieter, the
+ * hardest note stays where 3× put it), like Pianoteq's Dynamics; and only for the multi-layer span (pianos: 10 dB →
+ * 60 dB at 6×). The single-layer span (24 dB) is already 72 dB at 3× and stops there.
+ */
+export const DYN_UP_MAX = 3;
+/** Built-in spans at or above this (dB) don't widen past DYN_UP_MAX (the single-layer 24 dB span). */
+const DYN_WIDE_SPAN = 20;
 /** Touch level that keeps its loudness at any range: velocity ≈ 96 of 127, where the sampler trims are calibrated. */
 export const DYN_PIVOT = 0.75;
 /** Built-in spans (dB from velocity 0 to full at range 1): multi-layer samplers, single-layer samplers. */
 export const DYN_SPAN_MULTI_DB = 10;
 export const DYN_SPAN_SINGLE_DB = 24;
-/**
- * TOUCH (D43): no instrument spreads wider than this. 72 dB = a single-layer sampler at range 3, the most it could
- * reach before D43, so every range ≤ 3 plays bit for bit as before; past 3 single-layer sounds stay at 72 dB (at 6×
- * they would reach 144 dB) while multi-layer ones go on to 60 dB.
- */
-export const DYN_SPAN_MAX_DB = 72;
 
 /**
  * @param {unknown} v
@@ -207,19 +210,21 @@ export function validDynRange(v) {
 
 /**
  * Note gain in dB for a touch level. range 1 = −spanDb · (1 − v) exactly (the pre-range formula); a wider range adds
- * spanDb · (r − 1) · (v − DYN_PIVOT): below the pivot quieter, above it louder. r = range, capped so that
- * spanDb · r ≤ DYN_SPAN_MAX_DB (TOUCH, D43): for the built-in spans the cap only acts past range 3 on single-layer
- * sounds (72 / 24 = 3 exactly), so ranges ≤ 3 compute the same numbers as before.
+ * spanDb · (range − 1) · (v − DYN_PIVOT): below the pivot quieter, above it louder. Past DYN_UP_MAX (3×) the
+ * multi-layer span keeps widening downwards only (−spanDb · (range − 3) · (1 − v)); the single-layer span stops at 3×.
+ * Values up to 3 give exactly the 1.1.1 numbers. TOUCH (D43): copied from 1.1.2 (915f496) as it is, operation for
+ * operation; native/core/src/inst/sampler.cpp velocityDb mirrors it.
  * @param {number} v01 touch level 0..1
  * @param {number} spanDb the instrument's built-in span (10 multi-layer, 24 single layer)
  * @param {number} [range] settings.dynamicRange (1..6)
  * @returns {number}
  */
 export function velocityDb(v01, spanDb, range = 1) {
-  const base = -spanDb * (1 - v01);
-  if (range === 1) return base;
-  const r = Math.min(range, DYN_SPAN_MAX_DB / spanDb);
-  return base + spanDb * (r - 1) * (v01 - DYN_PIVOT);
+  if (range === 1) return -spanDb * (1 - v01);
+  const r = Math.min(range, DYN_UP_MAX);
+  const base = -spanDb * (1 - v01) + spanDb * (r - 1) * (v01 - DYN_PIVOT);
+  if (range <= DYN_UP_MAX || spanDb >= DYN_WIDE_SPAN) return base;
+  return base - spanDb * (range - DYN_UP_MAX) * (1 - v01); // 1.1.2: downward only past 3×
 }
 
 /**

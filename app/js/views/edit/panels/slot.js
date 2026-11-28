@@ -38,6 +38,7 @@ import { PEDAL_HOLD_TRACK } from '../../../shared/learn.js';
 import {
   COMPILED_PRESETS, LINEAR_TOUCH, COMPUTER_KEYBOARD, compileTouch, touchAt, touchWord,
 } from '../../../shared/touch-curve.js';
+import { compileCurve, calAt } from '../../../shared/velocity-cal.js';
 import { onThemeChange } from '../../components/eq-palette.js';
 import { say } from '../../components/voice.js'; // v11-polish: the strip foot's words per theme
 
@@ -655,10 +656,10 @@ function mountSlot(el, ctx, opts) {
       const sl = curSlot();
       if (!sl) return;
       const a = activeCurve(sl);
-      const key = JSON.stringify([a.c, a.curve, a.from]);
+      const key = JSON.stringify([a.c, a.curve, a.from, !!a.cal]);
       if (key !== sparkKey) {
         sparkKey = key;
-        spark.draw(a.c, a.curve, a.from);
+        spark.draw(a.c, a.curve, a.from, !!a.cal);
       }
       customBox.hidden = a.curve !== 'custom';
       const whose = a.from === 'the on-screen keys' ? 'the on-screen keys’' : a.from === EACH_KEYBOARD
@@ -1003,8 +1004,9 @@ function mountSlot(el, ctx, opts) {
   /**
    * v11-touch: the curve this slot plays with: its preset, its own (custom), or for 'normal' the playing keyboard's
    * own curve from settings.keyboards (the MIDI keyboard the controller is listening to; with none connected, the
-   * on-screen + computer keys' entry), else linear.
-   * @returns {{c:object, curve:string, from:string|null}}
+   * on-screen + computer keys' entry), else linear. TOUCH (D43): a keyboard's calibration points (`velocity`) take the
+   * place of its `touch` (as in the controller); `c` is then the compiled calibration and `cal` is true.
+   * @returns {{c:object, curve:string, from:string|null, cal?:boolean}}
    */
   function activeCurve(slot) {
     const curve = slot.velocityCurve || 'normal';
@@ -1016,16 +1018,22 @@ function mountSlot(el, ctx, opts) {
     // up one by one (status.midi.name joins them, "Keystation, nanoKEY", in 'All' mode or the all-ports fallback)
     const sel = m && m.connected && Array.isArray(m.inputs) ? m.inputs.filter((x) => x && x.selected) : [];
     const names = [...new Set(sel.map((x) => x.name || ''))];
+    const ownOf = (n) => {
+      const e = kb[n];
+      const cal = e && e.velocity ? compileCurve(e.velocity) : null;
+      if (cal) return { c: cal, cal: true };
+      return e && e.touch ? { c: compileTouch(e.touch) } : null;
+    };
     if (names.length > 1) {
-      const withOwn = names.filter((n) => kb[n] && kb[n].touch);
+      const withOwn = names.filter((n) => ownOf(n));
       if (withOwn.length > 1) return { c: LINEAR_TOUCH, curve, from: EACH_KEYBOARD };
       if (!withOwn.length) return { c: LINEAR_TOUCH, curve, from: null };
-      return { c: compileTouch(kb[withOwn[0]].touch), curve, from: withOwn[0] };
+      return { ...ownOf(withOwn[0]), curve, from: withOwn[0] };
     }
     const name = names[0] ?? (m && m.connected && m.name ? m.name : COMPUTER_KEYBOARD);
-    const own = kb[name] && kb[name].touch;
+    const own = ownOf(name);
     if (!own) return { c: LINEAR_TOUCH, curve, from: null };
-    return { c: compileTouch(own), curve, from: name === COMPUTER_KEYBOARD ? 'the on-screen keys' : name };
+    return { ...own, curve, from: name === COMPUTER_KEYBOARD ? 'the on-screen keys' : name };
   }
 
   /** Tiny velocity-curve graph (x = how hard you play, y = how loud it sounds), drawn in the slot colour. */
@@ -1033,10 +1041,14 @@ function mountSlot(el, ctx, opts) {
     const cv = h('canvas.ev2-slot-spark', { width: 128, height: 56, role: 'img', 'aria-label': 'Response curve' });
     return {
       el: cv,
-      /** @param {object} c compiled curve (shared/touch-curve.js) @param {string} curve @param {string|null} from */
-      draw(c, curve, from) {
+      /**
+       * @param {object} c compiled curve (shared/touch-curve.js), or with `cal` a compiled calibration (velocity-cal)
+       * @param {string} curve @param {string|null} from @param {boolean} [cal]
+       */
+      draw(c, curve, from, cal = false) {
         cv.dataset.curve = curve;
         cv.dataset.from = from || '';
+        cv.dataset.cal = cal ? 'points' : ''; // TOUCH: a keyboard's calibration curve
         cv.title = `${TOUCH_HINTS[curve] || ''} Left = soft key press, right = hard.`;
         const g = cv.getContext && cv.getContext('2d');
         if (!g) return;
@@ -1059,7 +1071,7 @@ function mountSlot(el, ctx, opts) {
         g.beginPath();
         for (let v = 1; v <= 127; v += 2) {
           const x = pad + ((v - 1) / 126) * (W - 2 * pad);
-          const y = H - pad - touchAt(c, v) * (H - 2 * pad);
+          const y = H - pad - (cal ? calAt(c, v) / 127 : touchAt(c, v)) * (H - 2 * pad); // TOUCH: points
           if (v === 1) g.moveTo(x, y);
           else g.lineTo(x, y);
         }

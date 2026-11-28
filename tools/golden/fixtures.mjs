@@ -568,9 +568,8 @@ const SWEEP_SETS = [
 // velocityDb law at 6 sample by sample (salamander: 60 dB; ep-rhodes: single layer, capped at range 3 = 72 dB).
 // dyn-peak-r<n>: loud dry piano chords through the master chain (tap 'out'): the ceiling at ranges 1, 3 and 6.
 const addD = (f) => add({ addedBy: 'TOUCH', ...f });
-// Slot gain 0.3 (−10.5 dB): range 6 plays the loud notes ≈ +10 dB over range 1, and the salamander set's own
-// web / native residue (≈ 7e-5 of the peak: its 48 kHz files, sampler-salamander-piano 1.5e-4 at a 2.1 peak) would
-// pass the exact tier's absolute 2e-4 only at the range-1 fixture's level.
+// Slot gain 0.3 (−10.5 dB) keeps the peaks well under the range-1 fixture's: the salamander set's own web / native
+// residue (≈ 7e-5 of the peak, sampler-salamander-piano 1.5e-4 at a 2.1 peak) against the exact tier's absolute 2e-4.
 for (const id of ['salamander-piano', 'ep-rhodes']) {
   const base = fixtures.find((f) => f.id === `sampler-${id}`);
   addD({ id: `dyn-range-${id}`, kind: 'dynamics', seconds: base.seconds,

@@ -175,41 +175,44 @@ test('assistant: refusals: too few notes, no difference (the computer keys), ste
   assert.equal(C.fitCalibration(null).reason, 'few');
 });
 
-test('dynamics in dB: range 1..6, 60 dB for multi-layer at 6, single layer capped at 72 dB, ≤ 3 bit-identical', () => {
-  assert.equal(T.DYN_RANGE.max, 6);
-  assert.equal(T.validDynRange(9), 6);
-  assert.equal(T.validDynRange(4.567), 4.57);
-  near(T.dynamicsDb(1), 10, 1e-12);
-  near(T.dynamicsDb(6), 60, 1e-12);
-  near(T.dynamicsDb(1, T.DYN_SPAN_SINGLE_DB), 24, 1e-12);
-  near(T.dynamicsDb(3, T.DYN_SPAN_SINGLE_DB), 72, 1e-12);
-  near(T.dynamicsDb(6, T.DYN_SPAN_SINGLE_DB), 72, 1e-12, 'capped, not 144');
-  assert.equal(T.rangeOfDynamicsDb(60), 6);
-  assert.equal(T.rangeOfDynamicsDb(35.5), 3.55);
-  assert.equal(T.rangeOfDynamicsDb(5), 1);
-  assert.equal(T.rangeOfDynamicsDb('x'), null);
-  // the pre-D43 formula, for every range ≤ 3 (step 0.01) and level: the same bits
-  const before = (v, span, range) => {
-    const base = -span * (1 - v);
-    return range === 1 ? base : base + span * (range - 1) * (v - T.DYN_PIVOT);
-  };
-  for (let ri = 100; ri <= 300; ri++) {
-    const range = ri / 100;
-    for (let vi = 0; vi <= 127; vi++) {
-      const v = vi / 127;
-      for (const span of [10, 24]) assert.equal(T.velocityDb(v, span, range), before(v, span, range));
+test('dynamics in dB (= 1.1.2): range 1..6, pianos 60 dB at 6 downwards only, single layer stops at 3, ≤ 3 as before',
+  () => {
+    assert.equal(T.DYN_RANGE.max, 6);
+    assert.equal(T.DYN_UP_MAX, 3);
+    assert.equal(T.validDynRange(9), 6);
+    assert.equal(T.validDynRange(4.567), 4.57);
+    near(T.dynamicsDb(1), 10, 1e-12);
+    near(T.dynamicsDb(3), 30, 1e-12);
+    near(T.dynamicsDb(4.5), 45, 1e-12);
+    near(T.dynamicsDb(6), 60, 1e-12);
+    near(T.dynamicsDb(1, T.DYN_SPAN_SINGLE_DB), 24, 1e-12);
+    near(T.dynamicsDb(3, T.DYN_SPAN_SINGLE_DB), 72, 1e-12);
+    near(T.dynamicsDb(6, T.DYN_SPAN_SINGLE_DB), 72, 1e-12, 'stops at 3×, not 144');
+    assert.equal(T.rangeOfDynamicsDb(60), 6);
+    assert.equal(T.rangeOfDynamicsDb(35.5), 3.55);
+    assert.equal(T.rangeOfDynamicsDb(5), 1);
+    assert.equal(T.rangeOfDynamicsDb('x'), null);
+    // the pre-D43 formula, for every range ≤ 3 (step 0.01) and level: the same bits
+    const before = (v, span, range) => {
+      const base = -span * (1 - v);
+      return range === 1 ? base : base + span * (range - 1) * (v - T.DYN_PIVOT);
+    };
+    for (let ri = 100; ri <= 300; ri++) {
+      const range = ri / 100;
+      for (let vi = 0; vi <= 127; vi++) {
+        const v = vi / 127;
+        for (const span of [10, 24]) assert.equal(T.velocityDb(v, span, range), before(v, span, range));
+      }
     }
-  }
-  // past 3: multi-layer keeps the formula, single layer stays at the range-3 numbers
-  for (const range of [3.5, 4, 6]) {
-    for (const v of [0, 0.3, 0.75, 1]) {
-      assert.equal(T.velocityDb(v, 10, range), before(v, 10, range));
-      assert.equal(T.velocityDb(v, 24, range), before(v, 24, 3));
+    // past 3: pianos keep the 3× top and widen downwards; single layer stays at the 3× numbers, bit for bit
+    for (const range of [3.5, 4, 6]) {
+      for (const v of [0, 0.3, 0.75, 1]) {
+        near(T.velocityDb(v, 10, range), before(v, 10, 3) - 10 * (range - 3) * (1 - v), 1e-12);
+        assert.equal(T.velocityDb(v, 24, range), before(v, 24, 3));
+      }
+      assert.equal(T.velocityDb(1, 10, range), 5, 'the hardest note stays at +5 dB');
     }
-  }
-  // the pivot (velocity ≈ 96) never moves
-  for (const range of [1, 3, 6]) near(T.velocityDb(T.DYN_PIVOT, 10, range), -2.5, 1e-12);
-  // loud end at 6: +12.5 dB above full for multi-layer, +12 dB (as at 3) for single layer
-  near(T.velocityDb(1, 10, 6), 12.5, 1e-12);
-  near(T.velocityDb(1, 24, 6), 12, 1e-12);
-});
+    near(T.velocityDb(0, 10, 6), -55, 1e-12);
+    near(T.velocityDb(T.DYN_PIVOT, 10, 6), -10, 1e-12, 'velocity ≈ 96 is 7.5 dB quieter at 6× than at 1×–3×');
+    near(T.velocityDb(1, 24, 6), 12, 1e-12);
+  });

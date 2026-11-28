@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "generator": "tools/golden/render.mjs",
- "generatedAt": "2026-11-28T04:18:51.108Z",
+ "generatedAt": "2026-11-28T05:32:41.666Z",
  "chromium": "157.0.8103.78",
  "chromiumPin": {
   "version": "157.0.8103.78",
@@ -37,7 +37,7 @@
  "lastRun": {
   "fixtures": 2,
   "repeat": 2,
-  "seconds": 9.3,
+  "seconds": 50.7,
   "cpus": 2
  },
  "stimuli": {
@@ -164,7 +164,7 @@
   "committedBytes": 2207860,
   "commitCapBytes": 2500000,
   "regenerate": "node tools/golden/pcm.mjs",
-  "seconds": 7.1
+  "seconds": 15.9
  },
  "tiers": {
   "exact": 109,
@@ -47738,49 +47738,49 @@
    "addedBy": "TOUCH",
    "chromium": "157.0.8103.78",
    "file": "out/dyn-range-salamander-piano.wav",
-   "sha256": "7a6f05e506d9c60d741e30c76f6c32ed832344c314cfb6338eeb1e0d6f8b8a0d",
+   "sha256": "6f3617105e55de8055d3d6a145e914ed52d0261565cb585a8e74f12fdd2e941b",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 374850,
    "seconds": 8.5,
-   "peak": 1.96741,
-   "peakDb": 5.878,
-   "rms": 0.162146,
-   "rmsDb": -15.8,
+   "peak": 0.829649,
+   "peakDb": -1.622,
+   "rms": 0.0683766,
+   "rmsDb": -23.3,
    "bandsDb": [
-    -58.98,
-    -61.82,
-    -60.02,
-    -59.21,
-    -67.05,
+    -66.48,
+    -69.32,
+    -67.52,
+    -66.71,
+    -74.55,
+    -45.02,
     -37.52,
-    -30.02,
-    -50.22,
-    -55.23,
-    -41.05,
-    -32.28,
-    -41.23,
-    -44.01,
-    -28.11,
-    -41.59,
-    -48.64,
-    -45.44,
-    -43.29,
-    -50.12,
-    -45.49,
-    -51.21,
-    -48.85,
-    -63.29,
-    -75.77,
-    -69.24,
-    -87,
-    -96.68,
-    -110,
-    -124.2,
-    -127
+    -57.72,
+    -62.73,
+    -48.55,
+    -39.78,
+    -48.73,
+    -51.51,
+    -35.61,
+    -49.09,
+    -56.14,
+    -52.94,
+    -50.79,
+    -57.62,
+    -52.99,
+    -58.71,
+    -56.35,
+    -70.79,
+    -83.27,
+    -76.74,
+    -94.5,
+    -104.2,
+    -117.5,
+    -131.7,
+    -134.5
    ],
-   "repeatMaxAbsDiff": 2.384185791015625e-7,
-   "renderMs": 6991,
+   "repeatMaxAbsDiff": 7.450580596923828e-9,
+   "renderMs": 24482,
    "tolerance": {
     "maxAbsDiff": 0.0002,
     "bandsDb": 0.25,
@@ -48138,7 +48138,7 @@
     },
     "samplesUsed": [
      {
-      "key": "http://127.0.0.1:42013/samples/salamander-piano/v14/C4.mp3",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v14/C4.mp3",
       "url": "/samples/salamander-piano/v14/C4.mp3",
       "frames": 667280,
       "rate": 44100,
@@ -48153,7 +48153,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:42013/samples/salamander-piano/v14/Gb2.mp3#max=30",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v14/Gb2.mp3#max=30",
       "url": "/samples/salamander-piano/v14/Gb2.mp3",
       "frames": 881712,
       "rate": 44100,
@@ -48168,7 +48168,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:42013/samples/salamander-piano/v4/C4.mp3",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v4/C4.mp3",
       "url": "/samples/salamander-piano/v4/C4.mp3",
       "frames": 682520,
       "rate": 44100,
@@ -48183,7 +48183,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:42013/samples/salamander-piano/v4/Gb2.mp3#max=30",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v4/Gb2.mp3#max=30",
       "url": "/samples/salamander-piano/v4/Gb2.mp3",
       "frames": 837158,
       "rate": 44100,
@@ -48198,7 +48198,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:42013/samples/salamander-piano/v9/C4.mp3",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v9/C4.mp3",
       "url": "/samples/salamander-piano/v9/C4.mp3",
       "frames": 682978,
       "rate": 44100,
@@ -48213,7 +48213,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:42013/samples/salamander-piano/v9/Eb4.mp3#max=30",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v9/Eb4.mp3#max=30",
       "url": "/samples/salamander-piano/v9/Eb4.mp3",
       "frames": 612948,
       "rate": 44100,
@@ -48228,7 +48228,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:42013/samples/salamander-piano/v9/Gb3.mp3",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v9/Gb3.mp3",
       "url": "/samples/salamander-piano/v9/Gb3.mp3",
       "frames": 654583,
       "rate": 44100,
@@ -48471,7 +48471,7 @@
     ]
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004942
+   "repeatBandsDb": 0.004943
   },
   {
    "id": "dyn-range-ep-rhodes",
@@ -50771,49 +50771,49 @@
    "addedBy": "TOUCH",
    "chromium": "157.0.8103.78",
    "file": "out/dyn-peak-r6.wav",
-   "sha256": "c0f98e6d4ce7e88d0fac3294b42558bf6e1fdb6e5d4ab848b13c51bb4d7a371c",
+   "sha256": "bf0ffb1134c385b316783eff5f6c43917430044e5afb6562fce4399c7d4947ea",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 220500,
    "seconds": 5,
-   "peak": 0.938109,
-   "peakDb": -0.5549,
-   "rms": 0.258163,
-   "rmsDb": -11.76,
+   "peak": 0.905014,
+   "peakDb": -0.8669,
+   "rms": 0.19833,
+   "rmsDb": -14.05,
    "bandsDb": [
-    -56.26,
-    -60.81,
-    -59.52,
-    -52.59,
-    -47.11,
-    -47.49,
-    -46.83,
-    -30.14,
-    -51.67,
-    -42.28,
-    -30.43,
-    -33.07,
-    -32.73,
-    -25.2,
-    -31.85,
-    -34.76,
-    -35.23,
-    -35.04,
-    -37.1,
-    -39.6,
-    -42.05,
-    -43.71,
-    -55.06,
-    -64.3,
-    -65.69,
-    -72.61,
-    -82.91,
-    -97.69,
-    -107.8,
-    -114.6
+    -58.6,
+    -62.56,
+    -61.57,
+    -55.63,
+    -50.27,
+    -49.31,
+    -47.95,
+    -31.52,
+    -53.16,
+    -43.65,
+    -33.93,
+    -34.77,
+    -34.87,
+    -27.94,
+    -34.23,
+    -36.46,
+    -37.32,
+    -37.34,
+    -38.91,
+    -42.24,
+    -43.47,
+    -45.45,
+    -56.66,
+    -66.1,
+    -67.7,
+    -73.79,
+    -84.13,
+    -99.88,
+    -111.7,
+    -117.5
    ],
    "repeatMaxAbsDiff": 4.76837158203125e-7,
-   "renderMs": 6609,
+   "renderMs": 24741,
    "tolerance": {
     "maxAbsDiff": 0.0002,
     "bandsDb": 0.25,
@@ -51246,7 +51246,7 @@
     },
     "samplesUsed": [
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C2.mp3#max=30",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v14/C2.mp3#max=30",
       "url": "/samples/salamander-piano/v14/C2.mp3",
       "frames": 881891,
       "rate": 44100,
@@ -51261,7 +51261,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C3.mp3",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v14/C3.mp3",
       "url": "/samples/salamander-piano/v14/C3.mp3",
       "frames": 643565,
       "rate": 44100,
@@ -51276,7 +51276,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C4.mp3",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v14/C4.mp3",
       "url": "/samples/salamander-piano/v14/C4.mp3",
       "frames": 667280,
       "rate": 44100,
@@ -51291,7 +51291,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C5.mp3",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v14/C5.mp3",
       "url": "/samples/salamander-piano/v14/C5.mp3",
       "frames": 415808,
       "rate": 44100,
@@ -51306,7 +51306,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Eb4.mp3#max=30",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v14/Eb4.mp3#max=30",
       "url": "/samples/salamander-piano/v14/Eb4.mp3",
       "frames": 535416,
       "rate": 44100,
@@ -51321,7 +51321,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Gb3.mp3",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v14/Gb3.mp3",
       "url": "/samples/salamander-piano/v14/Gb3.mp3",
       "frames": 638795,
       "rate": 44100,
@@ -51336,7 +51336,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Gb4.mp3#max=30",
+      "key": "http://127.0.0.1:32775/samples/salamander-piano/v14/Gb4.mp3#max=30",
       "url": "/samples/salamander-piano/v14/Gb4.mp3",
       "frames": 613382,
       "rate": 44100,
@@ -51579,7 +51579,7 @@
     ]
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004536
+   "repeatBandsDb": 0.004913
   }
  ]
 }

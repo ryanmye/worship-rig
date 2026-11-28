@@ -387,7 +387,7 @@ force). All 112 pre-existing fixtures render byte-identical to the base (`a28f0b
 
 | # | file(s) | change | why |
 |---|---|---|---|
-| TOUCH-1 | `src/inst/sampler.h`, `src/inst/sampler.cpp` (T12) | `kDynRangeMax` 6, `kDynSpanMaxDb` 72; `SamplerOp::DynamicRange` clamps 1..6 (was 3); `velocityDb` caps r at `kDynSpanMaxDb / spanDb` (= 3 exactly for the 24 dB single-layer span, 7.2 for multi-layer) | D43: multi-layer samplers reach 60 dB; single layer stays at its pre-D43 maximum (72 dB), every range ≤ 3 computes the same numbers (shared/touch-curve.js `velocityDb`, the same cap) |
+| TOUCH-1 | `src/inst/sampler.h`, `src/inst/sampler.cpp` (T12) | `kDynRangeMax` 6; `SamplerOp::DynamicRange` clamps 1..6 (was 3); `velocityDb` = 1.1.2's rule operation for operation (`kDynUpMax` 3, `kDynWideSpan` 20): past 3 the multi-layer span widens downwards only (`− span · (range − 3) · (1 − v)`), spans ≥ 20 dB stop at 3 | D43, matching 1.x 1.1.2 (`915f496`) so a 1.1.2 backup sounds the same: pianos 60 dB at 6 with the top at +5 dB; single layer stays at 72 dB; every range ≤ 3 computes the same numbers |
 | TOUCH-2 | `src/model/song.cpp`, `src/model/model.h` (T13), `src/bridge/schema.cpp`, `src/bridge/bridge.cpp` (T08) | `SongGraph::setDynamicRange` clamps 1..6 (`kDynRangeMax`); comments | D43 |
 | TOUCH-3 | `tools/common/fixture_runner.cpp` | `setup.dynamicRange` → `config {dynamicRange}` before the song (page.js: `engine.setDynamicRange`) | golden fixtures `dyn-range-*`, `dyn-peak-r*` (`tests/golden_ids/touch.ids`) |
-| TOUCH-4 | `tests/test_bridge_dynrange.cpp`, `tests/test_song.cpp` | clamp 9 → 6; ranges past 3 against the velocityDb law (salamander-piano to 60 dB, ep-rhodes 6 = 3 bit for bit) | D43 |
+| TOUCH-4 | `tests/test_bridge_dynrange.cpp`, `tests/test_song.cpp` | clamp 9 → 6; ranges past 3 against the 1.1.2 velocityDb law (salamander-piano to 60 dB, ep-rhodes 6 = 3 bit for bit) | D43 |

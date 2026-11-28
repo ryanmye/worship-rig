@@ -711,8 +711,14 @@ test('slot: v11-touch — Custom touch curve, sparkline shows the active curve, 
     await t.ev(() => window.__rig.store.setKeyboard('@computer', { touch: { shape: 0.5, min: 0, max: 1, top: 90 } }));
     await t.until((s) => document.querySelector(s).dataset.from === 'the on-screen keys', spark);
     assert.match(await t.page.textContent(`${t.host} .ev2-slot-rnote2`), /Normal follows the on-screen keys’ own touch/);
+    // TOUCH (D43): calibration points take the place of the {touch} curve, here as in the controller
+    await t.ev(() => window.__rig.store.setKeyboard('@computer',
+      { velocity: { in: [0, 64, 127], out: [0, 20, 127] } }));
+    await t.until((s) => document.querySelector(s).dataset.cal === 'points', spark);
+    assert.equal(await t.page.getAttribute(spark, 'data-from'), 'the on-screen keys');
     await t.ev(() => window.__rig.store.setKeyboard('@computer', null));
     await t.until((s) => document.querySelector(s).dataset.from === '', spark);
+    assert.equal(await t.page.getAttribute(spark, 'data-cal'), '');
     assert.equal(await t.page.textContent(`${t.host} .ev2-slot-rnote2`), '');
     // v11-review-fixes R-7: two keyboards listened to ('All'): status.midi.name joins them, but each has its own curve
     await t.ev(() => {

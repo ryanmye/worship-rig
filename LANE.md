@@ -36,12 +36,15 @@ node_modules is a symlink to /home/claude/worship-rig/node_modules (git-ignored)
   `controller.recentVelocities(name)` = last 200 raw velocities per device (histogram).
 - Assistant targets silence 0 / p 32 / mp 48 / f 96 / fff 120; full (127) at fff + 7·(fff − f)/24 (≤ 127); an fff
   median ≥ 126.5 (board tops out) plays 127.
-- Dynamics: DYN_RANGE.max 6; velocityDb caps r so span·r ≤ 72 dB (single layer stops at range 3 = 72 dB; ≤ 3 is
-  bit-identical, unit-tested over every 0.01 step).
+- Dynamics: DYN_RANGE.max 6; velocityDb = 1.x 1.1.2's function (915f496) byte for byte (orchestrator, 2026-11-28):
+  past 3 pianos widen downwards only (60 dB at 6, top +5 dB), spans >= 20 dB stop at 3; ≤ 3 bit-identical. My first
+  cut (72 dB span cap, pivot kept, top +12.5 dB) was replaced, not kept.
 
 - Golden fixtures dyn-range-salamander-piano / dyn-range-ep-rhodes (range 6, slot tap, gain 0.3) and dyn-peak-r1/3/6
-  (tap out). Native vs web: ep-rhodes 2.98e-8; salamander 1.39e-4 (= the set's own residue, range-1 fixture 1.51e-4);
-  the per-note level change 6 vs 1, web − native ≤ 1.7e-6 dB (.probe/ratio.json). Peaks at out: −1.2 / −0.9 / −0.6 dBFS.
+  (tap out). Native vs web (1.1.2 rule): ep-rhodes 2.98e-8; salamander 5.84e-5; per-note level change 6 vs 1, web −
+  native ≤ 1.7e-6 dB (.probe/ratio.json). Peaks: past 3 none rise (CONTRACT_CHANGES table).
+- 112 old fixtures byte-identical vs base: compare with the base's PCM set (pcm-base: only ep-rhodes C4/E4 wavs);
+  render.mjs wrote 155 MB of PCM dumps into native/golden/pcm (git-ignored), which changes native sampler renders.
 - Goldens rendered by playwright's chromium-1194 build of 157.0.8103.78 (the pin names the headless-shell-1243 build of
   the same version); chromiumPin restored to the old object so nothing else churns.
 

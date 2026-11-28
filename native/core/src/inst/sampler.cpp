@@ -22,6 +22,8 @@ constexpr double kInf = std::numeric_limits<double>::infinity();
 constexpr double kStealFade = 0.02;    // instruments.js STEAL_FADE
 constexpr double kAllOffFade = 0.03;   // sampler.js allOff default
 constexpr double kDynPivot = 0.75;     // touch-curve.js DYN_PIVOT
+constexpr double kDynUpMax = 3;        // touch-curve.js DYN_UP_MAX (TOUCH D43 = 1.1.2)
+constexpr double kDynWideSpan = 20;    // touch-curve.js DYN_WIDE_SPAN
 constexpr double kReleaseMin = 0.02, kReleaseMax = 1.5;  // sampler.js RELEASE_RANGE (the param's min / max)
 
 double clampD(double x, double lo, double hi) { return std::min(hi, std::max(lo, x)); }
@@ -32,13 +34,14 @@ double butter2Q() {
   return q;
 }
 
-/** touch-curve.js velocityDb(v01, spanDb, range); TOUCH (D43): r capped so spanDb · r <= kDynSpanMaxDb (72 / 24 = 3
- *  exactly, so every range <= 3 computes the same numbers as before). */
+/** touch-curve.js velocityDb(v01, spanDb, range), operation for operation (TOUCH D43 = 1.1.2 915f496): past 3 the
+ *  multi-layer span widens downwards only; spans >= 20 dB (single layer) stop at 3. Ranges <= 3: as before. */
 double velocityDb(double v01, double spanDb, double range) {
-  const double base = -spanDb * (1 - v01);
-  if (range == 1) return base;
-  const double r = std::min(range, kDynSpanMaxDb / spanDb);
-  return base + spanDb * (r - 1) * (v01 - kDynPivot);
+  if (range == 1) return -spanDb * (1 - v01);
+  const double r = std::min(range, kDynUpMax);
+  const double base = -spanDb * (1 - v01) + spanDb * (r - 1) * (v01 - kDynPivot);
+  if (range <= kDynUpMax || spanDb >= kDynWideSpan) return base;
+  return base - spanDb * (range - kDynUpMax) * (1 - v01);  // 1.1.2: downward only past 3
 }
 
 }  // namespace

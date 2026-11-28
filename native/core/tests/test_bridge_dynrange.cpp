@@ -82,13 +82,15 @@ TEST_SUITE("bridge_dynrange") {
 
   // TOUCH (D43): past 3. The level change against range 1 must be the shared/touch-curve.js velocityDb law, which the
   // web engine's sampler.js uses as it is:
-  //   velocityDb(v, span, r) - velocityDb(v, span, 1) = span · (min(r, 72 / span) - 1) · (v - 0.75), v = vel / 127.
+  //   velocityDb(v, span, r) - velocityDb(v, span, 1) = span · (min(r, 3) - 1) · (v - 0.75)
+  //     - (span < 20 ? span · max(r - 3, 0) · (1 - v) : 0),   v = vel / 127 (1.1.2: downwards only past 3).
   // Same note, same velocity, same layer, through the whole output chain: measured within 5.3e-4 dB of the law (the
   // per-sample ratio of two renders wanders ±0.03 dB, so something after the voice is not exactly scale-invariant);
   // the sample-by-sample web / native agreement at range 6 is the golden fixtures' job (dyn-range-*, slot taps).
-  TEST_CASE("dynamicRange past 3 (TOUCH D43): multi-layer to 60 dB, single layer capped at 72 dB (range 3)") {
+  TEST_CASE("dynamicRange past 3 (TOUCH D43 = 1.1.2): multi-layer to 60 dB downwards only, single layer stops at 3") {
     const auto law = [](int vel, double span, double r) {
-      return span * (std::min(r, 72.0 / span) - 1) * (vel / 127.0 - 0.75);
+      const double v = vel / 127.0;
+      return span * (std::min(r, 3.0) - 1) * (v - 0.75) - (span < 20 ? span * std::max(r - 3, 0.0) * (1 - v) : 0);
     };
     for (const int vel : {20, 40, 64}) {
       const double piano1 = noteDb(vel, "1", false, "salamander-piano");

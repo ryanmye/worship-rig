@@ -10463,28 +10463,34 @@ IO-2.0.md "Lane TOUCH". `git diff a28f0b3 -- app/js/engine` is empty.
   points carry a `--text` ring so they read in both colour-blind modes and on the Day themes (v6 test). The old
   Feel / Softest / Loudest / Full volume at sliders and the two-step "Fit to my touch" are gone from the UI
   (`fitTouch` stays exported and tested).
+- **Edit › slot › Response** (`views/edit/panels/slot.js` `activeCurve`): a slot on Normal draws the playing keyboard's
+  calibration points in its sparkline (`data-cal="points"`), as it drew a `{touch}` curve, with the same "Normal
+  follows …" line (edit-v2 slot "v11-touch" test extended).
 
 **2. Dynamics in dB** (`shared/touch-curve.js`)
 - `DYN_RANGE.max` 3 → **6**. Shown as one number in dB, Pianoteq's Dynamics: the span from velocity 0 to full on a
   multi-layer (piano) sound = 10 dB × range (slider 10..60 dB, step 0.5 dB; the store keeps the multiplier, 2
   decimals, absent = 1). The hint gives the single-layer span and the loud-end lift. Decision: one dB number for the
   pianos (what the player tunes), not a multiplier; the single-layer number is shown beside it.
-- **Single-layer cap**: `velocityDb` caps the range so `spanDb · r ≤ DYN_SPAN_MAX_DB` = **72 dB**. 72 = a single-layer
-  sampler at range 3, its pre-D43 maximum, so every range ≤ 3 computes the same numbers (72 / 24 = 3 exactly; unit
-  test over every 0.01 step 1..3 and every velocity: bit-identical), and single-layer sounds stay at 72 dB past 3
-  (they would reach 144 dB at 6). Multi-layer: 10 / 30 / 45 / 60 dB at 1 / 3 / 4.5 / 6. The pivot (velocity ≈ 96)
-  never moves, so the loud end rises: hardest note +12.5 dB over today's full at 6 (+5 dB at 3).
-- Native: `kDynRangeMax` 6, `kDynSpanMaxDb` 72 (`sampler.h`); `SongGraph::setDynamicRange` and the sampler op clamp
-  1..6; `velocityDb` has the same cap. mock-native and the shim use `validDynRange` (now 1..6). The bridge field and
+- **The rule past 3 is 1.x 1.1.2's** (`915f496`, orchestrator 2026-11-28: a 1.1.2 backup must sound the same in
+  2.0): `velocityDb` is that commit's function byte for byte (`DYN_UP_MAX` 3, `DYN_WIDE_SPAN` 20). Ranges ≤ 3 are the
+  1.1.1 formula (unit test over every 0.01 step 1..3 and every velocity: bit-identical). Past 3 the multi-layer span
+  widens **downwards only**, `− spanDb · (range − 3) · (1 − v)`: pianos 30 / 45 / 60 dB at 3 / 4.5 / 6, the hardest
+  note stays at the +5 dB of 3×, velocity ≈ 96 plays 7.5 dB quieter at 6× than at 1–3×. Spans ≥ 20 dB (single layer,
+  24 dB) stop at 3× (72 dB, +12 dB top; they would reach 144 dB at 6×). The first cut of this lane capped
+  `spanDb · r` at 72 dB and kept the pivot, so the piano top rose to +12.5 dB at 6× and an fff chord drove the master
+  ceiling ≈ 19 dB; it was replaced by the 1.1.2 rule before hand-back (no second rule kept).
+- Native: `kDynRangeMax` 6 (`sampler.h`); `SongGraph::setDynamicRange` and the sampler op clamp 1..6; `sampler.cpp`
+  `velocityDb` mirrors the 1.1.2 function operation for operation (`kDynUpMax`, `kDynWideSpan`). mock-native and the shim use `validDynRange` (now 1..6). The bridge field and
   `hello` stay as UIB made them (no minor bump): the field is the same, the reply echoes the range in force, and the
   app ships its UI and core together. `engine-api.spec.mjs` text says 1..6 (`engine-api.json --check` up to date).
 - **Fixtures** (web oracle → native): new `setup.dynamicRange` (page.js `setDynamicRange` before the song;
   `fixture_runner.cpp` `config {dynamicRange}`), five new exact-tier fixtures (`addedBy: 'TOUCH'`,
   `tests/golden_ids/touch.ids`, COVERAGE op "setDynamicRange"): `dyn-range-salamander-piano` / `dyn-range-ep-rhodes`
   (the sampler-<set> events at range 6, slot tap, slot gain 0.3) and `dyn-peak-r1` / `-r3` / `-r6` (dry salamander
-  chords, tap `out`). Native g++ vs the goldens: ep-rhodes max|diff| **2.98e-8**; salamander **1.39e-4** (pass; the same
-  residue as the range-1 `sampler-salamander-piano`, 1.51e-4 with the same PCM, ≈ 7e-5 of the peak: its own sample
-  path, not the dynamics); dyn-peak-r1 / r3 / r6 6.0e-5 / 6.3e-5 / 6.7e-5. The level change range 6 vs range 1 per
+  chords, tap `out`). Native g++ vs the goldens: ep-rhodes max|diff| **2.98e-8**; salamander **5.84e-5** (the set's own residue:
+  the range-1 `sampler-salamander-piano` is 1.51e-4 with the same PCM, ≈ 7e-5 of its peak); dyn-peak-r1 / r3 / r6
+  6.0e-5 / 6.3e-5 / 5.6e-5. The level change range 6 vs range 1 per
   note (dyn-range vs sampler-salamander-piano, gain removed), web vs native: |Δ| ≤ **1.7e-6 dB** on all five notes
   (≈ 2e-7 in amplitude). The 112 existing fixtures render byte-identical to the base build (112/112 `cmp`), and their
   manifest entries are unchanged (the goldens were rendered with `--only dyn-`; this Chromium is the playwright
@@ -10494,26 +10500,28 @@ IO-2.0.md "Lane TOUCH". `git diff a28f0b3 -- app/js/engine` is empty.
 
   | sound, vel | range 1 | range 3 | range 4.5 | range 6 |
   |---|---|---|---|---|
-  | salamander 7-note chord C2–C5, 127 | +5.9 → −1.37 | +10.9 → −1.02 | +14.7 → −0.87 | +18.4 → −0.75 |
-  | same, 110 | +4.6 → −1.47 | +6.9 → −1.30 | +8.7 → −1.17 | +10.4 → −1.04 |
-  | same, 127, reverb send 0.3 | +6.3 → −1.31 | +11.3 → −0.96 | +15.1 → −0.83 | +18.8 → −0.72 |
-  | salamander C4 alone, 127 | +1.1 → −1.87 | +6.1 → −1.41 | +9.9 → −1.17 | +13.6 → −0.97 |
-  | ep-rhodes 7-note chord, 127 (capped at 3) | −1.4 → −2.28 | +10.7 → −1.07 | +10.7 → −1.07 | +10.7 → −1.07 |
+  | salamander 7-note chord C2–C5, 127 | +5.9 → −1.37 | +10.9 → −1.02 | +10.9 → −1.02 | +10.9 → −1.02 |
+  | same, 110 | +4.6 → −1.47 | +6.9 → −1.30 | +4.9 → −1.45 | +2.9 → −1.63 |
+  | same, 127, reverb send 0.3 | +6.3 → −1.31 | +11.3 → −0.96 | +11.3 → −0.96 | +11.3 → −0.96 |
+  | salamander C4 alone, 127 | +1.1 → −1.87 | +6.1 → −1.41 | +6.1 → −1.41 | +6.1 → −1.41 |
+  | salamander C4 alone, 110 | −0.2 → −2.03 | +2.1 → −1.77 | +0.1 → −1.99 | −1.9 → −2.75 |
+  | ep-rhodes 7-note chord, 127 (stops at 3) | −1.4 → −2.28 | +10.7 → −1.07 | +10.7 → −1.07 | +10.7 → −1.07 |
 
-  The ceiling holds (never above −0.72 dBFS; asymptote −0.3), but at 60 dB an fff chord drives it ≈ 19 dB, where
-  today's default drives it ≈ 7 dB: on loud playing the catcher compressor and the soft clip do much more work.
-  Not changed here (the pivot keeps the song's balance against synths and organ at f, and ranges ≤ 3 must stay
-  as they were): Ryan's FP-10 test asks whether it pumps or distorts and whether he prefers the master lower.
+  Past 3× nothing gets louder: the ceiling sees no new peak (never above −0.96 dBFS here; asymptote −0.3), and the
+  loud notes it already caught at 3× (fff chords ≈ 12 dB into it) are where they were. Below fff the notes get
+  quieter. The golden `dyn-peak-r6` holds this on both engines.
 - **Tests**: `test/unit/shared/velocity-cal.test.mjs` (new, 9: parse / format round trip, refusals, evaluation,
-  presets, the assistant incl. a light board and a saturating board, refusals, dB dynamics + bit-identity);
+  presets, the assistant incl. a light board and a saturating board, refusals, dB dynamics = the 1.1.2 rule +
+  bit-identity ≤ 3);
   `test/phase1/shell/touch-cal.test.mjs` (new, 6: no curve = today's calls, calibrated path, silent notes, curve
   over `{touch}`, @computer, recentVelocities, store validation / migrate / export); `dynamic-range.test.mjs` and
-  engine-bridge `sound-settings.test.mjs` (cap 6); native `unit.bridge_dynrange` (ranges past 3 against the law,
-  within 2e-3 dB through the whole output chain: measured ≤ 5.3e-4, the per-sample ratio of two renders wanders
+  engine-bridge `sound-settings.test.mjs` (cap 6); native `unit.bridge_dynrange` (ranges past 3 against the 1.1.2
+  law, within 2e-3 dB through the whole output chain: measured ≤ 5.3e-4, the per-sample ratio of two renders wanders
   ±0.03 dB after the voice; ep-rhodes 6 = 3 bit for bit) and `unit.song` (clamp 9 → 6); settings "Your keyboards"
   (rewritten: Dynamics dB, paste / copy, refused input, numbers, keys, drag, Add, presets, assistant same / ok, the
   old curve still plays, Back to standard, Remember / Forget) in the app and fixture modes, `sound2.mjs` (dB slider →
   `config {dynamicRange}` 2, 6), v6 "TOUCH" (search finds dynamics / pianoteq / calibrate, the editor under
   `.v6-st`, colour-blind rg / by, Daylight Day).
 - **Needs Ryan's FP-10** (MAC_CHECK step 4 item 17): Key Touch Light vs Medium, the assistant with real keys, a pasted
-  community FP-10 curve, how 30 / 45 / 60 dB feel, and whether the master ceiling at 60 dB pumps on fff chords.
+  community FP-10 curve, and how 30 / 45 / 60 dB feel (at 60 dB a medium-loud note plays 7.5 dB quieter than at
+  1–3×: the master may want raising).
