@@ -837,6 +837,7 @@ final class RigSelfTestRunner {
                 if let body {
                     req.httpMethod = "POST"
                     req.httpBody = Data(body.utf8)
+                    req.setValue("application/json", forHTTPHeaderField: "Content-Type") // JSON only (415 otherwise)
                 }
                 if let token { req.setValue(token, forHTTPHeaderField: "X-Rig-Token") }
                 URLSession.shared.dataTask(with: req) { data, resp, _ in

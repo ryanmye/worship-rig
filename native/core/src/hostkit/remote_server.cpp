@@ -14,12 +14,10 @@
 #include <cctype>
 #include <cerrno>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 
-#if defined(__APPLE__)
-#include <sys/random.h>
-#endif
 
 #include "js_json.h"
 #include "js_text.h"
@@ -34,12 +32,16 @@ constexpr std::size_t kMaxIn = kMaxHead + kMaxBody;  // an HTTP request; a WebSo
 constexpr std::size_t kMaxOut = 256 * 1024;          // a client that stops reading is dropped
 
 void systemRandom(std::uint8_t *p, std::size_t n) {
+#if defined(__APPLE__)
+  arc4random_buf(p, n);  // a CSPRNG on every Apple OS; <sys/random.h> (getentropy) is missing from the iOS SDK
+#else
   while (n > 0) {
     const std::size_t k = n < 256 ? n : 256;
     if (getentropy(p, k) != 0) std::abort();  // no randomness = no safe tokens: never fall back to something weak
     p += k;
     n -= k;
   }
+#endif
 }
 
 std::int64_t steadyMs() {
