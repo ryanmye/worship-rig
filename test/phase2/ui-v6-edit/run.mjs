@@ -86,6 +86,8 @@ const info = await server.listen();
 const origin = `http://127.0.0.1:${info.port}`;
 const browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
 
+/** TOUCH (D43): modules the branch loads at boot that a pre-D43 base lacks (the only intended request change). */
+const TOUCH_MODULES = ['/js/shared/velocity-cal.js', '/js/views/components/velocity-editor.js'];
 async function purityBoot(base, q = '') {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   await pinTheme(context, 'sanctuary');
@@ -119,7 +121,9 @@ async function purityBoot(base, q = '') {
         dom: [...document.body.querySelectorAll('*')].filter((e) => !e.closest('#toasts > *')
           && !e.closest('[data-testid="setting-row-esc-panics"], [data-testid="setting-row-ui-v6"], '
             + '[data-testid="setting-row-cvd"], ' // U-CVD (D32): the third intended Settings row
-            + '[data-testid="setting-row-chart-view"], [data-testid="chart-toggle"]'))
+            + '[data-testid="setting-row-chart-view"], [data-testid="chart-toggle"], '
+            // TOUCH (D43; touch-skeptic F2, as in ui-v6): each keyboard's hidden Touch editor changed on purpose
+            + '[data-testid="settings-keyboards"] .st-kb-edit'))
           .map(shape).join('\n'),
         chart: [...document.querySelectorAll('[data-testid="chart-toggle"], [class*="chv-"], #perform-chart')]
           .map((e) => e.dataset.testid || e.id || e.className),
@@ -128,6 +132,7 @@ async function purityBoot(base, q = '') {
         rig: Object.keys(window.__rig).sort(),
       };
     });
+    for (const m of TOUCH_MODULES) reqs.delete(m); // TOUCH (D43): store / controller and Settings load them at boot
     return { ...r, reqs: [...reqs].sort() };
   } finally {
     await context.close();
