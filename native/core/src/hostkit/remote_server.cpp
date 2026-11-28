@@ -63,13 +63,17 @@ constexpr int kSendFlags = MSG_NOSIGNAL;
 constexpr int kSendFlags = 0;
 #endif
 
-/** Peer address as text, and whether it is on the local network. */
-bool peerOf(const sockaddr_storage &ss, std::string *ip) {
+/**
+ * Peer address as text (`ip`: the service's per-address budgets and failures), its socket-count key (`key`: an IPv6
+ * peer's /64, since one host can pick any address in it; skeptic-2 G2: but failures stay per address, or one IPv6
+ * guesser would block pairing for every phone on the LAN's /64), and whether it is on the local network.
+ */
+bool peerOf(const sockaddr_storage &ss, std::string *ip, std::string *key) {
   char buf[INET6_ADDRSTRLEN] = {0};
   if (ss.ss_family == AF_INET) {
     const auto *a = reinterpret_cast<const sockaddr_in *>(&ss);
     inet_ntop(AF_INET, &a->sin_addr, buf, sizeof buf);
-    *ip = buf;
+    *ip = *key = buf;
     return isLocalIPv4(ntohl(a->sin_addr.s_addr));
   }
   if (ss.ss_family == AF_INET6) {
@@ -81,15 +85,15 @@ bool peerOf(const sockaddr_storage &ss, std::string *ip) {
       in_addr v4;
       std::memcpy(&v4, b.data() + 12, 4);
       inet_ntop(AF_INET, &v4, buf, sizeof buf);
-    } else {
-      // one IPv6 host has a whole /64 to pick addresses from: limits count per /64 (skeptic-2 F8)
-      in6_addr net{};
-      std::memcpy(&net, b.data(), 8);
-      inet_ntop(AF_INET6, &net, buf, sizeof buf);
-      *ip = std::string(buf) + "/64";
+      *ip = *key = buf;
       return isLocalIPv6(b);
     }
+    inet_ntop(AF_INET6, &a->sin6_addr, buf, sizeof buf);
     *ip = buf;
+    in6_addr net{};
+    std::memcpy(&net, b.data(), 8);
+    inet_ntop(AF_INET6, &net, buf, sizeof buf);
+    *key = std::string(buf) + "/64";
     return isLocalIPv6(b);
   }
   return false;
@@ -113,7 +117,8 @@ std::string stringField(std::string_view body, std::string_view key) {
 
 struct Server::Client {
   int fd = -1;
-  std::string ip;
+  std::string ip;   // the peer's address (service budgets, failures)
+  std::string key;  // its socket-count key (an IPv6 /64)
   bool ws = false;
   bool closing = false;  // close once `out` is flushed
   std::int64_t closeBy = 0;  // …or at this time, flushed or not (a peer that stops reading; skeptic-2 C2)
@@ -452,8 +457,8 @@ void Server::acceptAll() {
     socklen_t sl = sizeof ss;
     const int fd = accept(listenFd_, reinterpret_cast<sockaddr *>(&ss), &sl);
     if (fd < 0) return;
-    std::string ip;
-    const bool local = peerOf(ss, &ip);
+    std::string ip, key;
+    const bool local = peerOf(ss, &ip, &key);
     if (!local) {
       close(fd);  // not on the local network: no reply at all
       continue;
@@ -462,15 +467,20 @@ void Server::acceptAll() {
     // paired WebSocket), from this IP when it is the IP that is full; else refuse the newcomer (skeptic-2 F8: idle
     // sockets that reconnect at once could hold every slot)
     auto live = [](const auto &c) { return !c->dead && !c->closing; };
-    auto unproven = [&](const auto &c) { return live(c) && !c->polling && (c->ws ? !c->authed : true); };
+    // skeptic-2 G1: a connection younger than kGraceMs is never the one evicted (a phone's WebSocket needs a moment
+    // between the upgrade and its auth message); a flood of reconnects then refuses itself, not the phone
+    const std::int64_t now = nowMs();
+    auto unproven = [&](const auto &c) {
+      return live(c) && !c->polling && (c->ws ? !c->authed : true) && now - c->openedAt >= kGraceMs;
+    };
     const auto perIp = std::count_if(clients_.begin(), clients_.end(),
-                                     [&](const auto &c) { return !c->dead && c->ip == ip; });
+                                     [&](const auto &c) { return !c->dead && c->key == key; });
     const auto total = std::count_if(clients_.begin(), clients_.end(), [](const auto &c) { return !c->dead; });
     const bool ipFull = perIp >= kMaxClientsPerIp, allFull = total >= kMaxClients;
     if (ipFull || allFull) {
       Client *victim = nullptr;
       for (auto &c : clients_) {
-        if (!unproven(c) || (ipFull && c->ip != ip)) continue;
+        if (!unproven(c) || (ipFull && c->key != key)) continue;
         if (!victim || c->openedAt < victim->openedAt) victim = c.get();
       }
       if (!victim) {
@@ -485,6 +495,7 @@ void Server::acceptAll() {
     auto c = std::make_unique<Client>();
     c->fd = fd;
     c->ip = ip;
+    c->key = key;
     c->since = c->openedAt = nowMs();
     clients_.push_back(std::move(c));
   }

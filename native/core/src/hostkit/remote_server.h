@@ -69,6 +69,7 @@ class Server {
   static constexpr int kMaxClients = 16;
   static constexpr int kMaxClientsPerIp = 4;  // per IPv4 address / per IPv6 /64
   static constexpr std::int64_t kFirstByteMs = 3000;  // a new connection must start its request this soon
+  static constexpr std::int64_t kGraceMs = 1500;     // never evicted younger than this (skeptic-2 G1)
 
  private:
   struct Client;

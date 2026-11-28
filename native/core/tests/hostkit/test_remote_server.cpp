@@ -406,24 +406,28 @@ TEST_SUITE("hostkit-remote-server") {
     CHECK(status(get(f.port(), "/api/state", first)) == 401);
   }
 
-  TEST_CASE("connection limits: 4 per IP; an idle HTTP connection is dropped") {
-    ServerTimeouts to;
-    to.httpMs = 400;
-    Fixture f(to);
+  TEST_CASE("connection limits: 4 per IP; eviction after a grace; an idle HTTP connection is dropped") {
+    Fixture f;
     f.server.setPage("x");
     std::vector<int> fds;
     for (int i = 0; i < 4; ++i) fds.push_back(connectTo(f.port()));
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // skeptic-2 G1: inside the grace nobody is evicted: the newcomer is refused
+    const int early = connectTo(f.port());
+    sendAll(early, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+    CHECK(readAll(early, 600).empty());
+    close(early);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
     // skeptic-2 F8: the 5th from the same IP takes the oldest idle one's place instead of being refused
     const int fifth = connectTo(f.port());
     sendAll(fifth, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
     CHECK(status(readAll(fifth, 1500)) == 200);
     close(fifth);
     CHECK(readAll(fds[0], 300).empty());  // the oldest was closed
-    // the rest say nothing: dropped after the first-byte deadline (3 s), not httpMs
+    // the rest say nothing: dropped at the first-byte deadline (3 s from their connect), long before httpMs (15 s)
     const std::int64_t t0 = nowMs();
     for (std::size_t i = 1; i < fds.size(); ++i) CHECK(readAll(fds[i], 5000).empty());
-    CHECK(nowMs() - t0 < 4500);
+    CHECK(nowMs() - t0 < 2500);
     for (int fd : fds) close(fd);
     CHECK(status(get(f.port(), "/")) == 200);
   }
