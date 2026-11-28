@@ -117,3 +117,20 @@ Step 5: iPad About.
   (pre-existing; N5's ⌘, at launch could hit it). settings-mac.js treats `rig.platform !== 'darwin'` as non-Mac
   (Electron's value): N8 must map 'macos'. My Samples' GarageBand Terminal steps are the only Chrome-era copy left
   (N2 / N6).
+
+## Skeptic N0 (2026-11-27, worktree /home/claude/wt-n0g)
+Brief: rebase lane-n0-tip on origin/v2-native, review adversarially (Chrome / Electron purity, `rig.shell` gates,
+__rigShell merge + shortcuts, page-load release, MIDI retry, Swift by reading, Settings wording), engine diff empty,
+gates, report in native/docs/reviews/n0-skeptic.md.
+- [x] rebase on origin/v2-native 3f5bf2c (one conflict: CONTRACT_CHANGES, both sections kept)
+- [x] review JS (controller, settings, main, native-midi, native-shell files, views)
+- [x] review Swift (RigShellRouter, RigHost, RigLibrary, RigNavigation, RigSelfTest)
+- [ ] gates (gates.mjs, UI6_PURITY_BASE=origin/v2-native)
+- [ ] report + final rebase check
+Findings (fixed as n0-skeptic commits):
+- F1 controller resumeRecording: "(downloaded when you stop)" shown in the native app (Chrome's OPFS wording).
+- F2 Settings MIDI line: a 'denied' reason in the native app pointed at "the browser's site settings".
+- F3 main.js beforeunload: the Chrome-tab guard (armed once audio has run) was on in the native app too; now
+  recording-only, as in Electron.
+Open: O1 Export (`<a download>` blob) may commit a main-frame navigation (NATIVE-GAPS finding 8, N3): with N0 that
+commit also posts panic + rec stop. O2 settings-mac.js platform 'darwin' vs 'macos' (N8, builder noted).

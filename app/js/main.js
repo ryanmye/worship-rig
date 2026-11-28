@@ -1054,11 +1054,13 @@ document.addEventListener('click', (e) => {
 
 // Don't cut the sound (or a take) by closing / reloading the tab (UX M2). Chrome: armed once audio has run.
 // Electron asks natively only while recording (its will-prevent-unload dialog is recording-specific), so there the
-// guard stays recording-only.
+// guard stays recording-only. n0-skeptic F3: so in the native app, which has no tab to close (the core keeps sounding
+// through a reload) and no public WKWebView beforeunload prompt to show the question with.
 let audioHasRun = false;
 window.addEventListener('beforeunload', (e) => {
   if (engine.ctx && engine.ctx.state === 'running') audioHasRun = true;
-  const guard = recorder.isRecording || (!isElectron && audioHasRun && controller.status.instance !== 'secondary');
+  const guard = recorder.isRecording
+    || (!isElectron && !nativeShell && audioHasRun && controller.status.instance !== 'secondary');
   if (guard) {
     e.preventDefault();
     e.returnValue = '';

@@ -2088,7 +2088,7 @@ export function mountSettings(el, ctx) {
         setText(
           midiStatus,
           !m.available
-            ? midiStatusText(m, isElectron, nativeShell)
+            ? midiStatusText(m, isApp, nativeShell) // n0-skeptic F2: no site settings in either app
             : m.connected
               ? `Connected: ${m.name}`
               : 'No keyboard connected — plug one in (it connects by itself), or play the computer keys A–;.',

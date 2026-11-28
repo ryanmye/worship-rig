@@ -2367,7 +2367,7 @@ export function createController(o) {
       r = { ok: false, error: err && err.message };
     }
     if (r && r.ok) {
-      warn(`Audio restarted, so the recording was split: ${saved} is saved; recording continues in ${r.path || r.filename || 'a new file'}${isElectron ? '' : ' (downloaded when you stop)'}.`);
+      warn(`Audio restarted, so the recording was split: ${saved} is saved; recording continues in ${r.path || r.filename || 'a new file'}${isElectron || nativeShell ? '' : ' (downloaded when you stop)'}.`);
     } else {
       warn(`Audio restarted and the recording stopped (${saved} is saved). Press Record to start a new take.`);
     }
