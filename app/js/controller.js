@@ -37,6 +37,7 @@ import {
   readDeviceSettings, deviceSettingUnset, DEVICE_SELECTIONS, isTrialId,
 } from './store.js';
 import { compileTouch } from './shared/touch-curve.js';
+import { compileCurve, calVelocity } from './shared/velocity-cal.js';
 import { transposeSemis, mod12, keyName } from './shared/music.js';
 import {
   PARAMS, isValidPath, isLearnButton, isLearnable, parsePath, describe, SLOT_COUNT, MAX_SLOTS, slotGainIndex,
@@ -1317,17 +1318,72 @@ export function createController(o) {
   const inputNames = new Map();
   /** input id (or COMPUTER_KEYBOARD) → noteOn options {touch} of a keyboard with its own curve (rebuilt on change). */
   const touchOpts = new Map();
+  /**
+   * TOUCH (D43): input id (or COMPUTER_KEYBOARD) → the keyboard's compiled calibration curve (settings.keyboards[name]
+   * .velocity). It maps the key velocity before the engine, which then plays it on the linear curve; it takes the place
+   * of an older {touch} curve on the same entry and of the Touch setting, as {touch} did.
+   */
+  const calCurves = new Map();
   let touchCapture = null; // captureTouch() listener
   function rebuildTouch() {
     touchOpts.clear();
+    calCurves.clear();
     const kb = settings().keyboards || {};
-    const optsFor = (name) => (kb[name] && kb[name].touch ? { touch: compileTouch(kb[name].touch) } : null);
-    for (const [id, name] of inputNames) {
-      const o = optsFor(name);
-      if (o) touchOpts.set(id, o);
+    const add = (key, name) => {
+      const e = kb[name];
+      if (!e) return;
+      const cal = e.velocity ? compileCurve(e.velocity) : null;
+      if (cal) calCurves.set(key, cal);
+      else if (e.touch) touchOpts.set(key, { touch: compileTouch(e.touch) });
+    };
+    for (const [id, name] of inputNames) add(id, name);
+    add(COMPUTER_KEYBOARD, COMPUTER_KEYBOARD);
+  }
+  /**
+   * One note-on from a keyboard through its own curve (TOUCH calibration, or the v11-touch {touch}), else the Touch
+   * setting. A calibrated velocity of 0 is a silent note: nothing is sent (the note-off then finds nothing held).
+   * @param {string} src  held-note source
+   * @param {string} key  input id or COMPUTER_KEYBOARD
+   * @param {number} note
+   * @param {number} vel  raw velocity 1..127
+   */
+  function keyboardNoteOn(src, key, note, vel) {
+    const cal = calCurves.get(key);
+    if (cal) {
+      const v = calVelocity(cal, vel);
+      if (v > 0) noteOnFrom(src, note, v);
+      return;
     }
-    const own = optsFor(COMPUTER_KEYBOARD);
-    if (own) touchOpts.set(COMPUTER_KEYBOARD, own);
+    const own = touchOpts.get(key);
+    if (own) noteOnFrom(src, note, vel, own);
+    else noteOnFrom(src, note, applyVelocitySens(vel, settings().velocitySens));
+  }
+  /** TOUCH (D43): the last VEL_LOG_SIZE raw velocities per device name (Settings' histogram), oldest first. */
+  const VEL_LOG_SIZE = 200;
+  const velLog = new Map(); // device name → {buf: Uint8Array, n, i}
+  function logVelocity(device, velocity) {
+    if (!device) return;
+    let l = velLog.get(device);
+    if (!l) {
+      if (velLog.size >= 64) velLog.delete(velLog.keys().next().value); // bounded: oldest device goes
+      velLog.set(device, (l = { buf: new Uint8Array(VEL_LOG_SIZE), n: 0, i: 0 }));
+    }
+    l.buf[l.i] = velocity;
+    l.i = (l.i + 1) % VEL_LOG_SIZE;
+    if (l.n < VEL_LOG_SIZE) l.n += 1;
+  }
+  /**
+   * TOUCH (D43): the raw velocities (before any curve) of up to the last 200 note-ons from one keyboard, oldest first.
+   * @param {string} device  MIDI device name or COMPUTER_KEYBOARD
+   * @returns {number[]}
+   */
+  function recentVelocities(device) {
+    const l = velLog.get(device);
+    if (!l) return [];
+    const out = [];
+    const start = l.n < VEL_LOG_SIZE ? 0 : l.i;
+    for (let k = 0; k < l.n; k++) out.push(l.buf[(start + k) % VEL_LOG_SIZE]);
+    return out;
   }
   /** v11-touch: names of remembered keyboards → midi ('first' prefers them). */
   function applyRemembered() {
@@ -1358,6 +1414,7 @@ export function createController(o) {
   }
   /** Tell a captureTouch() listener about a played note (raw velocity, before any curve). */
   function captured(velocity, device, inputId) {
+    logVelocity(device, velocity);
     if (!touchCapture) return;
     try {
       touchCapture({ velocity, device, inputId: inputId ?? null });
@@ -1575,10 +1632,8 @@ export function createController(o) {
       if (learned && isButtonControl(learned)) return triggerButton(learned, d.velocity > 0);
       if (d.velocity === 0) return noteOffFrom(midiSrc(d), d.note);
       captured(d.velocity, inputNames.get(d.inputId) ?? null, d.inputId);
-      // v11-touch: a keyboard with its own curve gets the raw velocity (its curve replaces the Touch setting)
-      const own = touchOpts.get(d.inputId);
-      if (own) noteOnFrom(midiSrc(d), d.note, d.velocity, own);
-      else noteOnFrom(midiSrc(d), d.note, applyVelocitySens(d.velocity, settings().velocitySens));
+      // v11-touch / TOUCH: a keyboard with its own curve (calibration or {touch}) replaces the Touch setting
+      keyboardNoteOn(midiSrc(d), d.inputId, d.note, d.velocity);
     },
     noteoff: (e) => {
       const d = e.detail;
@@ -1816,7 +1871,11 @@ export function createController(o) {
       if (note < 0 || note > 127) return;
       kbHeld.set(e.code, note);
       captured(KB_VELOCITY, COMPUTER_KEYBOARD, null);
-      noteOnFrom('kb', note, KB_VELOCITY, touchOpts.get(COMPUTER_KEYBOARD));
+      const cal = calCurves.get(COMPUTER_KEYBOARD); // TOUCH: the computer keys' calibration (velocity 100 through it)
+      if (cal) {
+        const v = calVelocity(cal, KB_VELOCITY);
+        if (v > 0) noteOnFrom('kb', note, v);
+      } else noteOnFrom('kb', note, KB_VELOCITY, touchOpts.get(COMPUTER_KEYBOARD));
     }
   }
 
@@ -4499,6 +4558,7 @@ export function createController(o) {
     transposeBy,
     swell,
     captureTouch,
+    recentVelocities,
     record,
     restartAudio,
     resumeAudio,
@@ -4597,11 +4657,12 @@ export function createController(o) {
     /** On-screen / programmatic performance input (source 'ui'). */
     perform: {
       noteOn: (note, vel = KB_VELOCITY) => {
-        captured(vel, COMPUTER_KEYBOARD, null);
-        // v11-touch: the on-screen keys' own curve (settings.keyboards['@computer']) replaces the Touch setting
-        const own = touchOpts.get(COMPUTER_KEYBOARD);
-        if (own) noteOnFrom('ui', note, Math.min(127, Math.max(1, Math.round(Number(vel) || 0))), own);
-        else noteOnFrom('ui', note, applyVelocitySens(vel, settings().velocitySens));
+        const raw = Math.min(127, Math.max(1, Math.round(Number(vel) || 0)));
+        captured(raw, COMPUTER_KEYBOARD, null);
+        // v11-touch / TOUCH: the on-screen keys' own curve (settings.keyboards['@computer']) replaces the Touch setting
+        if (calCurves.has(COMPUTER_KEYBOARD) || touchOpts.has(COMPUTER_KEYBOARD)) {
+          keyboardNoteOn('ui', COMPUTER_KEYBOARD, note, raw);
+        } else noteOnFrom('ui', note, applyVelocitySens(vel, settings().velocitySens));
       },
       noteOff: (note) => noteOffFrom('ui', note),
       sustain: (down) => {

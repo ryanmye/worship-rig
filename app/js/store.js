@@ -58,6 +58,7 @@ import {
   PARAMS, clamp, describe, isValidPath as isValidPath4, defaultSlot, SLOT_COUNT, MAX_SLOTS, slotGainIndex, isLearnable,
 } from './shared/params.js';
 import { normalizeTouch, PEDAL_CURVES, COMPUTER_KEYBOARD, validDynRange } from './shared/touch-curve.js';
+import { validCurve } from './shared/velocity-cal.js';
 import { normalizeClick, validTimeSig } from './shared/click-math.js';
 import { normalizeScenes } from './shared/scenes.js';
 import { validPackEntry, packModeOf, songFingerprint, PACK_ID_RE, PACK_ID_MAX } from './shared/patch-packs.js';
@@ -784,7 +785,11 @@ function normalizeMidiLearn(raw) {
   return out;
 }
 
-/** v11-touch: settings.keyboards (see COMPUTER_KEYBOARD). Unknown entry fields are kept; empty entries dropped. */
+/**
+ * v11-touch: settings.keyboards (see COMPUTER_KEYBOARD). Unknown entry fields are kept; empty entries dropped.
+ * TOUCH (D43): an entry's optional `velocity` {in, out} is a calibration curve (shared/velocity-cal.js); one that
+ * fails validCurve is dropped (a hand-edited file), never repaired. Idempotent (validCurve of a valid curve is itself).
+ */
 export function normalizeKeyboards(raw) {
   const out = {};
   if (!isObj(raw)) return out;
@@ -796,6 +801,11 @@ export function normalizeKeyboards(raw) {
     if (e.touch !== undefined) {
       if (isObj(e.touch)) e.touch = normalizeTouch(e.touch);
       else delete e.touch;
+    }
+    if (e.velocity !== undefined) {
+      const c = validCurve(e.velocity);
+      if (c) e.velocity = c;
+      else delete e.velocity;
     }
     if (e.remember !== true) delete e.remember;
     if (Object.keys(e).length) out[name] = e;
@@ -1945,7 +1955,7 @@ export function createStore(opts = {}) {
       }
       if (k === 'dynamicRange') {
         if (value === null || value === undefined) return { segs, value: undefined };
-        const v = validDynRange(value); // a number, clamped to 1..3; 1 = absent (today's sound)
+        const v = validDynRange(value); // a number, clamped to 1..6 (TOUCH, D43); 1 = absent (today's sound)
         return v === null ? null : { segs, value: v === 1 ? undefined : v };
       }
       // v11-metronome: settings.click is set whole (normalised; empty = absent); midiClockOut is a name or null (off)
@@ -2899,11 +2909,15 @@ export function createStore(opts = {}) {
      * v11-touch: merge `fields` into one keyboard's entry of settings.keyboards (names contain dots, so this is not a
      * set() path). A field set to null is removed; `fields` null forgets the keyboard. An entry left empty is dropped.
      * @param {string} name  MIDI device name, or COMPUTER_KEYBOARD
-     * @param {{touch?:object|null, remember?:boolean|null}|null} fields
+     * TOUCH (D43): `velocity` is a calibration curve {in, out}; an invalid one refuses the whole call (false).
+     * @param {{touch?:object|null, velocity?:{in:number[], out:number[]}|null, remember?:boolean|null}|null} fields
      * @returns {boolean} changed
      */
     setKeyboard(name, fields) {
       if (typeof name !== 'string' || !name || name.length > KEYBOARD_NAME_MAX || isReservedKey(name)) return false;
+      if (isObj(fields) && fields.velocity !== undefined && fields.velocity !== null && !validCurve(fields.velocity)) {
+        return false;
+      }
       const next = { ...(state.settings.keyboards || {}) };
       if (fields === null) delete next[name];
       else if (isObj(fields)) {

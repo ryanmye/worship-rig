@@ -30,9 +30,11 @@ test('store: settings.dynamicRange is optional, device-local, clamped; 1 and nul
   s.set('settings.dynamicRange', 1.8);
   assert.equal(s.get().settings.dynamicRange, 1.8);
   s.set('settings.dynamicRange', 7);
-  assert.equal(s.get().settings.dynamicRange, 3);
+  assert.equal(s.get().settings.dynamicRange, 6); // TOUCH (D43): the cap went 3 → 6 (60 dB for pianos)
+  s.set('settings.dynamicRange', 4.2);
+  assert.equal(s.get().settings.dynamicRange, 4.2);
   s.set('settings.dynamicRange', 'loud');
-  assert.equal(s.get().settings.dynamicRange, 3, 'refused');
+  assert.equal(s.get().settings.dynamicRange, 4.2, 'refused');
   s.set('settings.dynamicRange', 1);
   assert.equal('dynamicRange' in s.get().settings, false, '1 = absent');
   s.set('settings.dynamicRange', 2);
