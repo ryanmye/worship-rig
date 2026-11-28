@@ -10342,3 +10342,24 @@ NATIVE-GAPS §2 "N3", finding 8; MAC_CHECK "B2"; LaneR F2; n0-skeptic O1.
 - Swift (unbuilt here; CI mac-check compiles it): RigFiles.swift (new), RigNavigation.swift, RigHost.swift
   (`files`, registered on the router), RigSelfTest.swift. tree-sitter-swift 0.7.4: 0 ERROR nodes in all thirteen
   Shared/*.swift files. Mac / iPad checks: MAC_CHECK.md step 4 item 5, step 5, the self-test table.
+
+### N3 skeptic fixes (n3-skeptic, 2026-11-28; native/docs/reviews/n3-skeptic.md)
+
+- **F1 toasts wait for the panel**: new `afterSave(result, fn)` (views/edit/lib.js) runs `fn` at once when
+  `download()` returned nothing (a browser download: Chrome / Electron unchanged, still synchronous) and, in the
+  native app, only when the reply is `{saved}`. Edit's Export library ("Library exported") and the v6 song menu's
+  Export this song… ("Exported …") use it, so a Cancel in the save panel / Files picker leaves no toast. The other
+  export callers show no toast. The line above "toasts still show at once" no longer holds in the native app.
+- **F2 file names by bytes**: `RigFiles.safeName` caps at `maxNameBytes = 240` UTF-8 bytes (APFS's limit is 255
+  bytes, not characters; the old 200-character cap let a 200-character CJK name reach 600 bytes, and cut the
+  `.rig-song.json` off a long ASCII one). It keeps the suffix from the first dot whose tail is ≤ 24 bytes with no
+  space (`.rig-song.json`, `.json`) and shortens the part before it.
+- **F3 iPad picker dismissed by a swipe**: the export picker's presentation delegate answers like Cancel
+  (`presentationControllerDidDismiss`), so `busy` cannot stay set if the picker is swiped away without
+  `documentPickerWasCancelled` [U] (it answers once either way).
+- **Listener**: also `auxclick` with button 1 (a middle-click fires no `click`; Chromium downloads it), and an SVG
+  `<a>` (href is an `SVGAnimatedString`) is read through its `href` attribute. Not covered, by design: anchors inside
+  a *closed* shadow root (composedPath hides them; the app has no shadow DOM) and detached anchors (RigNavigation's
+  `.download` / cancel is the belt).
+- Tests: files.test.mjs 10 → 13 (SVG anchor, `afterSave`, auxclick); native-shell B2 +1 subtest (a `{canceled}`
+  reply: no "Exported" toast, checked with a MutationObserver; fails with `afterSave` mutated to always toast).

@@ -76,7 +76,7 @@
 
   if (typeof w.addEventListener !== 'function') return;
   // window, capture phase: the first listener of every click, so nothing in the page can let one through
-  w.addEventListener('click', function (ev) {
+  function onClick(ev) {
     if (ev.defaultPrevented) return; // nothing will be followed anyway
     var a = downloadAnchor(ev);
     if (!a) return;
@@ -85,5 +85,9 @@
     if (!/^(blob|data):/i.test(href)) return; // rig:// downloads are WKDownloads (RigNavigation)
     ev.preventDefault();
     saveUrl(href, a.getAttribute('download') || 'download');
-  }, true);
+  }
+  w.addEventListener('click', onClick, true);
+  // a middle-click fires auxclick, not click (n3-skeptic O-mid: Chromium downloads it; WebKit's new-window answer
+  // is RigNavigation's belt, [U]); take it over the same way
+  w.addEventListener('auxclick', function (ev) { if (ev.button === 1) onClick(ev); }, true);
 })();

@@ -70,12 +70,12 @@ test('saveText: canceled and error replies pass through; no handler answers {err
   assert.deepEqual(plain(await none.rig.saveText('a.json', 'x')), { error: 'shell unavailable' });
 });
 
-test('one capture listener on window for click; injected twice it is still one', () => {
+test('capture listeners on window for click and auxclick; injected twice they are still one each', () => {
   const s = filesWindow();
-  assert.deepEqual(s.listeners.map((l) => [l.type, l.capture]), [['click', true]]);
+  assert.deepEqual(s.listeners.map((l) => [l.type, l.capture]), [['click', true], ['auxclick', true]]);
   const save = s.win.rig.saveText;
   s.run();
-  assert.equal(s.listeners.length, 1);
+  assert.equal(s.listeners.length, 2);
   assert.equal(s.win.rig.saveText, save);
 });
 
@@ -187,4 +187,21 @@ test('n3-skeptic F1: afterSave toasts at once for a browser download, only on {s
     afterSave(Promise.resolve({ error: 'busy' }), () => seen.push('error'));
     await settle();
     assert.deepEqual(seen, ['browser', 'saved']);
+  });
+
+test('n3-skeptic O-mid: a middle-click (auxclick, button 1) is taken over; a right-click (button 2) is not',
+  async () => {
+    const href = 'blob:rig://app/mid';
+    const s = filesWindow({ blobs: { [href]: new Blob(['m'], { type: 'text/plain' }) } });
+    const aux = s.listeners.find((l) => l.type === 'auxclick').fn;
+    const mk = (button) => ({ button, defaultPrevented: false,
+      composedPath: () => [el('a', { download: 'm.txt' }, href)], preventDefault() { this.defaultPrevented = true; } });
+    const right = mk(2);
+    aux(right);
+    assert.equal(right.defaultPrevented, false);
+    const mid = mk(1);
+    aux(mid);
+    assert.equal(mid.defaultPrevented, true);
+    await settle();
+    assert.deepEqual(plain(s.handler.calls), [{ name: 'm.txt', text: 'm', m: 'saveFile' }]);
   });

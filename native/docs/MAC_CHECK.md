@@ -577,6 +577,10 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
     REC: the recording is one file in Music › Worship Rig that plays to the end (an export must never stop it), and
     the app never flashed or reloaded (held notes keep sounding through the panel).
   - A second Export while the panel is open does nothing (one panel at a time).
+  - (n3-skeptic F1) Edit's Export library and the song menu's Export this song…: **Cancel** in the panel shows no
+    "Library exported" / "Exported …" toast; Save shows it after the panel closes.
+  - (n3-skeptic F2) A song whose name is very long and non-ASCII (paste ~120 characters of 你好 into its name):
+    Export song suggests a name that still ends in `.rig-song.json` and saves.
 - [ ] 6. **Recording**: REC, 30 s, stop; the WAV is in Music › Worship Rig and plays.
 - [ ] 7. **Buffer size 64 / 128** and **Voices per sound 128** with a big pedalled chord: no clicks. Optional: time a
   large layered chord (data for raising desktop Auto later; Ryan kept it at 128, D5 follow-up).
@@ -636,6 +640,8 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
   saved. Edit's Export song and the song menu's Export this song… the same. Settings › Import… shows the iPad's own
   picker; the exported song comes back ("Imported 1 songs"). The chart's Import file picks a ChordPro file from
   Files. During a recording, an export does not stop it (the take in Files › Recordings plays to the end).
+  (n3-skeptic F3) Open the Files export picker and **swipe it down** (or tap outside it) instead of Cancel: a second
+  Export afterwards opens the picker again (not refused as "busy"); Cancel shows no "exported" toast.
 - [ ] The README's verification list items 6–7 (memory warning, AVAudioSession: silent switch, screen lock, a call,
   headphones in and out).
 - [ ] Landscape in the new layout (U9 items 39–40). The app doesn't turn to portrait: Info-iPad allows landscape
