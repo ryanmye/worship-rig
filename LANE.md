@@ -17,16 +17,16 @@ capped, values ≤ 3 bit-identical, peaks at max measured. No app/js/engine chan
 - [x] 4. DYN_RANGE max 6, single-layer cap (72 dB), validDynRange; native clamp (song.cpp, sampler.cpp, schema/bridge
       comments), mock-native; tests (web/native agree > 3)
 - [x] 5. UI: Settings › Keyboards (old layout) + v6 equivalent: editor, assistant, dB dynamics; tests
-- [ ] 6. Native rebuild g++ / clang-20 -Werror / ASan; ctest; fixtures byte-identical vs baseline
+- [x] 6. Native rebuild g++ / clang-20 -Werror / ASan; ctest; fixtures byte-identical vs baseline
 - [x] 7. Peak measurements at max through the master ceiling; CONTRACT_CHANGES "TOUCH (D43)"; MAC_CHECK step 4 item
 - [ ] 8. Gates: shell-unit, unit, settings, ui-core, ui-v6, migration-1x (+ new suites)
 - [ ] 9. Final report in this file
 
 ## Next step
-5 (UI tests: settings app + v6 modes), then 6 (clang-20 / ASan builds, ctest), 7 (docs), 8 (gates).
-Baseline renders: /home/claude/scratch/touch/base-renders (112, native/core/build-touch-base at a28f0b3 sources);
-new renders after the clamp change: 112/112 cmp-identical (g++). build-touch-base is now the lane's g++ build.
-node_modules is a symlink to /home/claude/worship-rig/node_modules (git-ignored).
+8: gates shell-unit,unit,settings,ui-core,ui-v6,migration-1x,edit-v2 on this tree, then the final report (9).
+Native on d9b292b (1.1.2 rule): g++ ctest 89/89; clang-20 -Werror 0 warnings, ctest 88/89 under load (rt.realtime
+xruns 4 > 3) and rt.realtime alone PASS; ASan+UBSan 89/89 (76 + the 13 cut off by a restart, rerun: no report);
+112 old fixtures g++ and clang byte-identical to the base renders (base PCM set); golden.touch PASS g++ / clang.
 
 ## Findings / decisions so far
 - Calibration stored as `settings.keyboards[name].velocity = {in, out}` (2 dp, 2–12 points, in strictly rising,
