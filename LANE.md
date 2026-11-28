@@ -126,8 +126,8 @@ native clamp/fixtures), rebase onto origin/v2-native, gates, report in native/do
 - [x] S5. ui-v6 purity edit
 - [x] S6. removed UI references / 1.x features
 - [x] S7. native clamp, fixtures, velocityDb vs wt-v112 byte compare
-- [ ] S8. gates
-- [ ] S9. report
+- [x] S8. gates (9/9 on 118e7ab; ui-v6-edit passed on rerun after a DOM-shape flake, probe 3/3 identical)
+- [x] S9. report (native/docs/reviews/touch-skeptic.md)
 Findings:
 - F1 (fixed 3a2aedc): calVelocity rounded outputs < 0.5 to silence; Heavy preset silenced key velocities 1..3 (old
   'hard' played them). Now only an output of exactly 0 is silent; > 0 plays at least 1.
@@ -143,4 +143,4 @@ Findings:
   same narrow TOUCH exclusion as ui-v6.
 - O8 (fixed): migration-1x D11 "from this computer" toast flake (2-toast stack evicts the info toast); pre-existing,
   reproduced on clean archives of 9f844af and e8bd0c7; the test now reads a MutationObserver toast log.
-- Next: S8 JS gates (shell-unit,unit,settings,ui-core,ui-v6,edit-v2,ui-v6-edit,migration-1x,chart), then report.
+- Done: verdict MERGE (Q1 for Ryan: Fit to my touch removed).

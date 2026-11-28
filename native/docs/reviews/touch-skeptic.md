@@ -133,7 +133,42 @@ second rebase; prefixed `touch-skeptic:`). They are recorded in CONTRACT_CHANGES
 
 ## Gates
 
-(filled in below after the gate run)
+**Gated tree: `118e7ab`** (all code and tests). Only this report and LANE.md change after it.
+
+| gate | result |
+|---|---|
+| shell-unit | PASS (35 s) |
+| unit | PASS (82 s) |
+| settings | PASS (129 s) |
+| ui-core | PASS (326 s) |
+| ui-v6 | PASS (338 s). Flag-off purity was compared against 3872bd9, not skipped. |
+| edit-v2 | PASS (391 s) |
+| ui-v6-edit | PASS on the second run (281 s). See the note below. |
+| migration-1x | PASS (119 s) |
+| chart | PASS (237 s) |
+
+The first ui-v6-edit run failed with "charts off: DOM shape". The suite's message is cut off before the differing
+line, so I wrote a probe (`.probe/purity-diff.mjs`) that boots the base and the branch with the same filter. Over 3
+pairs the DOM was identical (2500 elements each), and the forced rerun passed. The builder saw the same kind of
+one-off on ui-v6: an extra `<option>` in the MIDI-clock select, from a device-list timing difference. This is a
+known flake and not caused by this lane. I didn't chase it further.
+
+On an earlier tree (4ae42dd, before F2 and O8), ui-v6-edit failed on requests (F2) and migration-1x failed on the
+toast flake (O8). Both are fixed above.
+
+**Native.** These ran on the tree after the first rebase. The second rebase brought in docs only, so the native
+code is the same.
+- g++ Release: ctest 89/89.
+- clang++-20 (`-Werror`): 0 warnings, ctest 89/89.
+- ASan + UBSan: 89/89, with no sanitizer report. The first run was stopped at 30 minutes after 79 tests; I reran
+  tests 80–89 with `ctest -I 80,89`, which includes `golden.touch`.
+- Fixtures: all 112 old ones are byte-identical to the base (a28f0b3) renders, with g++ and with clang-20 (same PCM
+  set). The 5 new ones pass `golden.touch` on all three builds.
+- `git diff origin/v2-native...HEAD -- app/js/engine` is empty.
+
+**Disk.** I reused the lane's build directories (`native/core/build-touch-{base,clang20,asan}`, about 1.7 GB) and
+created none. I deleted my render copies and base archives. The lane's build directories should be deleted after
+the merge, as the builder noted.
 
 ## Questions
 
