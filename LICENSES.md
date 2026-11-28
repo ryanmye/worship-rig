@@ -195,6 +195,7 @@ can be shipped inside a PolyForm Noncommercial app, provided the notices travel 
 | dr_mp3, dr_wav (dr_libs) | `native/core/third_party/dr_libs/` | public domain (Unlicense) or MIT-0 | end of each header |
 | Unicode / ICU collation order (data, generated) | `native/core/src/hostkit/collation_table.inc` | Unicode License V3 | `native/core/src/hostkit/LICENSE.unicode` |
 | yyjson | `native/core/third_party/yyjson/` | MIT | `native/core/third_party/yyjson/LICENSE` |
+| QR Code generator (Project Nayuki, C++) | `native/core/third_party/qrcodegen/` | MIT | `native/core/third_party/qrcodegen/LICENSE` |
 | doctest (tests only, not shipped) | `native/core/third_party/doctest/` | MIT | `native/core/third_party/doctest/LICENSE.txt` |
 | miniaudio (Linux/Mac dev host only, not shipped) | `native/devhost/third_party/miniaudio/` | public domain (Unlicense) or MIT-0 | `native/devhost/third_party/miniaudio/LICENSE` |
 

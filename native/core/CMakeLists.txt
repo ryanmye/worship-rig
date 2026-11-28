@@ -41,9 +41,10 @@ add_library(rig_third_party STATIC
   third_party/yyjson/yyjson.c
   third_party/pffft/src/pffft.c
   third_party/pffft/src/pffft_common.c
-  third_party/impl/dr_libs_impl.c)
+  third_party/impl/dr_libs_impl.c
+  third_party/qrcodegen/qrcodegen.cpp)  # remote lane (D45): the Settings › Remote QR code (rig_hostkit)
 target_include_directories(rig_third_party PUBLIC
-  third_party/yyjson third_party/dr_libs third_party/pffft/include/pffft)
+  third_party/yyjson third_party/dr_libs third_party/pffft/include/pffft third_party/qrcodegen)
 target_include_directories(rig_third_party PRIVATE third_party/pffft/src)
 # -ffp-contract=off here too: pffft/dr_mp3 feed parity paths, and clang on arm64 contracts a*b+c into FMA by default
 # (SETUP_REVIEW A9)
@@ -101,7 +102,7 @@ file(GLOB RIG_HOSTKIT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/
 list(SORT RIG_HOSTKIT_SOURCES)
 add_library(rig_hostkit STATIC ${RIG_HOSTKIT_SOURCES})
 target_include_directories(rig_hostkit PUBLIC include PRIVATE src/hostkit)
-target_link_libraries(rig_hostkit PRIVATE rig_third_party)
+target_link_libraries(rig_hostkit PRIVATE rig_third_party Threads::Threads)  # Threads: the remote server (D45)
 rig_target_defaults(rig_hostkit)
 set_target_properties(rig_hostkit PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 

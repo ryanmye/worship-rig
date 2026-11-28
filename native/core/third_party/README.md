@@ -7,6 +7,7 @@ canonical GitHub raw URLs on 2026-11-19. Compiled with `-w` into `rig_third_part
 | dir | upstream | version | licence | used by | status |
 |---|---|---|---|---|---|
 | `yyjson/` | github.com/ibireme/yyjson `src/yyjson.{h,c}` | tag 0.10.0 | MIT | bridge JSON in, tools | in use |
+| `qrcodegen/` | github.com/nayuki/QR-Code-generator `cpp/qrcodegen.{hpp,cpp}` | commit 9a217d4 (2026-11-03), unchanged | MIT | Settings › Remote QR code (rig_hostkit, D45) | in use |
 | `doctest/` | github.com/onqtam/doctest `doctest/doctest.h` | tag v2.4.11 | MIT | unit tests | in use |
 | `dr_libs/` | github.com/mackron/dr_libs `dr_mp3.h`, `dr_wav.h` | master (dr_mp3 v0.7.5 unreleased) | public domain / MIT-0 | T06 decode | linked (impl in `impl/dr_libs_impl.c`), tested |
 | `pffft/` | github.com/marton78/pffft `src/pffft.c`, `pffft_common.c`, `pffft_priv_impl.h`, `src/simd/*`, `include/pffft/pffft.h`, `src/fmv.h` | master (float build only) | BSD-like (FFTPACK) | T04 convolver, T11 PeriodicWave | linked, round-trip tested |
