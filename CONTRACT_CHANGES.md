@@ -10525,3 +10525,13 @@ IO-2.0.md "Lane TOUCH". `git diff a28f0b3 -- app/js/engine` is empty.
 - **Needs Ryan's FP-10** (MAC_CHECK step 4 item 17): Key Touch Light vs Medium, the assistant with real keys, a pasted
   community FP-10 curve, and how 30 / 45 / 60 dB feel (at 60 dB a medium-loud note plays 7.5 dB quieter than at
   1–3×: the master may want raising).
+- **touch-skeptic fixes** (native/docs/reviews/touch-skeptic.md):
+  - F1: `calVelocity` silences only an output of exactly 0 (Pianoteq's rule). A positive output plays at least
+    velocity 1. Before, outputs under 0.5 rounded to silence: the Heavy preset (old 'hard' v^1.6 as points) silenced
+    key velocities 1–3, which the old curve played. Test: Heavy sounds at every velocity 1..127.
+  - O2: `parseVelocity` refuses an empty field between commas (`0, , 127` was read as two points), and says "text
+    after its closing ]" for `Velocity = [...];` or a trailing note (before: "missing its closing ]").
+  - O3: ui-v6 flag-off purity leaves out only `[data-testid="settings-keyboards"] .st-kb-edit` (each keyboard's
+    hidden Touch editor), so the block's heading, Dynamics row and keyboard rows are compared again.
+  - Test: a silent note under the pedal, on re-strike, as a duplicate note-on and across two keyboards sends no
+    engine call; a sounding note whose curve turns silent while held still gets its note-off.
