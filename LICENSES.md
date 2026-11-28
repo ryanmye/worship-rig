@@ -193,6 +193,7 @@ can be shipped inside a PolyForm Noncommercial app, provided the notices travel 
 | glibc `__tanh_fma` / `__expm1_fma` (fdlibm) | `native/core/src/num/js_tanh.cpp` | Sun fdlibm notice; see the note below | in the file |
 | pffft (marton78 fork) | `native/core/third_party/pffft/` | BSD-like (FFTPACK / UCAR) | `native/core/third_party/pffft/LICENSE.txt` |
 | dr_mp3, dr_wav (dr_libs) | `native/core/third_party/dr_libs/` | public domain (Unlicense) or MIT-0 | end of each header |
+| Unicode / ICU collation order (data, generated) | `native/core/src/hostkit/collation_table.inc` | Unicode License V3 | `native/core/src/hostkit/LICENSE.unicode` |
 | yyjson | `native/core/third_party/yyjson/` | MIT | `native/core/third_party/yyjson/LICENSE` |
 | doctest (tests only, not shipped) | `native/core/third_party/doctest/` | MIT | `native/core/third_party/doctest/LICENSE.txt` |
 | miniaudio (Linux/Mac dev host only, not shipped) | `native/devhost/third_party/miniaudio/` | public domain (Unlicense) or MIT-0 | `native/devhost/third_party/miniaudio/LICENSE` |
