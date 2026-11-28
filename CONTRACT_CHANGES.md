@@ -10226,9 +10226,10 @@ NATIVE-GAPS §2 "N0", §0 findings 3 and 4; LaneR O1; NMA review O3, O5.
   dead). The controller honours both (`menuOwnsShortcuts` skips its ⌘ keys, `keepsAwake` skips navigator.wakeLock);
   Electron behaves as before (`isElectron` implies both).
 - **`rig.getInfo()`** (native): `{version, build, shell:'native', platform, os, userData, port:0, portChanged:false,
-  otherLibrary:null, padsRoot:null, userSamplesDir:null, userSampleRoots:[], recordingsDir, backupsDir}` (1.x shape
-  without `electron`; `padsRoot` / `userSamplesDir` stay null until N4 / N2, so the D11 pad check and My Samples keep
-  their "not here" paths).
+  otherLibrary:null, padsRoot:null, userSamplesDir:null, userSampleRoots, recordingsDir, backupsDir}` (1.x shape
+  without `electron`; `padsRoot` stays null until N4, so the D11 pad check keeps its "not here" path).
+  n0-skeptic, after the N1 merge: `userSampleRoots` are RigPaths.userSampleRoots; `userSamplesDir` stays null on
+  purpose, so Settings › My Samples reads its folder line from N1's /api/user-samples (the iPad's Files name).
 - **`__rigShell` is merged into, never replaced** (finding 3). Native: `installShellHook` assigns `recording()` /
   `library()` into the shell's object; `stop()` deletes only those two, and only while they are still its own.
   Electron: replaced and deleted as before.

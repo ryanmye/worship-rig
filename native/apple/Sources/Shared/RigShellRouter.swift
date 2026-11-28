@@ -66,7 +66,9 @@ enum RigShellScripts {
 
 /// window.rig.getInfo (Settings › About, the D11 pad check, the self-test's `shell` step): the 1.x shape (main.js
 /// 'rig:getInfo') without `electron`. The rig://app origin never changes, so port 0 and no other library (M5).
-/// padsRoot / userSamplesDir stay null until lanes N4 / N2 own those folders.
+/// padsRoot stays null until lane N4 owns the pad folder. userSamplesDir stays null on purpose: Settings › My Samples
+/// then reads the folder from /api/user-samples (lane N1), which gives the iPad's Files name, not the container path
+/// (n1-skeptic O3); userSampleRoots are RigPaths' (n0-skeptic, after the N1 merge).
 final class RigInfo: RigShellFeature {
     let methods: [String] = ["getInfo"]
 
@@ -94,7 +96,7 @@ final class RigInfo: RigShellFeature {
             "otherLibrary": NSNull(),
             "padsRoot": NSNull(),
             "userSamplesDir": NSNull(),
-            "userSampleRoots": [String](),
+            "userSampleRoots": RigPaths.userSampleRoots.map { $0.path },
             "recordingsDir": RigPaths.recordingsDir.path,
             "backupsDir": RigPaths.backupsDir.path,
         ]
