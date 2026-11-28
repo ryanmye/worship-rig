@@ -620,5 +620,7 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 - The one commit by another GitHub account (ilomacht, cf6e15f) is Ryan's own account (Ryan, 2026-11-28), so every
   copyright holder of this line is Ryan; no rewrite.
   Windows (D27/D28): everything planned works under PolyForm except the ASIO SDK's GPLv3 option; Windows 2.0 uses
-  WASAPI only, and ASIO waits for Ryan to sign Steinberg's own licence if he wants it. Outside contributions from now
+  WASAPI only, and ASIO waits for Ryan to sign Steinberg's own licence if he wants it. Ryan (2026-11-28): "ship with
+  wasapi for now, slot in asio if it turns out to not be good" — the Windows audio host keeps ASIO as a drop-in
+  backend behind the same interface, decided by a test on a real PC with Ryan's interface. Outside contributions from now
   on need the contributor's agreement to PolyForm (CONTRIBUTING note). Not legal advice; Ryan may want a lawyer's look.
