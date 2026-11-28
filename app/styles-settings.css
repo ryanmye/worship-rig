@@ -343,3 +343,9 @@
 .st-previous-list { flex: 1 1 100%; list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .st-previous-row { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
 .st-previous-what { flex: 1 1 auto; }
+
+/* remote lane (D45): Settings › Mac › Remote (views/settings-remote.js) */
+.st-remote-url { font-weight: 600; user-select: text; -webkit-user-select: text; }
+.st-remote-qr { display: block; width: 176px; height: 176px; margin: 8px 0; image-rendering: pixelated;
+  border-radius: 6px; }
+.st-remote-code { font-size: 1.4em; font-weight: 700; letter-spacing: 0.12em; margin: 4px 0 8px; }

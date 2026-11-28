@@ -28,6 +28,9 @@
 //              exact bytes into <temp>/Saves (RigFiles.saveDir: no panel); a plain blob: page load is cancelled; no
 //              main-frame commit, the same URL, the recording still running ("files-recording" is required only
 //              when the recording started). "files-download" (not required): a detached <a download> as a WKDownload
+//   remote     (remote lane, D45) rig_remote through RigBus on loopback: the page over HTTP, pairing with the code,
+//              /api/state ready (the controller's state reached rig_remote), a PANIC from the "phone" reaching the
+//              page's rig.onBusCommand with via:"remote"; stopped again. The setting's UserDefaults key is untouched
 //   midi       (not required) the CoreMIDI client was created
 //   webcontent the WebContent process did not terminate
 //   console    zero console.error / uncaught errors / unhandled rejections / resource or CSP errors on the page
@@ -278,6 +281,27 @@ enum RigSelfTestScripts {
       const info = r && typeof r.getInfo === 'function' ? await r.getInfo() : null;
       out.version = info && !info.error ? info.version || null : null;
       out.infoError = info ? info.error || null : 'no getInfo';
+    } catch (err) {
+      out.probeError = String((err && err.message) || err);
+    }
+    return JSON.stringify(out);
+    """#
+
+    /// callAsyncJavaScript body (remote lane, D45), argument `phase`: 'listen' counts the commands the shell relays
+    /// through rig.onBusCommand (and checks rig.busPublish / rig.remote exist); 'read' returns what arrived.
+    static let remoteProbe = #"""
+    const out = {};
+    try {
+      const r = window.rig || null;
+      if (phase === 'listen') {
+        window.__rigRemoteSeen = [];
+        out.busPublish = !!(r && typeof r.busPublish === 'function');
+        out.remote = !!(r && r.remote && typeof r.remote.setEnabled === 'function');
+        out.listening = !!(r && typeof r.onBusCommand === 'function'
+          && r.onBusCommand((j) => window.__rigRemoteSeen.push(j)));
+      } else {
+        out.seen = window.__rigRemoteSeen || [];
+      }
     } catch (err) {
       out.probeError = String((err && err.message) || err);
     }
@@ -747,7 +771,7 @@ final class RigSelfTestRunner {
     /// Lane N3 (B2, n0-skeptic O1): exports during a recording never load a page; the saved bytes are exact.
     private func stepFiles() {
         let t = Date()
-        guard let dir = host.files.saveDir else { return stepEnd() }
+        guard let dir = host.files.saveDir else { return stepRemote() }
         let commits0 = commits
         let url0 = host.webView.url
         js(RigSelfTestScripts.filesProbe, ["timeoutMs": 8000]) { [self] d, err in
@@ -789,7 +813,69 @@ final class RigSelfTestRunner {
                 report.check("files-recording", started && still, required: started, recDetail)
                 report.check("files-download", !want.isEmpty && downloaded == want, required: false,
                              "a detached <a download> as a WKDownload: \(downloaded.count) of \(want.count) bytes")
-                stepEnd()
+                stepRemote()
+            }
+        }
+    }
+
+    /// Remote lane (D45): rig_remote on loopback through RigBus (the same calls Settings › Remote makes, without its
+    /// UserDefaults key): the page over HTTP, pairing with the code, a PANIC from the "phone" reaching the page's
+    /// rig.onBusCommand with via:"remote", and Lock-free state from the controller. Stopped again at the end.
+    private func stepRemote() {
+        let t = Date()
+        js(RigSelfTestScripts.remoteProbe, ["phase": "listen"]) { [self] d, err in
+            let ready: Bool = (d?["listening"] as? Bool) == true && (d?["remote"] as? Bool) == true
+            guard ready, let port = host.bus.startForTest() else {
+                report.check("remote", false, "not ready: probe \(d ?? [:]) \(err ?? ""), or rig_remote did not start")
+                return stepEnd()
+            }
+            let info = host.bus.info() as? [String: Any] ?? [:]
+            let code = info["code"] as? String ?? ""
+            let base = "http://127.0.0.1:\(port)"
+            func call(_ path: String, _ body: String?, _ token: String?, _ done: @escaping (Int, String) -> Void) {
+                var req = URLRequest(url: URL(string: base + path)!, timeoutInterval: 5)
+                if let body {
+                    req.httpMethod = "POST"
+                    req.httpBody = Data(body.utf8)
+                }
+                if let token { req.setValue(token, forHTTPHeaderField: "X-Rig-Token") }
+                URLSession.shared.dataTask(with: req) { data, resp, _ in
+                    let st = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                    let text = data.map { String(decoding: $0, as: UTF8.self) } ?? ""
+                    DispatchQueue.main.async { done(st, text) }
+                }.resume()
+            }
+            call("/", nil, nil) { [self] pageStatus, page in
+                call("/api/pair", "{\"code\":\"\(code)\"}", nil) { [self] pairStatus, pairBody in
+                    let tok = (try? JSONSerialization.jsonObject(with: Data(pairBody.utf8)) as? [String: Any])?["token"]
+                        as? String ?? ""
+                    call("/api/state", nil, tok) { [self] stateStatus, stateBody in
+                        call("/api/cmd", "{\"cmd\":\"panic\",\"id\":\"selftest1\"}", tok) { [self] cmdStatus, cmdBody in
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [self] in
+                                js(RigSelfTestScripts.remoteProbe, ["phase": "read"]) { [self] r, _ in
+                                    let seen = r?["seen"] as? [String] ?? []
+                                    let gotPanic: Bool = seen.contains {
+                                        $0.contains("\"panic\"") && $0.contains("\"remote\"")
+                                    }
+                                    let pageOK: Bool = pageStatus == 200 && page.contains("Worship Rig Remote")
+                                    let paired: Bool = pairStatus == 200 && tok.count == 32
+                                    let stateOK: Bool = stateStatus == 200 && stateBody.contains("\"ready\":true")
+                                    let cmdOK: Bool = cmdStatus == 200 && cmdBody.contains("\"ok\":true")
+                                    host.bus.setEnabled(false)
+                                    let off: Bool = (host.bus.info() as? [String: Any])?["on"] as? Bool == false
+                                    let ok = pageOK && paired && stateOK && cmdOK && gotPanic && off
+                                    report.set("remote", ["port": port, "seen": seen, "state": stateBody,
+                                                          "addresses": info["addresses"] ?? []])
+                                    var detail = "port \(port): page \(pageStatus), pair \(pairStatus), "
+                                    detail += "state \(stateStatus) (ready \(stateOK)), cmd \(cmdStatus), "
+                                    detail += "page got PANIC via remote \(gotPanic), stopped \(off)"
+                                    report.check("remote", ok, ms: ms(since: t), detail)
+                                    stepEnd()
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

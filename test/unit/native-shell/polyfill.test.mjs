@@ -29,7 +29,7 @@ test('files: NN-name.js, 00-core first, each a classic script (no import / expor
 
 test('core: window.rig flags, __rigNative queue, __rigShell basics (Mac defaults)', () => {
   const { win } = loadShell();
-  assert.deepEqual(plain({ ...win.rig, onMenu: undefined }), {
+  assert.deepEqual(plain({ ...win.rig, onMenu: undefined, remote: undefined }), { // rig.remote: bus.test.mjs
     isElectron: false, shell: 'native', platform: 'macos', menuOwnsShortcuts: false, keepsAwake: false,
   });
   assert.equal(typeof win.rig.onMenu, 'function');
@@ -148,7 +148,8 @@ test('Swift side: the router loads this folder with this separator; every call()
   assert.ok(router.includes('window.__rigShellConfig = '), 'the config line');
   const js = shellFiles().map((f) => fs.readFileSync(path.join(SHELL_DIR, f), 'utf8')).join('\n');
   const called = [...js.matchAll(/shell\.call\('([A-Za-z]+)'/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(called)].sort(), ['backupNow', 'getInfo', 'latestBackup', 'saveFile']);
+  assert.deepEqual([...new Set(called)].sort(), ['backupNow', 'busPublish', 'getInfo', 'latestBackup', 'remoteForgetAll',
+    'remoteInfo', 'remoteNewCode', 'remoteSetEnabled', 'saveFile']); // + remote lane (D45): 40-bus.js
   const swift = fs.readdirSync(SWIFT_DIR).filter((f) => f.endsWith('.swift'))
     .map((f) => fs.readFileSync(path.join(SWIFT_DIR, f), 'utf8')).join('\n');
   const declared = [...swift.matchAll(/let methods(?:: \[String\])? = \[([^\]]*)\]/g)]

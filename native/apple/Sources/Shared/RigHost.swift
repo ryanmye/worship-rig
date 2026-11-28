@@ -22,6 +22,8 @@ final class RigHost: NSObject, ObservableObject {
     let library: RigLibrary
     /// window.rig.saveText, WKDownloads and the open panel (lane N3, RigFiles.swift).
     let files: RigFiles
+    /// The Mac command bus and the browser remote (remote lane, D45, RigBus.swift).
+    let bus: RigBus
     /// window.rig's message handler (`rigShell`); WeakReplyHandler holds it weakly, so the host keeps it.
     private let shellRouter: RigShellRouter
     private(set) var audio: RigAudio!
@@ -54,16 +56,20 @@ final class RigHost: NSObject, ObservableObject {
         let navDelegate = RigNavigationDelegate()
         let libraryHandler = RigLibrary()
         let filesHandler = RigFiles()
+        let busHandler = RigBus()
         let router = RigShellRouter()
         router.register(libraryHandler)
         router.register(RigInfo())
         router.register(filesHandler)
+        router.register(busHandler)
         shellRouter = router
         scheme = schemeHandler
         bridge = bridgeHandler
         navigation = navDelegate
         library = libraryHandler
         files = filesHandler
+        bus = busHandler
+        if selfTest != nil { busHandler.persist = false } // the self-test never reads or writes the remote setting
         conf.setURLSchemeHandler(schemeHandler, forURLScheme: RigSchemeHandler.scheme)
         let ucc = WKUserContentController()
         if let hooks = selfTest {
@@ -102,12 +108,14 @@ final class RigHost: NSObject, ObservableObject {
         navigation.host = self
         library.host = self
         files.host = self
+        bus.host = self
         RigPaths.ensureDirectories()
         audio = RigAudio(host: self)
         midi = RigMIDI(host: self)
         createEngine()
         lifecycle = RigLifecycle(host: self)
         loadUI()
+        bus.restore() // the remote on, if Settings › Remote left it on (D34: off by default)
     }
 
     private func loadUI() {

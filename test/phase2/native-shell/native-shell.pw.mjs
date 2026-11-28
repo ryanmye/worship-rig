@@ -3,7 +3,8 @@
 // removed (WKWebView has none), and window.rig from the REAL app/js/native-shell files, injected at document start
 // the way RigShellScripts does (test/unit/native-shell/fake-shell.mjs), over a fake webkit.messageHandlers.rigShell.
 // Checks: the flags and the merged __rigShell after boot; Settings without Chrome wording (About, Library & Backup,
-// the Menu-bar section and the mini-panel button: LaneR O1), no Mac category until a Mac-only feature exists, Back
+// the Menu-bar section and the mini-panel button: LaneR O1), a Mac category once a Mac-only feature exists (the remote
+// lane's Settings › Mac › Remote, D45, is the first), Back
 // up now through the shell, the v6 summaries; iPad wording; the shell's files are never requested; zero
 // console.error, no HTTP >= 400. Chrome (no window.rig) keeps its copy.
 // Lane N3 (B2, n0-skeptic O1): every export goes through rig.saveText (or the <a download> listener), never a
@@ -46,7 +47,9 @@ after(async () => {
 
 /** The fake rigShell handler (page side): records calls; getInfo / backupNow / latestBackup as RigInfo / RigLibrary. */
 function fakeShell(info) {
-  window.__shell = { calls: [], backups: [], saves: [] };
+  window.__shell = { calls: [], backups: [], saves: [],
+    remote: { on: false, port: 0, code: '123456', paired: 0, pausedSec: 0, addresses: [], url: null, pairUrl: null,
+      qr: null } };
   const handlers = {
     getInfo: () => info,
     backupNow: (b) => {
@@ -54,6 +57,21 @@ function fakeShell(info) {
       return { path: `${info.backupsDir}/rig-20261127-120000.json` };
     },
     latestBackup: () => ({ error: 'no backup found' }),
+    // remote lane (D45): RigBus (the command bus + the browser remote), as rig_remote_info_json answers
+    busPublish: (b) => {
+      window.__shell.states = (window.__shell.states || 0) + 1;
+      return JSON.parse(b.json).v === 1 ? { ok: true } : { error: 'v must be 1' };
+    },
+    remoteInfo: () => window.__shell.remote,
+    remoteSetEnabled: (b) => {
+      const r = window.__shell.remote;
+      Object.assign(r, b.on ? { on: true, port: 8450, url: 'http://192.168.1.20:8450/',
+        pairUrl: `http://192.168.1.20:8450/#p=${r.code}`, qr: { size: 21, modules: '1'.repeat(7) + '0'.repeat(434) },
+        addresses: [{ name: 'en0', ip: '192.168.1.20' }] } : { on: false, port: 0, url: null, qr: null, addresses: [] });
+      return r;
+    },
+    remoteNewCode: () => Object.assign(window.__shell.remote, { code: '654321' }),
+    remoteForgetAll: () => Object.assign(window.__shell.remote, { paired: 0 }),
     // lane N3: RigFiles (the Mac's save panel; here the user always picks the suggested name)
     saveFile: (b) => {
       window.__shell.saves.push(b);
@@ -157,11 +175,13 @@ test('native Mac app: flags, merged __rigShell, Settings without Chrome wording,
         await a.until(() => !document.querySelector('#view-settings.open'));
       });
 
-      await t.test('no Mac category yet; Look holds "Low-resource mode" without menu-bar rows or the mini panel',
+      // remote lane (D45): the browser remote is the native app's first Mac-only feature, so the Mac category exists
+      // and the Low-resource section moves there (settings.js macCat), still without menu-bar rows or the mini panel
+      await t.test('a Mac category (Remote); it holds "Low-resource mode" without menu-bar rows or the mini panel',
         async () => {
           await openSettings(a);
-          assert.ok(!(await tabIds(a)).includes('mac'), 'no Mac-only feature exists before N7-N9');
-          await cat(a, 'look');
+          assert.ok((await tabIds(a)).includes('mac'), 'rig.remote is a Mac-only feature');
+          await cat(a, 'mac');
           const mb = await a.ev(() => {
             const s = document.querySelector('#view-settings [data-section="menubar"]');
             return {
@@ -177,6 +197,46 @@ test('native Mac app: flags, merged __rigShell, Settings without Chrome wording,
           assert.deepEqual({ ...mb, text: undefined }, { h: 'Low-resource mode', aria: 'Low-resource mode',
             mode: false, set: false, mini: false, login: false, low: true, text: undefined });
           assert.ok(!/Chrome|mini panel|menu-bar mode/i.test(mb.text), mb.text);
+        });
+
+      await t.test('remote lane: Settings › Mac › Remote: off by default, on shows address, QR and code, live info',
+        async () => {
+          await cat(a, 'mac');
+          const q = (sel) => a.ev((x) => {
+            const el = document.querySelector(`#view-settings [data-testid="${x}"]`);
+            return el ? { hidden: !!el.closest('[hidden]'), text: el.textContent, pressed: el.getAttribute('aria-pressed'),
+              disabled: !!el.disabled } : null;
+          }, sel);
+          await a.until(() => window.__shell.calls.includes('remoteInfo'));
+          assert.equal((await q('setting-remote')).pressed, 'false', 'off by default (D34)');
+          assert.equal((await q('remote-details')).hidden, true);
+          await a.page.click('#view-settings [data-testid="setting-remote"]');
+          await a.until(() => document.querySelector('#view-settings [data-testid="setting-remote"]')
+            .getAttribute('aria-pressed') === 'true');
+          assert.equal((await q('remote-details')).hidden, false);
+          assert.match((await q('remote-url')).text, /open http:\/\/192\.168\.1\.20:8450\//);
+          assert.equal((await q('remote-code')).text, 'Code 123456');
+          assert.equal((await q('remote-paired')).text, '0 phones paired');
+          assert.equal((await q('remote-forget')).disabled, true, 'nothing to forget');
+          const qr = await a.ev(() => {
+            const c = document.querySelector('#view-settings [data-testid="remote-qr"]');
+            return { w: c.width, hidden: c.hidden, px: Array.from(c.getContext('2d').getImageData(16, 16, 1, 1).data) };
+          });
+          assert.deepEqual(qr, { w: (21 + 8) * 4, hidden: false, px: [0, 0, 0, 255] }, 'the first dark module');
+          // the shell pushes a change (a phone paired)
+          await a.ev(() => window.__rigShell.remoteInfo(JSON.stringify({ ...window.__shell.remote, paired: 2 })));
+          await a.until(() => /2 phones/.test(document.querySelector('#view-settings [data-testid="remote-paired"]')
+            .textContent));
+          await a.page.click('#view-settings [data-testid="remote-new-code"]');
+          await a.until(() => /654321/.test(document.querySelector('#view-settings [data-testid="remote-code"]')
+            .textContent));
+          await a.page.click('#view-settings [data-testid="setting-remote"]');
+          await a.until(() => document.querySelector('#view-settings [data-testid="setting-remote"]')
+            .getAttribute('aria-pressed') === 'false');
+          assert.equal((await q('remote-details')).hidden, true);
+          assert.deepEqual((await a.ev(() => window.__shell.calls)).filter((m) => /^remote/.test(m)),
+            ['remoteInfo', 'remoteSetEnabled', 'remoteNewCode', 'remoteSetEnabled']);
+          assert.ok((await a.ev(() => window.__shell.states)) > 0, 'the controller publishes through rig.busPublish');
         });
 
       await t.test('About: version and build from getInfo, the folders; no Chrome / Electron / local server', async () => {
@@ -222,7 +282,7 @@ test('native Mac app: flags, merged __rigShell, Settings without Chrome wording,
           .textContent));
         const lib = await a.ev(() => document.querySelector('[data-testid="settings-sum-library"]').textContent);
         assert.ok(/backed up|automatic backups/.test(lib), lib);
-        assert.ok(!(await tabIds(a)).includes('mac'));
+        assert.ok((await tabIds(a)).includes('mac'), 'remote lane (D45): Mac › Remote');
       });
 
       assert.deepEqual(a.errors, []);

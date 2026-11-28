@@ -13,6 +13,7 @@ import { noteName } from '../shared/music.js';
 import { pickableThemes, resolveThemeId, lightSiblings, byId as themeById, LIGHT_AUTO_KEY } from '../shared/themes.js';
 import { latencyHint } from './components/latencyHint.js';
 import { mountHotkeys, mountUpdates } from './settings-mac.js';
+import { mountRemote } from './settings-remote.js';
 import { mountKeyboards } from './settings-keyboards.js';
 import { clickSettingsOf } from '../shared/click-math.js';
 import { mountGarageBandImport } from './settings-import.js';
@@ -309,7 +310,10 @@ export function mountSettings(el, ctx) {
   // the Mac category: Electron always; the native Mac app once a lane gives it a Mac-only feature (N7 menu bar and
   // login item, N8 global shortcuts, N9 update check). Until then its one row (Low-resource) stays in Look, as in
   // Chrome
-  const macFeatures = isElectron || (nativeShell && rig.platform === 'macos'
+  // remote lane (D45): the browser remote (rig.remote, Mac app only) is one too
+  const hasRemote = !!(nativeShell && rig.platform === 'macos' && rig.remote
+    && typeof rig.remote.setEnabled === 'function');
+  const macFeatures = isElectron || hasRemote || (nativeShell && rig.platform === 'macos'
     && ['setMenuBarMode', 'setLoginItem', 'setHotkeys', 'setUpdateCheck'].some((k) => typeof rig[k] === 'function'));
   // LaneR O1: menu-bar mode needs the shell's tray (Electron; native once N7 adds setMenuBarMode); Chrome has the mini
   // panel window instead. The native app without it shows neither
@@ -1846,6 +1850,12 @@ export function mountSettings(el, ctx) {
       place('mac', h('section.st-section', { 'aria-label': 'Updates', 'data-section': 'updates-check' },
         h('h2.st-h2', { text: 'Updates' }), updates.toggleRow));
     } else updates.el.prepend(updates.toggleRow); // a window.rig without isElectron: keep the switch by its line
+  }
+  // remote lane (D45): Settings › Mac › Remote, the browser remote (native Mac app only)
+  if (hasRemote && panels.has('mac')) {
+    const remote = mountRemote(macDeps);
+    place('mac', remote.el);
+    cleanups.push(() => remote.destroy());
   }
   // onboarding O9: the live resource line is a diagnostic, not a setting
   diag.append(mbResource);
