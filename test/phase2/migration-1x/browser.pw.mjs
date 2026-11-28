@@ -1,6 +1,6 @@
 // Lane E5, in the real 2.0 app (app/index.html, headless Chromium): a real 1.1 library arrives through
-//   (a) the native shell's first-launch path: window.rig is RigLibrary.swift's polyfill, the page passes Swift's
-//       readyProbe (store.pristine && __rigShell.menuReady()), then __rigShell.menu('importLatestBackup');
+//   (a) the native shell's first-launch path: window.rig is the native shell's own (app/js/native-shell), the page
+//       passes Swift's readyProbe (store.pristine && __rigShell.menuReady()), then __rigShell.menu('importLatestBackup');
 //   (b) Settings › "Import latest backup…" › Replace library, over an edited library (backed up first);
 //   (c) Settings › Import… with the 1.1 Settings export, into the untouched factory library (E5: replaces it).
 // Each time Perform shows the 1.1 song and setlist and Settings shows its settings; zero console.error, no HTTP ≥ 400.
@@ -12,6 +12,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 import { ROOT, fixture, tmpDir } from './lib.mjs';
 import { MIDI_PERMISSIONS, waitRigReady } from '../../integration/lib.mjs';
+import { documentStartScript } from '../../unit/native-shell/fake-shell.mjs';
 
 const require = createRequire(import.meta.url);
 const { createServer } = require(path.join(ROOT, 'server.js'));
@@ -37,33 +38,31 @@ after(async () => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-/** RigLibrary.swift's document-start polyfill (same shape), with the staged 1.x backup and a disk log. */
-const POLYFILL = (text) => {
-  const menu = [];
+/**
+ * The native shell's Swift side for these tests (RigLibrary over RigShellRouter): a fake
+ * webkit.messageHandlers.rigShell with the staged 1.x backup and a disk log. The window.rig in front of it is the
+ * real one (app/js/native-shell, lane N0: `NATIVE_SHELL`), injected after this.
+ */
+const FAKE_NATIVE = (text) => {
   window.__disk = { backups: [], staged: text ? { path: '/Electron/backups/rig-20261124-210000.json', origin: 'http://127.0.0.1:8438', savedAt: 1, text } : null };
-  const shell = window.__rigShell = window.__rigShell || {};
-  shell.menu = (id) => menu.slice().forEach((cb) => { try { cb(id); } catch (e) { console.warn(e); } });
-  shell.menuReady = () => menu.length > 0;
-  window.rig = {
-    isElectron: false,
-    platform: 'darwin',
-    backupNow: async (json, kind) => {
+  const handlers = {
+    backupNow: ({ json, kind }) => {
       window.__disk.backups.push({ kind: kind || 'library', json });
       return { path: `/Native/backups/rig-${window.__disk.backups.length}.json` };
     },
-    latestBackup: async () => window.__disk.staged || { error: 'no backup found' },
-    onMenu: (cb) => {
-      if (typeof cb !== 'function') return () => {};
-      menu.push(cb);
-      return () => { menu.splice(menu.indexOf(cb), 1); };
-    },
+    latestBackup: () => window.__disk.staged || { error: 'no backup found' },
   };
+  window.webkit = { messageHandlers: { rigShell: {
+    postMessage: (b) => Promise.resolve(handlers[b.m] ? handlers[b.m](b) : { error: `unknown method ${b.m}` }),
+  } } };
 };
+const NATIVE_SHELL = documentStartScript({ platform: 'macos', menuOwnsShortcuts: false, keepsAwake: false });
 
 async function open(text, { via, install } = {}) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.grantPermissions([...MIDI_PERMISSIONS], { origin });
-  await context.addInitScript(POLYFILL, text);
+  await context.addInitScript(FAKE_NATIVE, text);
+  await context.addInitScript({ content: NATIVE_SHELL });
   // D11: how the shell found the staged file, and 1.1.1's marker already on this origin (same-origin Chrome)
   if (via) await context.addInitScript((v) => { if (window.__disk.staged) window.__disk.staged.via = v; }, via);
   if (install) await context.addInitScript((id) => localStorage.setItem('rig.install', id), install);

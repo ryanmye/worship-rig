@@ -66,6 +66,9 @@ const SUITES = [
   // Lane NMA: the real app on the bridge engine (MockNative) without Web MIDI, as in WKWebView: midi.js over
   // engine-bridge/native-midi.js (keys, Learn, Program Change, lamp, hot-unplug, clock-out port); ~10 s
   { name: 'native-midi', groups: ['phase2'], cmd: [node, 'test/phase2/native-midi/run.mjs'], timeout: 6 * MIN },
+  // Lane N0: the real app with the native shell's window.rig (app/js/native-shell, injected) over MockNative: flags,
+  // the merged __rigShell, Settings without Chrome wording (About, Library, Menu bar: LaneR O1), iPad, Chrome's copy
+  { name: 'native-shell', groups: ['phase2'], cmd: [node, 'test/phase2/native-shell/run.mjs'], timeout: 8 * MIN },
   // Lane E5: real 1.x libraries (test/fixtures/library-1x) → 2.0 on every import path, the 1.1 downgrade, the 2.0 app
   { name: 'migration-1x', groups: ['phase2'], cmd: [node, 'test/phase2/migration-1x/run.mjs'], timeout: 8 * MIN },
   // themes-setup: every registered theme boots flash-free, switches at runtime, picker/Quick, selector coverage

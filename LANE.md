@@ -21,12 +21,12 @@ Worktree /home/claude/wt-n0, branch lane-n0 from origin/v2-native c7bccec.
 - [x] 3. app edits: controller (menuOwnsShortcuts, keepsAwake, __rigShell merge), settings / v6 settings (Mac
         category, About, backups copy, Menu bar, MIDI text), main.js MIDI texts, pad gates
 - [x] 4. native-midi.js: first-listen retry (backoff, then next `ports`) + unit tests
-- [ ] 5. Playwright: native-shell suite (real app, bridge-mock, real polyfill files); migration-1x repointed
+- [x] 5. Playwright: native-shell suite (real app, bridge-mock, real polyfill files); migration-1x repointed
 - [ ] 6. docs: CONTRACT_CHANGES, SHELL.md, MAC_CHECK, NATIVE-GAPS note, release notes
 - [ ] 7. gates via tools/cloud/gates.mjs; final report here
 
 ## Next step
-5. Playwright native-shell suite + migration-1x repoint.
+6. docs (CONTRACT_CHANGES, SHELL.md, MAC_CHECK, ENGINE_CONTRACT adapter note, NATIVE-GAPS, release notes); then gates.
 
 ## Findings / decisions so far
 - Files go under `app/js/native-shell/` (brief), not `native/apple/Resources/shell/` (plan): app/ is already a folder
@@ -41,3 +41,9 @@ Worktree /home/claude/wt-n0, branch lane-n0 from origin/v2-native c7bccec.
   only the crash path did). The pump queue is not dropped there (didCommit may arrive after the new page's hello).
 
 ## Open questions
+- Settings in the native app (probe .probe/chrome-words.mjs, bridge-mock + real shell files): the only Chrome /
+  browser / Terminal words left are the GarageBand Terminal steps in My Samples (N2 / N6) and "bring one from
+  Chrome" in the new Library hint (intended).
+- Pre-existing race (not N0): opening Settings before main.js's lazy settings mount finishes (`__rig.viewsReady`)
+  shows the placeholder, which the mount then hides again (body keeps `settings-open`). A native ⌘, (N5) right at
+  launch could hit it; the suite waits for viewsReady.
