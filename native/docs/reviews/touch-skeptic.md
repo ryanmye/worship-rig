@@ -18,7 +18,9 @@ The design holds:
 - One conflict: `CONTRACT_CHANGES.md`, where both sides appended a section. Both were kept (N0, N3, then TOUCH).
 - `controller.js` and `MAC_CHECK.md` merged by themselves. I checked the controller hunks by hand: N0's changes and
   the TOUCH note path don't touch each other.
-- After the rebase, `git diff origin/v2-native...HEAD -- app/js/engine` is still empty.
+- During the review `origin/v2-native` moved to 3872bd9 (D45 and the REMOTE lane plan, docs only). The lane was
+  rebased onto it cleanly.
+- After both rebases, `git diff origin/v2-native...HEAD -- app/js/engine` is still empty.
 
 ## Findings and fixes
 
@@ -26,16 +28,18 @@ The design holds:
 |---|---|---|---|
 | F1 | `calVelocity` rounded every output under 0.5 to 0, which is a silent note. The Heavy preset (the old 'hard' curve, v^1.6, as points) maps key velocities 1–3 to 0.05–0.35, so they made no sound. The old 'hard' curve played them (about −10 dB on a piano), because the engine never got a 0. A pasted or edited curve with a shallow start had the same problem. The module's own rule, and Pianoteq's, is that only an output of 0 is silent. | med (lost soft notes on stage, in the lane's own preset) | **fixed** |
 | O2 | `parseVelocity` read `0, , 127` as two points instead of refusing the missing number, which goes against the module's "refused, not repaired" rule. Text after the `]` (`Velocity = [...];`, or a note pasted from a forum) was refused with the wrong reason ("missing its closing ]"). | low | **fixed** |
+| F2 | The **ui-v6-edit** gate failed. The suite has its own flag-off purity check ("charts off: non-sample requests"), and the builder had only taught ui-v6's check about the two new modules. The builder ran `edit-v2`, not `ui-v6-edit`. | med (a red gate) | **fixed** |
 | O3 | The ui-v6 flag-off purity check left out the whole `[data-testid="settings-keyboards"]` block. That also dropped the heading, the Dynamics row and every keyboard row's head (Touch… / Remember / Forget) from the DOM comparison. Only each row's hidden `.st-kb-edit` actually changed. | low (a weaker test) | **fixed** (narrowed) |
 | O4 | Stale `1..3` comments in `bridge-engine.js` setDynamicRange and in `mock-native.js`. | trivial | **fixed** |
 | O5 | Dead CSS: `.st-kb-fit .ed-btn` (the old fit box is gone). | trivial | **fixed** |
 | O6 | Parsing is strict about surrounding text. `My FP-10: Velocity = [...]` is refused ("Paste one curve"). The player has to paste the curve alone. | low | open (by design; the message says what to paste) |
+| O8 | migration-1x "D11 Settings › Import… from this computer" is flaky, and the flake is older than this lane: it reproduces on clean archives of 9f844af and e8bd0c7. The toast stack keeps 2 (main.js), and the warn toasts for this box's missing devices can arrive after the info "Device settings used: N" and push it out before the 50 ms poll sees it. | low (a red gate on a loaded box) | **fixed** (the test reads every added toast) |
 | O7 | After a downgrade, 1.x keeps `velocity` (it keeps unknown entry fields) but doesn't play it. Saving points clears `touch`, so a keyboard calibrated in 2.0 plays Standard touch in 1.x. 1.1.1 also clamps the Range to 3. | — | expected; noted |
 
 ### Fixes
 
-The fixes are commits ee6e832, 3a2aedc, 32bf082, 9ae8616, 6a21123 and c841a05 (prefixed `touch-skeptic:`). They are
-recorded in CONTRACT_CHANGES under "TOUCH (D43)", as "touch-skeptic fixes".
+The fixes are commits 4943757, 8f7b5b3, b46f9b6, e1f118d, 6804cc1, 972f44f, d77dfca and c50114b (SHAs after the
+second rebase; prefixed `touch-skeptic:`). They are recorded in CONTRACT_CHANGES under "TOUCH (D43)", as "touch-skeptic fixes".
 
 - **F1:** `calVelocity` returns 0 only when `calAt` is exactly 0. Any positive output plays velocity 1 or more.
   - Unit test: Heavy sounds at every key velocity from 1 to 127, and an output of 0.008 plays velocity 1.
@@ -48,6 +52,10 @@ recorded in CONTRACT_CHANGES under "TOUCH (D43)", as "touch-skeptic fixes".
 - **O3:** the purity filter is `[data-testid="settings-keyboards"] .st-kb-edit`. `TOUCH_MODULES` (the two new modules
   removed from the request set) is unchanged and narrow. Its JSDoc was moved so that `purityBoot`'s doc sits on
   `purityBoot` again.
+- **F2:** `test/phase2/ui-v6-edit/run.mjs` `purityBoot` gets the same `TOUCH_MODULES` request filter and the same
+  `[data-testid="settings-keyboards"] .st-kb-edit` DOM filter.
+- **O8:** the test installs the first-launch test's MutationObserver toast log before it clicks Import, and waits
+  on the log. It passed 3 runs out of 3; before the fix it failed 3 of 3 on 9f844af and 1 of 2 on e8bd0c7.
 - **New controller test** (touch-cal, 7th test):
   - A silent note (FP-10 curve, velocity 1) under the pedal, on a re-strike and as a duplicate note-on sends no
     `noteOn` and no `noteOff`.
@@ -98,7 +106,9 @@ recorded in CONTRACT_CHANGES under "TOUCH (D43)", as "touch-skeptic fixes".
      sounds the same. Its `{touch}` keyboards come through as they are.
    - Old `{shape,min,max,top}` entries still play through `{touch}` exactly as before (touch-cal test 3). The editor
      shows them as points but saves nothing until the player changes something.
-5. **ui-v6 purity edit.** The change was narrow but excluded too much; see O3.
+5. **ui-v6 purity edit.** The change was narrow but excluded too much; see O3. With the narrower filter, ui-v6's
+   purity test still passes against the base (32 s, compared, not skipped), so the only DOM change in that block is
+   inside `.st-kb-edit`. ui-v6-edit's copy of the check had not been updated at all; see F2.
 6. **Removed UI.**
    - The old keyboard Feel / Softest / Loudest / Full volume at sliders, the curve diagram and the two-step "Fit to
      my touch" are gone from Settings (both layouts). No test id, class or code still refers to them. The only

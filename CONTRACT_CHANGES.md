@@ -10533,5 +10533,8 @@ IO-2.0.md "Lane TOUCH". `git diff a28f0b3 -- app/js/engine` is empty.
     after its closing ]" for `Velocity = [...];` or a trailing note (before: "missing its closing ]").
   - O3: ui-v6 flag-off purity leaves out only `[data-testid="settings-keyboards"] .st-kb-edit` (each keyboard's
     hidden Touch editor), so the block's heading, Dynamics row and keyboard rows are compared again.
+  - F2: ui-v6-edit's own flag-off purity check gets the same two filters (it failed on the two new modules).
+  - O8 (a flake from before this lane): migration-1x "D11 Settings › Import… from this computer" reads every added
+    toast. The 2-toast stack could push "Device settings used" out before the poll saw it.
   - Test: a silent note under the pedal, on re-strike, as a duplicate note-on and across two keyboards sends no
     engine call; a sounding note whose curve turns silent while held still gets its note-off.
