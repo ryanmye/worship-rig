@@ -453,6 +453,28 @@ void Server::loopOnce() {
   }
 }
 
+/** New connections per IP (per /64): ServerTimeouts acceptPerSec / acceptBurst; at most 256 keys (skeptic-2 H1). */
+bool Server::acceptAllowed(const std::string &key) {
+  if (!to_.limitLoopback && (key.rfind("127.", 0) == 0 || key == "::1")) return true;
+  const double perSec = to_.acceptPerSec, burst = to_.acceptBurst;
+  const std::int64_t t = nowMs();
+  auto it = acceptBuckets_.find(key);
+  if (it == acceptBuckets_.end()) {
+    if (acceptBuckets_.size() >= 256) {
+      acceptBuckets_.erase(std::min_element(acceptBuckets_.begin(), acceptBuckets_.end(),
+                                            [](const auto &a, const auto &b) { return a.second.second < b.second.second; }));
+    }
+    it = acceptBuckets_.emplace(key, std::make_pair(burst, t)).first;
+  }
+  double &tokens = it->second.first;
+  std::int64_t &at = it->second.second;
+  tokens = std::min(burst, tokens + static_cast<double>(t - at) / 1000.0 * perSec);
+  at = t;
+  if (tokens < 1) return false;
+  tokens -= 1;
+  return true;
+}
+
 void Server::acceptAll() {
   for (;;) {
     sockaddr_storage ss{};
@@ -461,19 +483,21 @@ void Server::acceptAll() {
     if (fd < 0) return;
     std::string ip, key;
     const bool local = peerOf(ss, &ip, &key);
-    if (!local) {
-      close(fd);  // not on the local network: no reply at all
+    if (!local || !acceptAllowed(key)) {
+      close(fd);  // not on the local network, or reconnecting too fast (skeptic-2 H1): no reply at all
       continue;
     }
     // full: make room by dropping the oldest connection that hasn't proved anything yet (no request served, no
     // paired WebSocket), from this IP when it is the IP that is full; else refuse the newcomer (skeptic-2 F8: idle
     // sockets that reconnect at once could hold every slot)
     auto live = [](const auto &c) { return !c->dead && !c->closing; };
-    // skeptic-2 G1: a connection younger than kGraceMs is never the one evicted (a phone's WebSocket needs a moment
-    // between the upgrade and its auth message); a flood of reconnects then refuses itself, not the phone
+    // skeptic-2 G1 / H1: an upgraded WebSocket gets kGraceMs to send its auth message before it can be evicted (a
+    // phone needs a moment); a silent socket gets no grace, so young reconnecting sockets can't keep every slot
     const std::int64_t now = nowMs();
     auto unproven = [&](const auto &c) {
-      return live(c) && !c->polling && (c->ws ? !c->authed : true) && now - c->openedAt >= kGraceMs;
+      if (!live(c) || c->polling) return false;
+      if (c->ws) return !c->authed && now - c->openedAt >= kGraceMs;
+      return true;
     };
     const auto perIp = std::count_if(clients_.begin(), clients_.end(),
                                      [&](const auto &c) { return !c->dead && c->key == key; });

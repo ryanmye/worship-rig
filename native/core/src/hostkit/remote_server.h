@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -36,6 +37,11 @@ struct ServerTimeouts {
   std::int64_t longPollMs = 10000; // /api/state?since=… holds this long, then answers anyway
   std::int64_t wsAuthMs = 5000;    // the first WebSocket message must authenticate
   std::int64_t wsIdleMs = 60000;   // a WebSocket with no message at all (the page pings every 20 s)
+  // new connections per IP (per IPv6 /64), skeptic-2 H1: a polling page opens one per request, so this only stops
+  // fast reconnect churn. Loopback is exempt (a local process can do anything anyway) unless a test says otherwise.
+  double acceptPerSec = 8;
+  double acceptBurst = 30;
+  bool limitLoopback = false;
 };
 
 class Server {
@@ -69,7 +75,8 @@ class Server {
   static constexpr int kMaxClients = 16;
   static constexpr int kMaxClientsPerIp = 4;  // per IPv4 address / per IPv6 /64
   static constexpr std::int64_t kFirstByteMs = 3000;  // a new connection must start its request this soon
-  static constexpr std::int64_t kGraceMs = 1500;     // never evicted younger than this (skeptic-2 G1)
+  static constexpr std::int64_t kGraceMs = 1500;     // an upgraded WebSocket's time to authenticate (G1)
+
 
  private:
   struct Client;
@@ -86,6 +93,7 @@ class Server {
   void wsClose(Client &c, std::uint16_t code, std::string_view why);
   void pushViews();
   void dropStaleTokens();
+  bool acceptAllowed(const std::string &key);
   void closeLater(Client &c);
   void notifyInfo();
   std::int64_t nowMs() const;
@@ -109,6 +117,7 @@ class Server {
   std::atomic<std::uint16_t> port_{0};
   bool destroying_ = false;  // ~Server: stop() fires no hook (the host may be tearing down; skeptic-2 C7)
   std::vector<std::unique_ptr<Client>> clients_;  // server thread only
+  std::map<std::string, std::pair<double, std::int64_t>> acceptBuckets_;  // key → (tokens, last), server thread
   std::uint64_t lastSeq_ = 0;
   std::atomic<std::uint64_t> forgetEpoch_{0};
   std::uint64_t seenForgetEpoch_ = 0;

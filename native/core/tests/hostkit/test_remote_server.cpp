@@ -406,19 +406,13 @@ TEST_SUITE("hostkit-remote-server") {
     CHECK(status(get(f.port(), "/api/state", first)) == 401);
   }
 
-  TEST_CASE("connection limits: 4 per IP; eviction after a grace; an idle HTTP connection is dropped") {
+  TEST_CASE("connection limits: 4 per IP; silent sockets make room at once, an upgraded WS gets a grace") {
     Fixture f;
     f.server.setPage("x");
     std::vector<int> fds;
     for (int i = 0; i < 4; ++i) fds.push_back(connectTo(f.port()));
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    // skeptic-2 G1: inside the grace nobody is evicted: the newcomer is refused
-    const int early = connectTo(f.port());
-    sendAll(early, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
-    CHECK(readAll(early, 600).empty());
-    close(early);
-    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-    // skeptic-2 F8: the 5th from the same IP takes the oldest idle one's place instead of being refused
+    // skeptic-2 F8 / H1: the 5th from the same IP takes the oldest silent one's place, however young it is
     const int fifth = connectTo(f.port());
     sendAll(fifth, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
     CHECK(status(readAll(fifth, 1500)) == 200);
@@ -427,9 +421,43 @@ TEST_SUITE("hostkit-remote-server") {
     // the rest say nothing: dropped at the first-byte deadline (3 s from their connect), long before httpMs (15 s)
     const std::int64_t t0 = nowMs();
     for (std::size_t i = 1; i < fds.size(); ++i) CHECK(readAll(fds[i], 5000).empty());
-    CHECK(nowMs() - t0 < 2500);
+    CHECK(nowMs() - t0 < 3600);  // ~3 s after their connect, not 15
+    for (int fd : fds) close(fd);
+    // G1: four upgraded WebSockets waiting to authenticate are protected for kGraceMs: a newcomer is refused...
+    fds.clear();
+    for (int i = 0; i < 4; ++i) {
+      const int fd = connectTo(f.port());
+      sendAll(fd, "GET /ws HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                  "Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n");
+      readUntil(fd, "\r\n\r\n");
+      fds.push_back(fd);
+    }
+    const int early = connectTo(f.port());
+    sendAll(early, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+    CHECK(readAll(early, 600).empty());
+    close(early);
     for (int fd : fds) close(fd);
     CHECK(status(get(f.port(), "/")) == 200);
+  }
+
+  TEST_CASE("new connections per IP are rate-limited (skeptic-2 H1); loopback is exempt by default") {
+    ServerTimeouts to;
+    to.limitLoopback = true;
+    to.acceptPerSec = 2;
+    to.acceptBurst = 4;
+    Fixture f(to);
+    f.server.setPage("x");
+    int served = 0;
+    for (int i = 0; i < 10; ++i) served += status(get(f.port(), "/")) == 200 ? 1 : 0;
+    CHECK(served >= 4);
+    CHECK(served <= 5);  // the burst, plus at most one refilled while the loop ran
+    std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+    CHECK(status(get(f.port(), "/")) == 200);  // refilled
+    Fixture g;  // defaults: loopback not limited
+    g.server.setPage("x");
+    served = 0;
+    for (int i = 0; i < 40; ++i) served += status(get(g.port(), "/")) == 200 ? 1 : 0;
+    CHECK(served == 40);
   }
 
   TEST_CASE("request rate limit per IP") {
