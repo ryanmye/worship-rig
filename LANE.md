@@ -155,10 +155,23 @@ Brief: same as above; report goes to native/docs/reviews/core3f-skeptic.md. Scra
 (builds, logs; `wt/` = a detached probe worktree, never committed).
 
 - [x] read RESUMABLE, LANE, CLAUDE.md, diff (native src, tests, store/views); merge-tree onto origin/v2-native clean
-- [ ] T1 independent repro: env-gated sleep between slots (no builder hook) on base 5c7ed2d vs lane, test :353
-- [ ] T1 mutation: hold taken but lane 1 ignores it; does the new test catch it?
-- [ ] native gates: g++, clang-20 -Werror, ASan ctest; fixtures byte-identical vs base
+- [x] T1 independent repro (no builder hook): env-gated 30 ms sleep after each slot that adopts a still-pending
+      prebuild, test :353 "switch back to B": base 10/10 busy 3-5 (FAIL), lane 10/10 busy 1 (only the injected
+      tick-gap lines fail); no sleep: base 10/10 busy 1 (passes, as on CI mostly). Logs scratch/core3f-sk/loop-*
+- [x] T1 mutation (lane 1's wait ignores held_): new core3f case 5/5 PASS (9/1) -> S1; :353 + sleep 5/5 busy 3-4
+- [x] S1 fixed 6c88d33: held, the hook waits ms/100; mutation now 5/5 FAIL (1-4 adopted), lane 5/5 pass (~2 s)
+- [ ] native gates (scratch/core3f-sk/native-gates.sh, resumable; summary in ng/summary.txt)
 - [ ] JS gates: shell-unit, unit, chart, migration-1x, ui-v6-bank, settings (gates.mjs)
 - [ ] review doc + final report
 
 Findings (skeptic 2):
+- S1 (T1 test strength): testWaitPrebuildStart returned at once while held, so the new case could not tell a
+  working hold from one lane 1 ignores. Fixed 6c88d33.
+- O (T1): onRateChanged's hold also spans the retiring synth.js WaveBank::get loop (a first-use bank at the new
+  rate: 80-300 ms with lane 1 idle). Harmless (rare; and holding through dropPrebuilt keeps lane 1 from starting a
+  stale-rate job). Not changed.
+- O (T3): longIterations keeps the last 256; a sanitized window with > 256 long iterations after a held one could
+  drop it (false pass only). Not changed.
+- O (CAP): a chart refused at the restore cap shows inline in the import dialog AND as the 'library-full' toast
+  (same text; not a x2 toast). keepTrial's copy of a trial chart (store.set) past 2.5 MB is dropped silently
+  (pre-existing, was 2 MB). Not changed.
