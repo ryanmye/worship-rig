@@ -205,3 +205,21 @@ test('n3-skeptic O-mid: a middle-click (auxclick, button 1) is taken over; a rig
     await settle();
     assert.deepEqual(plain(s.handler.calls), [{ name: 'm.txt', text: 'm', m: 'saveFile' }]);
   });
+
+test('n3-skeptic F4: a failed read hands the URL to a detached <a download> (WebKit\'s WKDownload path)',
+  async () => {
+    const made = [];
+    const href = 'blob:rig://app/unreadable';
+    const s = filesWindow();
+    s.win.document = { createElement: (tag) => {
+      const a = { tag, clicked: 0, click() { this.clicked += 1; } };
+      made.push(a);
+      return a;
+    } };
+    const ev = s.click(el('a', { download: 'x.json' }, href));
+    assert.equal(ev.defaultPrevented, true);
+    await settle();
+    assert.deepEqual(plain(made), [{ tag: 'a', clicked: 1, href, download: 'x.json' }]);
+    assert.deepEqual(s.handler.calls, [], 'nothing reached saveFile');
+    assert.match(String(s.warns[0][0]), /could not read x\.json .*handing it to WebKit/);
+  });

@@ -58,9 +58,28 @@
       return r;
     }, function (e) {
       var msg = String((e && e.message) || e);
-      console.warn('[rig] could not read ' + name + ' to save it: ' + msg);
+      console.warn('[rig] could not read ' + name + ' to save it: ' + msg + '; handing it to WebKit\'s download');
+      handOff(href, name);
       return { error: msg };
     });
+  }
+
+  /**
+   * n3-skeptic F4: the read failed (WebKit could not fetch the blob: from this page, NATIVE-GAPS Q1 [U]) after the
+   * click's default was prevented. Click a detached copy instead: its event never reaches window (no loop), and
+   * WebKit's own `<a download>` handling makes it a WKDownload (RigNavigation `.download` → RigFiles), never a load.
+   */
+  function handOff(href, name) {
+    try {
+      var d = w.document;
+      if (!d || typeof d.createElement !== 'function') return;
+      var a = d.createElement('a');
+      a.href = href;
+      a.download = name;
+      a.click();
+    } catch (e) {
+      console.warn('[rig] could not hand ' + name + ' to the download: ' + String((e && e.message) || e));
+    }
   }
 
   /** The <a download> a click lands on (the target or an ancestor), or null. */

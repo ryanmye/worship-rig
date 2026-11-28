@@ -358,6 +358,8 @@ test('filesProbe (lane N3): records, saves through saveText, clicks an in-page a
     [['a', 'N3 click.json', true, true], ['a', 'N3 download.json', false, true]]);
   assert.match(out.href1, /^blob:/, 'it tried a plain blob: page load (Swift cancels it; the step checks webView.url)');
   assert.equal(out.samePage, true);
+  assert.deepEqual(out.fileWarns, [], 'n3-skeptic F4: no listener warnings recorded');
+  assert.equal(typeof win.console.warn, 'function');
   // the names the Swift step reads back
   for (const n of ['N3 self-test \\u{e9}.json', 'N3 click.json', 'N3 download.json']) {
     assert.ok(swift.includes(`appendingPathComponent("${n}")`), n);

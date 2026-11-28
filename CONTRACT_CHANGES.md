@@ -10361,5 +10361,13 @@ NATIVE-GAPS §2 "N3", finding 8; MAC_CHECK "B2"; LaneR F2; n0-skeptic O1.
   `<a>` (href is an `SVGAnimatedString`) is read through its `href` attribute. Not covered, by design: anchors inside
   a *closed* shadow root (composedPath hides them; the app has no shadow DOM) and detached anchors (RigNavigation's
   `.download` / cancel is the belt).
-- Tests: files.test.mjs 10 → 13 (SVG anchor, `afterSave`, auxclick); native-shell B2 +1 subtest (a `{canceled}`
+- **F4 a failed read is handed to WebKit**: the listener prevents the click's default before it knows whether
+  `fetch(blob:)` works from a `rig://` page (NATIVE-GAPS / LANE Q1 [U]); a failed read used to save nothing. It now
+  clicks a detached copy of the anchor (`handOff`): that click never reaches `window` (no loop) and WebKit's own
+  `<a download>` handling makes it a WKDownload (RigNavigation `.download` → RigFiles), never a page load. Chromium
+  check (fetch forced to fail): one download `hand.json`, no main-frame navigation, one warn. The self-test's
+  `filesProbe` records the listener's warnings (`files.probe.fileWarns`, counted in the `files` detail), so a Q1
+  failure shows even when the hand-off still writes `N3 click.json`.
+- Tests: files.test.mjs 10 → 14 (SVG anchor, `afterSave`, auxclick, the hand-off); selftest filesProbe: no
+  warnings; native-shell B2 +1 subtest (a `{canceled}`
   reply: no "Exported" toast, checked with a MutationObserver; fails with `afterSave` mutated to always toast).

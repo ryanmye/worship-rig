@@ -142,6 +142,15 @@ enum RigSelfTestScripts {
         try { await rig.controller.record(); } catch (e) { out.recError = String((e && e.message) || e); }
       }
       out.recStarted = await until(recording, Math.min(4000, timeoutMs));
+      // n3-skeptic F4: the listener's read / save warnings (a failed blob: fetch is handed to a WKDownload, which
+      // would still write "N3 click.json": these say which way it went)
+      const con = window.console;
+      const warn0 = con.warn;
+      out.fileWarns = [];
+      con.warn = function (...a) {
+        if (/^\[rig\] could not/.test(String(a[0]))) out.fileWarns.push(String(a[0]).slice(0, 200));
+        return warn0.apply(this, a);
+      };
       out.text = 'N3 self-test \u00e9 \u00fc \u2014 \ud83d\udca1\n{"schema":2}\n';
       const save = window.rig && typeof window.rig.saveText === 'function'
         ? await window.rig.saveText('N3 self-test \u00e9.json', out.text) : { error: 'no rig.saveText' };
@@ -164,6 +173,7 @@ enum RigSelfTestScripts {
       out.href1 = String(window.location.href);
       out.samePage = window.__n3Marker === 'still this page';
       out.stillRecording = recording();
+      con.warn = warn0;
       if (out.recStarted) {
         try { await rig.controller.record(); } catch (e) { out.recStopError = String((e && e.message) || e); }
       }
@@ -767,6 +777,8 @@ final class RigSelfTestRunner {
                 let urlWord: String = sameURL ? "unchanged" : "changed to \(urlNow)"
                 var detail = "saveText \(saveWord), <a download> click \(clickWord), \(n) commit(s)"
                 detail += ", URL \(urlWord), same page \(samePage), files \(names)"
+                let fileWarns: Int = (d?["fileWarns"] as? [Any])?.count ?? 0
+                detail += ", \(fileWarns) listener warning(s) (see files.probe.fileWarns)"
                 report.check("files", ok, ms: ms(since: t), detail)
                 let started: Bool = (d?["recStarted"] as? Bool) == true
                 let still: Bool = (d?["stillRecording"] as? Bool) == true
