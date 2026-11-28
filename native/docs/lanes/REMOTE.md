@@ -185,3 +185,27 @@ reads them as text but the JSON parser); `HEAD /` answers Content-Length 0.
 8. Status blocks here after each push.
 
 ## Status
+
+### Status 2026-11-28 (remote session)
+
+- **Done (on v2-native):** the Mac command bus and the browser remote, end to end on Linux.
+  - Bus: `rig_bus.h` (bus.js checks in C++, parity-tested), bus v1 optional `scene.name` / `locked` /
+    `via:'remote'` / `droneToggle.on`; the controller refuses remote commands under Lock except PANIC.
+  - Remote: `rig_remote.h` server (LAN-only, Host/Origin checks, pairing code → token, backoff, rate limits, long
+    poll + WebSocket), `app/remote/index.html` (ES5), `rig-remote-dev`, suite `remote` (run-all).
+  - Mac: `40-bus.js`, `RigBus.swift`, Settings › Mac › Remote (D46), self-test step `remote`.
+  - Two skeptic reviews: no blockers left. Review 1 S1–S4 fixed; review 2 F1–F7 fixed (an unauthenticated
+    WebSocket could grow memory without bound and wedge every slot; the pause between code rotations now doubles to
+    1 h).
+- **Next:** fix forward from CI `mac-check` (Swift compiles only there); skeptic-2's two late minor items: G1 (a
+  WebSocket between upgrade and auth can be evicted under a connection flood; the page falls back to polling, so the
+  remote keeps working) and G2 (count IPv6 failures per /128, sockets per /64). Then, for the iPhone remote (D30), more
+  commands and fields on the same bus (pick a song, drone key / level, master), plus Bonjour.
+- **Blocked:** nothing.
+- **Ryan, on the Mac:**
+  1. Settings › Mac › Remote: switch it on. macOS may ask to allow incoming connections: allow it.
+  2. Scan the QR with an iPhone on the same Wi-Fi. Pair, try every button, then Lock on the Mac (only PANIC works).
+  3. Turn Wi-Fi off and on, and check the page reconnects.
+  4. Old phones if you have them: iOS 12 (must work), iOS 7 (best effort), Android Chrome 50+.
+  5. Quit the app: the phone shows "Reconnecting…". Open it again: the remote comes back on with a new code, and
+     phones pair again.
