@@ -617,8 +617,8 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   for commercial use. 1.x (`main`, releases up to 1.1.1) stays GPL-3.0-only; those releases can't be relicensed.
 - Unchanged: the samples keep their own licences (Salamander CC BY 3.0, VSCO CC0, Musyng Kite CC BY-SA 3.0, in
   LICENSES.md), the fonts OFL 1.1, third-party code its own permissive licences.
-- Tier 2 (mine): the one commit by another GitHub account (ilomacht, cf6e15f: test/port-preflight.mjs and 3 lines in
-  the runners) is rewritten from scratch by an agent that doesn't see the original, unless Ryan confirms it's his.
+- The one commit by another GitHub account (ilomacht, cf6e15f) is Ryan's own account (Ryan, 2026-11-28), so every
+  copyright holder of this line is Ryan; no rewrite.
   Windows (D27/D28): everything planned works under PolyForm except the ASIO SDK's GPLv3 option; Windows 2.0 uses
   WASAPI only, and ASIO waits for Ryan to sign Steinberg's own licence if he wants it. Outside contributions from now
   on need the contributor's agreement to PolyForm (CONTRIBUTING note). Not legal advice; Ryan may want a lawyer's look.
