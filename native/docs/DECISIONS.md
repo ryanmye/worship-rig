@@ -624,3 +624,11 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   wasapi for now, slot in asio if it turns out to not be good" — the Windows audio host keeps ASIO as a drop-in
   backend behind the same interface, decided by a test on a real PC with Ryan's interface. Outside contributions from now
   on need the contributor's agreement to PolyForm (CONTRIBUTING note). Not legal advice; Ryan may want a lawyer's look.
+
+## D39: Rig follows SetFlow in 2.x (Ryan, 2026-11-28: "sure in 2.x")
+- Rig 2.x gets a SetFlow follower: a read-only client of a SetFlow host's LAN WebSocket (role "musician") that follows
+  the MD's song, key, section, vamp, end and setlist through `controller.*` (BACKLOG 2.x "SetFlow follower").
+- Not 2.0; queued in the after-2.0 slot (D36) after Windows CI + W1–W11 and the browser remote (D34).
+- Protocol-level interop only: SetFlow (andteklin/setflow, read at 741b972) has no LICENSE file, so no code is copied.
+  Its message format is a prototype's; re-read it when the lane starts and pin the version it was built against.
+

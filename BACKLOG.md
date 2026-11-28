@@ -110,6 +110,13 @@ Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Plannin
       stage. Details still to be decided with Ryan. Builds on 2.0's background sample loading (CORE2A: the old song
       plays until the new one is loaded; the newest switch wins), and could preload the next song in the set.
       **M, cloud + Ryan hands-on**
+- [ ] **SetFlow follower (D39).** Rig joins a SetFlow host (github.com/andteklin/setflow, the MD's live arrangement
+      tool) as a read-only LAN client, like a musician's phone, and follows it: the song loaded (linked once, or by
+      title) and its performance key (transpose; the drone follows per D26.1a), the section type (verse / chorus /
+      bridge → a snapshot per type), vamp (hold, or an optional pad swell), end (a song-end fade, not PANIC) and the
+      setlist's next song. Talks to SetFlow's WebSocket only; no SetFlow code is copied (the repo has no licence).
+      Tolerates unknown fields and keeps playing if SetFlow drops. Native app: local-network permission. Later, on its
+      own: SetFlow ChordPro → the 2.0 chord chart (shares the WorshipTools/ChordPro parsing above). **M, cloud**
 - [ ] More 2.x items: Ryan is still thinking. Add them here as they come.
 
 ## A. Features Ryan asked for or floated, not yet built — ALL v1.1+ (Ryan 2026-09-30: "don't make the app too complex"; nothing in A gates v1)
