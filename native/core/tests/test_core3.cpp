@@ -590,6 +590,12 @@ TEST_SUITE("core3") {
     CHECK(contains(rt.call("\"op\":\"commit\",\"token\":" + std::to_string(Rt::tokenOf(pr.second))),
                    "\"committed\":true"));
     CHECK(rt.stat("buildsOffThread") - off0 + rt.stat("buildsAtCommit") - at0 == 10);  // the 44.1 kHz jobs only
+    // core3f skeptic F3: the dropped 48 kHz prebuild lane 1 (nice 10) was building when the rate changed runs to its
+    // end (unwanted, never attached; the queued ones are skipped): on a busy 2-CPU box it was still running when the
+    // commit answered (7 of 8 runs "4 == 0"). Nothing may be left behind; when it drains is the scheduler's.
+    for (const auto end = Clock::now() + std::chrono::seconds(kSanitized ? 300 : 60);
+         rt.stat("buildsPending") > 0 && Clock::now() < end;)
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
     CHECK(rt.stat("buildsPending") == 0);
     rt.post(R"({"v":1,"op":"play","e":"on","n":67,"vel":90})");
     std::uint32_t v = 0;
