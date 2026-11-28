@@ -716,3 +716,9 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   Electron). The iPad shows no Mac category (the remote is served by the Mac app, D34).
 - The on/off setting lives in the shell (UserDefaults `rig.remote.enabled.v1`), not in the library: it belongs to this
   Mac, and a library import must never switch a network server on.
+
+## D47: 2.0 drops 1.x's "Fit to my touch" and the Feel / Softest / Loudest sliders (Ryan, 2026-11-28: "Drop it")
+- The TOUCH lane (D43) replaces them with the per-keyboard points editor, presets and the five-step Calibrate…
+  assistant.
+- Curves saved by 1.x keep playing exactly as before. `fitTouch` stays exported, but the UI no longer uses it.
+
