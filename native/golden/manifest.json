@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "generator": "tools/golden/render.mjs",
- "generatedAt": "2026-11-28T04:14:29.483Z",
+ "generatedAt": "2026-11-28T04:18:51.108Z",
  "chromium": "157.0.8103.78",
  "chromiumPin": {
   "version": "157.0.8103.78",
@@ -35,9 +35,9 @@
  },
  "measures": "tools/golden/analysis.mjs (definitions in its header and native/golden/README.md)",
  "lastRun": {
-  "fixtures": 5,
+  "fixtures": 2,
   "repeat": 2,
-  "seconds": 30.8,
+  "seconds": 9.3,
   "cpus": 2
  },
  "stimuli": {
@@ -164,7 +164,7 @@
   "committedBytes": 2207860,
   "commitCapBytes": 2500000,
   "regenerate": "node tools/golden/pcm.mjs",
-  "seconds": 7.8
+  "seconds": 7.1
  },
  "tiers": {
   "exact": 109,
@@ -47738,49 +47738,49 @@
    "addedBy": "TOUCH",
    "chromium": "157.0.8103.78",
    "file": "out/dyn-range-salamander-piano.wav",
-   "sha256": "18bcff4f529312c9eeeb7ded781d2ac74f12a0c4a343fc682707a5423a75a873",
+   "sha256": "7a6f05e506d9c60d741e30c76f6c32ed832344c314cfb6338eeb1e0d6f8b8a0d",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 374850,
    "seconds": 8.5,
-   "peak": 6.55802,
-   "peakDb": 16.34,
-   "rms": 0.540488,
-   "rmsDb": -5.344,
+   "peak": 1.96741,
+   "peakDb": 5.878,
+   "rms": 0.162146,
+   "rmsDb": -15.8,
    "bandsDb": [
-    -48.52,
-    -51.36,
-    -49.57,
-    -48.76,
-    -56.59,
-    -27.06,
-    -19.56,
-    -39.77,
-    -44.78,
-    -30.6,
-    -21.82,
-    -30.78,
-    -33.55,
-    -17.65,
-    -31.13,
-    -38.18,
-    -34.99,
-    -32.83,
-    -39.66,
-    -35.04,
-    -40.75,
-    -38.39,
-    -52.84,
-    -65.31,
-    -58.78,
-    -76.55,
-    -86.22,
-    -99.52,
-    -113.8,
-    -116.5
+    -58.98,
+    -61.82,
+    -60.02,
+    -59.21,
+    -67.05,
+    -37.52,
+    -30.02,
+    -50.22,
+    -55.23,
+    -41.05,
+    -32.28,
+    -41.23,
+    -44.01,
+    -28.11,
+    -41.59,
+    -48.64,
+    -45.44,
+    -43.29,
+    -50.12,
+    -45.49,
+    -51.21,
+    -48.85,
+    -63.29,
+    -75.77,
+    -69.24,
+    -87,
+    -96.68,
+    -110,
+    -124.2,
+    -127
    ],
-   "repeatMaxAbsDiff": 4.76837158203125e-7,
-   "renderMs": 7373,
+   "repeatMaxAbsDiff": 2.384185791015625e-7,
+   "renderMs": 6991,
    "tolerance": {
     "maxAbsDiff": 0.0002,
     "bandsDb": 0.25,
@@ -47820,7 +47820,7 @@
          "type": "sampler",
          "id": "salamander-piano"
         },
-        "gain": 1
+        "gain": 0.3
        },
        null,
        null,
@@ -47939,7 +47939,7 @@
         "type": "sampler",
         "id": "salamander-piano"
        },
-       "gain": 1,
+       "gain": 0.3,
        "pan": 0,
        "octave": 0,
        "transpose": 0,
@@ -48138,7 +48138,7 @@
     },
     "samplesUsed": [
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C4.mp3",
+      "key": "http://127.0.0.1:42013/samples/salamander-piano/v14/C4.mp3",
       "url": "/samples/salamander-piano/v14/C4.mp3",
       "frames": 667280,
       "rate": 44100,
@@ -48153,7 +48153,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Gb2.mp3#max=30",
+      "key": "http://127.0.0.1:42013/samples/salamander-piano/v14/Gb2.mp3#max=30",
       "url": "/samples/salamander-piano/v14/Gb2.mp3",
       "frames": 881712,
       "rate": 44100,
@@ -48168,7 +48168,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v4/C4.mp3",
+      "key": "http://127.0.0.1:42013/samples/salamander-piano/v4/C4.mp3",
       "url": "/samples/salamander-piano/v4/C4.mp3",
       "frames": 682520,
       "rate": 44100,
@@ -48183,7 +48183,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v4/Gb2.mp3#max=30",
+      "key": "http://127.0.0.1:42013/samples/salamander-piano/v4/Gb2.mp3#max=30",
       "url": "/samples/salamander-piano/v4/Gb2.mp3",
       "frames": 837158,
       "rate": 44100,
@@ -48198,7 +48198,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v9/C4.mp3",
+      "key": "http://127.0.0.1:42013/samples/salamander-piano/v9/C4.mp3",
       "url": "/samples/salamander-piano/v9/C4.mp3",
       "frames": 682978,
       "rate": 44100,
@@ -48213,7 +48213,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v9/Eb4.mp3#max=30",
+      "key": "http://127.0.0.1:42013/samples/salamander-piano/v9/Eb4.mp3#max=30",
       "url": "/samples/salamander-piano/v9/Eb4.mp3",
       "frames": 612948,
       "rate": 44100,
@@ -48228,7 +48228,7 @@
       }
      },
      {
-      "key": "http://127.0.0.1:37593/samples/salamander-piano/v9/Gb3.mp3",
+      "key": "http://127.0.0.1:42013/samples/salamander-piano/v9/Gb3.mp3",
       "url": "/samples/salamander-piano/v9/Gb3.mp3",
       "frames": 654583,
       "rate": 44100,
@@ -48471,7 +48471,7 @@
     ]
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004984
+   "repeatBandsDb": 0.004942
   },
   {
    "id": "dyn-range-ep-rhodes",
@@ -48482,49 +48482,49 @@
    "addedBy": "TOUCH",
    "chromium": "157.0.8103.78",
    "file": "out/dyn-range-ep-rhodes.wav",
-   "sha256": "c66c2b24e66abe3c2ba29fdbacbd5fc96e19321f88c1667f5c5a7d3d2b5789d9",
+   "sha256": "bb9a28aa9d6dfec918d1d0e5b874c5a5caea8f11647760df690ef23bc18f9b9e",
    "sampleRate": 44100,
    "channels": 2,
    "frames": 374850,
    "seconds": 8.5,
-   "peak": 1.48559,
-   "peakDb": 3.438,
-   "rms": 0.207851,
-   "rmsDb": -13.64,
+   "peak": 0.445676,
+   "peakDb": -7.02,
+   "rms": 0.0623553,
+   "rmsDb": -24.1,
    "bandsDb": [
-    -64.77,
-    -61.34,
-    -59.65,
-    -58.15,
-    -57.09,
-    -35.99,
-    -27.3,
-    -50.01,
-    -50.83,
-    -27.92,
-    -25.92,
-    -28.56,
-    -48.39,
-    -35.62,
-    -43.17,
-    -40.07,
-    -50.76,
-    -66.75,
-    -70.41,
-    -66.69,
-    -74.21,
-    -87.37,
-    -83.29,
-    -82.58,
-    -104,
-    -116.3,
-    -131.5,
-    -132.7,
-    -141.5,
-    -151.9
+    -75.23,
+    -71.79,
+    -70.1,
+    -68.61,
+    -67.55,
+    -46.45,
+    -37.76,
+    -60.47,
+    -61.29,
+    -38.38,
+    -36.38,
+    -39.02,
+    -58.84,
+    -46.08,
+    -53.63,
+    -50.53,
+    -61.21,
+    -77.21,
+    -80.87,
+    -77.15,
+    -84.67,
+    -97.82,
+    -93.75,
+    -93.03,
+    -114.4,
+    -126.7,
+    -142,
+    -143.1,
+    -151.9,
+    -162.3
    ],
-   "repeatMaxAbsDiff": 2.2351741790771484e-8,
-   "renderMs": 2236,
+   "repeatMaxAbsDiff": 8.940696716308594e-8,
+   "renderMs": 2006,
    "tolerance": {
     "maxAbsDiff": 0.0002,
     "bandsDb": 0.25,
@@ -48564,7 +48564,7 @@
          "type": "sampler",
          "id": "ep-rhodes"
         },
-        "gain": 1
+        "gain": 0.3
        },
        null,
        null,
@@ -48683,7 +48683,7 @@
         "type": "sampler",
         "id": "ep-rhodes"
        },
-       "gain": 1,
+       "gain": 0.3,
        "pan": 0,
        "octave": 0,
        "transpose": 0,
@@ -48882,7 +48882,7 @@
     },
     "samplesUsed": [
      {
-      "key": "http://127.0.0.1:37593/samples/ep-rhodes/B3.mp3",
+      "key": "http://127.0.0.1:42013/samples/ep-rhodes/B3.mp3",
       "url": "/samples/ep-rhodes/B3.mp3",
       "frames": 137984,
       "rate": 44100,
@@ -48893,7 +48893,7 @@
       "monoFix": null
      },
      {
-      "key": "http://127.0.0.1:37593/samples/ep-rhodes/C4.mp3",
+      "key": "http://127.0.0.1:42013/samples/ep-rhodes/C4.mp3",
       "url": "/samples/ep-rhodes/C4.mp3",
       "frames": 137984,
       "rate": 44100,
@@ -48904,7 +48904,7 @@
       "monoFix": null
      },
      {
-      "key": "http://127.0.0.1:37593/samples/ep-rhodes/D4.mp3",
+      "key": "http://127.0.0.1:42013/samples/ep-rhodes/D4.mp3",
       "url": "/samples/ep-rhodes/D4.mp3",
       "frames": 137984,
       "rate": 44100,
@@ -48915,7 +48915,7 @@
       "monoFix": null
      },
      {
-      "key": "http://127.0.0.1:37593/samples/ep-rhodes/E4.mp3",
+      "key": "http://127.0.0.1:42013/samples/ep-rhodes/E4.mp3",
       "url": "/samples/ep-rhodes/E4.mp3",
       "frames": 137984,
       "rate": 44100,
@@ -48926,7 +48926,7 @@
       "monoFix": null
      },
      {
-      "key": "http://127.0.0.1:37593/samples/ep-rhodes/G2.mp3",
+      "key": "http://127.0.0.1:42013/samples/ep-rhodes/G2.mp3",
       "url": "/samples/ep-rhodes/G2.mp3",
       "frames": 137936,
       "rate": 44100,
@@ -48937,7 +48937,7 @@
       "monoFix": null
      },
      {
-      "key": "http://127.0.0.1:37593/samples/ep-rhodes/G3.mp3",
+      "key": "http://127.0.0.1:42013/samples/ep-rhodes/G3.mp3",
       "url": "/samples/ep-rhodes/G3.mp3",
       "frames": 137984,
       "rate": 44100,
@@ -49122,7 +49122,7 @@
     ]
    },
    "repeatEnvCorr": 1,
-   "repeatBandsDb": 0.004982
+   "repeatBandsDb": 0.0049
   },
   {
    "id": "dyn-peak-r1",
