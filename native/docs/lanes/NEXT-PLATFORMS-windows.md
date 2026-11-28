@@ -24,8 +24,10 @@ native shell around the 2.0 core"). It is the Windows half of the plan that D27 
   and it shows the compile and golden problems listed in §5.
 - **No ASIO in Windows 2.0 (D38): WASAPI only.** Steinberg added a GPLv3 option to the ASIO SDK in October 2025
   **[V]**, but 2.0 is PolyForm Noncommercial 1.0.0, not GPL, so that option doesn't fit: a GPLv3 SDK can't be combined
-  into a non-GPL app. ASIO would need Steinberg's proprietary licence agreement, signed by Ryan; it waits until he
-  decides he wants it.
+  into a non-GPL app. Ryan (2026-11-28): "ship with wasapi for now, slot in asio if it turns out to not be good". So
+  the Windows audio host keeps ASIO as a drop-in backend behind the same interface; whether it is needed is decided
+  by a test on a real PC with Ryan's interface, and shipping it would then need Steinberg's proprietary licence,
+  signed by Ryan.
 - **Signing:** the cheapest clean routes are the Microsoft Store (free registration, and the Store signs MSIX for
   free) **[V]** or Azure Artifact Signing (about $9.99/month; individuals in the US and Canada only) **[V]**. Neither
   gives instant SmartScreen trust **[V]**. This is tier 1.
@@ -123,8 +125,10 @@ Notes:
 
 > **D38 (2026-11-28): Windows 2.0 ships WASAPI only, no ASIO.** 2.0's code is PolyForm Noncommercial 1.0.0, so the
 > SDK's GPLv3 option below can't be used (GPLv3 code can only go into a GPL program). The only route left is
-> Steinberg's proprietary agreement, which Ryan would have to sign; until he does, ASIO is out of scope. The research
-> below is kept for that decision; its "Compatibility with GPL-3.0-only" paragraph no longer applies.
+> Steinberg's proprietary agreement, which Ryan would have to sign. Design the audio host so ASIO can slot in later
+> behind the same interface; a real-PC test with Ryan's interface decides whether it's needed ("ship with wasapi for
+> now, slot in asio if it turns out to not be good", Ryan). The research below is kept for that decision; its
+> "Compatibility with GPL-3.0-only" paragraph no longer applies.
 
 - **Licence, current state [V]:**
   - In October 2025 Steinberg made ASIO dual-licensed, proprietary or GPLv3 ([CDM](https://cdm.link/open-steinberg-vst3-and-asio/), [heise](https://heise.de/-10963451), [Libre Arts](https://librearts.org/2025/11/steinberg-relicenses-vst3-and-asio/), [Wikipedia](https://en.wikipedia.org/wiki/Audio_Stream_Input/Output)).
@@ -169,8 +173,9 @@ Notes:
 **Recommended audio plan:**
 1. Spike/MVP: WASAPI shared low-latency (`noAutoConvertSRC`, Pro Audio MMCSS).
 2. Add exclusive mode as a Settings option with a warning ("other apps go silent").
-3. ~~Parity: an ASIO host behind a device-type picker~~. Not in Windows 2.0 (D38): only if Ryan signs Steinberg's
-   proprietary ASIO licence; then an ASIO host behind a device-type picker.
+3. ~~Parity: an ASIO host behind a device-type picker~~. Not in Windows 2.0 (D38). Keep the host interface ready for
+   it; if the real-PC test with Ryan's interface says WASAPI isn't good enough and Ryan signs Steinberg's proprietary
+   licence, ASIO slots in behind a device-type picker.
 
 ---
 
@@ -395,8 +400,9 @@ shell's size (about 3k lines) and the devhost. They are not measured.
    - (v) Unsigned beta only.
 
    Suggested: (i) for users + (ii) for GitHub downloads, or (i) alone to keep the cost at zero.
-2. **ASIO: answered by D38.** Windows 2.0 is WASAPI only. The SDK's GPLv3 option doesn't fit a PolyForm app; ASIO
-   comes back only if Ryan signs Steinberg's proprietary licence agreement.
+2. **ASIO: answered by D38.** Windows 2.0 ships WASAPI only, with ASIO as a later drop-in backend behind the same
+   interface if a real-PC test says WASAPI isn't good enough. The SDK's GPLv3 option doesn't fit a PolyForm app, so
+   shipping ASIO needs Ryan to sign Steinberg's proprietary licence agreement.
 3. **Test hardware:** which Windows PC(s), and x64 or ARM64? A Parallels VM on Apple silicon runs Windows 11 ARM:
    good for UI and MIDI smoke tests, useless for latency.
 4. **Minimum Windows version:** Windows 11 only, or Windows 10 22H2 too? Windows 10 means single-client MIDI and the
