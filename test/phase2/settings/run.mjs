@@ -492,11 +492,13 @@ async function runMode(mode, browser) {
             await new Promise((r) => setTimeout(r, 15));
           }
         }, vels);
-        // live readout + histogram (Standard touch = linear here)
+        // live readout + histogram (Standard touch = linear here; earlier tests may have played these keys already)
+        const histN = () => ev((r) => Number(document.querySelector(`${r} .st-cal-hist`).dataset.count), row);
+        const n0 = await histN();
         await play([50]);
         await until((r) => document.querySelector(`${r} [data-testid="cal-readout"]`).dataset.raw === '50', row);
         assert.match(await page.textContent(`${row} [data-testid="cal-readout"]`), /50 → plays 50/);
-        assert.equal(await ev((r) => document.querySelector(`${r} .st-cal-hist`).dataset.count, row), '1');
+        assert.equal(await histN(), Math.min(200, n0 + 1));
         // paste a community curve in Pianoteq's format: its points are saved, and the text reads back the same
         const FP10 = 'Velocity = [0, 1, 18, 32, 50, 108, 127; 0, 0, 30, 57, 84, 127, 127]';
         await page.fill(`${row} [data-testid="cal-text"]`, FP10);

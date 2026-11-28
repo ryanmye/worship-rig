@@ -378,3 +378,16 @@ Builder lane F2 (2026-11-25, on `e3af65b`). No frozen file, op, reply, event sha
 | F2-4 | `tests/samples_service.cpp`, `tests/test_runtime_preload.cpp` | three service cases (eviction at the cap, memory pressure 1 / 1 / 2, rate change with a decode in flight across ticks and with none; `Env` takes a mode, realtime = decodes on the pool) and one realtime engine case (`rig_host_memory_pressure` twice, `rig_host_audio_started` at 44.1 kHz, a preload after it) | one event each, the changed ids only |
 | F2-5 | `test/unit/engine-bridge/sample-status-fuzz.test.mjs`, `sample-status.test.mjs` | fuzz `ticks` mode (silent changes, a per-tick diff of the known ids) + its control; a `RIG_DEVHOST` case: `config {lowResource:true}` (the same trim as memory pressure level 1) turns the trimmed song's songReady false via one `{celesta:false}` event | |
 | F2-6 | `native/apple/Sources/Shared/RigLibrary.swift` | `RigBackups.isLibrary` returns false for data starting with EF BB BF | review F1 open item 3: JSONSerialization skips a BOM, `JSON.parse` in `store.importJSON` refuses it ("That file is not valid JSON."), so the file was served and then refused. Unbuilt here (CI `mac-check`). `test/phase2/migration-1x/paths.test.mjs` pins the store's behaviour and the stand-in's skip |
+
+## TOUCH: settings.dynamicRange up to 6 (DECISIONS D43), marked `INTERFACE-CHANGE(TOUCH)`
+
+Builder TOUCH (2026-11-27). No C API, opcode, `Command` / `AudioEvent`, `UnitSlot` or frozen-header change; the bridge
+field and reply stay as UIB made them (no minor bump: same field, wider value range, the reply echoes the range in
+force). All 112 pre-existing fixtures render byte-identical to the base (`a28f0b3`) g++ renders.
+
+| # | file(s) | change | why |
+|---|---|---|---|
+| TOUCH-1 | `src/inst/sampler.h`, `src/inst/sampler.cpp` (T12) | `kDynRangeMax` 6, `kDynSpanMaxDb` 72; `SamplerOp::DynamicRange` clamps 1..6 (was 3); `velocityDb` caps r at `kDynSpanMaxDb / spanDb` (= 3 exactly for the 24 dB single-layer span, 7.2 for multi-layer) | D43: multi-layer samplers reach 60 dB; single layer stays at its pre-D43 maximum (72 dB), every range ≤ 3 computes the same numbers (shared/touch-curve.js `velocityDb`, the same cap) |
+| TOUCH-2 | `src/model/song.cpp`, `src/model/model.h` (T13), `src/bridge/schema.cpp`, `src/bridge/bridge.cpp` (T08) | `SongGraph::setDynamicRange` clamps 1..6 (`kDynRangeMax`); comments | D43 |
+| TOUCH-3 | `tools/common/fixture_runner.cpp` | `setup.dynamicRange` → `config {dynamicRange}` before the song (page.js: `engine.setDynamicRange`) | golden fixtures `dyn-range-*`, `dyn-peak-r*` (`tests/golden_ids/touch.ids`) |
+| TOUCH-4 | `tests/test_bridge_dynrange.cpp`, `tests/test_song.cpp` | clamp 9 → 6; ranges past 3 against the velocityDb law (salamander-piano to 60 dB, ep-rhodes 6 = 3 bit for bit) | D43 |

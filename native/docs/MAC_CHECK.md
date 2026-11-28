@@ -628,6 +628,22 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
   the same ids (no second copy when you import a Chrome library backup into the app). A pack song that uses a My
   Samples instrument loads with that part silent (lane N2 brings the sound).
 
+- [ ] 17. **Touch on your Roland FP-10** (lane TOUCH, D43; CONTRACT_CHANGES "TOUCH (D43)"). Settings › Keyboards &
+  MIDI › Your keyboards › FP-10 › Touch…:
+  - Play a few notes: "Last note: n → plays m" follows, and the bars under the curve fill in (your last 200 notes).
+  - **Key Touch Light vs Medium** (the FP-10's own Key Touch setting; its manual gives the button combination):
+    play the same soft / loud phrase on each and watch the bars. Which one sends 127 on your hardest notes? Keep that
+    one for the steps below.
+  - **Calibrate…**: the five steps (silence, p, mp, f, fff), six notes each. Does the result say "full level from"
+    a velocity above your fff, and do notes harder than your fff still get louder?
+  - **Dynamics**: try 30, 45 and 60 dB with a piano. Are soft notes quiet enough now? At 60 dB, do hard chords
+    distort or pump (the master ceiling works up to ≈ 19 dB on a 7-note fff chord there, see CONTRACT_CHANGES)?
+    If they do, which feels better: turning the master down, or a lower Dynamics?
+  - **A community FP-10 curve**: paste `Velocity = [0, 1, 18, 32, 50, 108, 127; 0, 0, 30, 57, 84, 127, 127]` (or
+    one from the Pianoteq forum) into "Pianoteq text", Use pasted. Compare it with your own calibration; Copy writes
+    the text back out (paste it into a note to check it reads the same).
+  - Back to standard: the keyboard plays as before.
+
 ### Step 5: iPad install (Ryan; needs his Apple ID)
 
 - [ ] `native/apple/README.md` steps 7–10: `./scripts/build-core.sh` (with the iOS slice), `xcodegen`, team = his
