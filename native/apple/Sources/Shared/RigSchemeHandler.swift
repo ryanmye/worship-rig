@@ -65,7 +65,8 @@ final class RigSchemeHandler: NSObject, WKURLSchemeHandler {
             }
         case "/api/user-samples":
             let roots = RigPaths.userSampleRoots.map { $0.path }
-            return json(task, ["enabled": true, "dir": roots.first ?? "", "path": roots.first ?? "", "roots": roots,
+            let shown = RigPaths.userSamplesShownName ?? roots.first ?? "" // Settings' "Folder: …" line
+            return json(task, ["enabled": true, "dir": shown, "path": shown, "roots": roots,
                                "count": 0, "packs": [String](), "errors": [String]()])
         case "/api/user-samples/manifest.json":
             return json(task, ["app": "worship-rig", "kind": "user-samples", "instruments": [String](),

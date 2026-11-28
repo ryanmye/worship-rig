@@ -77,6 +77,16 @@ enum RigPaths {
         #endif
     }
 
+    /// What Settings › My Samples shows as the folder (n1-skeptic O3): on the iPad the name the Files app gives it,
+    /// not the container path (/var/mobile/Containers/Data/Application/<UUID>/...). nil = show the path.
+    static var userSamplesShownName: String? {
+        #if os(iOS)
+        let env = ProcessInfo.processInfo.environment["RIG_USER_SAMPLES"] ?? ""
+        if overrideRoot == nil && env.isEmpty { return "On My iPad › Worship Rig › Samples" }
+        #endif
+        return nil
+    }
+
     /// `userSampleRoots` as the JSON array of paths rig_hostkit takes.
     static var userSampleRootsJSON: String {
         let paths = userSampleRoots.map { $0.path }
