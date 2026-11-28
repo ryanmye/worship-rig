@@ -125,8 +125,9 @@ gates, report in native/docs/reviews/n0-skeptic.md.
 - [x] rebase on origin/v2-native 3f5bf2c (one conflict: CONTRACT_CHANGES, both sections kept)
 - [x] review JS (controller, settings, main, native-midi, native-shell files, views)
 - [x] review Swift (RigShellRouter, RigHost, RigLibrary, RigNavigation, RigSelfTest)
-- [ ] gates (gates.mjs, UI6_PURITY_BASE=origin/v2-native)
-- [ ] report + final rebase check
+- [x] rebased again on 0cc56b7 (N1 merged; conflicts CONTRACT_CHANGES, selftest-scripts test: both kept); N1 getInfo fix
+- [x] gates (gates.mjs, UI6_PURITY_BASE=origin/v2-native): all 9 PASS on d2e43ea
+- [x] report native/docs/reviews/n0-skeptic.md (verdict MERGE)
 Findings (fixed as n0-skeptic commits):
 - F1 controller resumeRecording: "(downloaded when you stop)" shown in the native app (Chrome's OPFS wording).
 - F2 Settings MIDI line: a 'denied' reason in the native app pointed at "the browser's site settings".
