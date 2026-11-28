@@ -97,6 +97,9 @@ run them one at a time; `run-all` does that for you.
     of WAVs to `audition/` (git-ignored). Findings are in `reviews/audition-findings.md`.
 - Sample sources and processing: `tools/samples/*` and `LICENSES.md`. Musyng Kite is **CC BY-SA 3.0**, not MIT, so
   keep attribution and share-alike.
+- Code licence (D38): 2.0+ (`v2-native`) is **PolyForm Noncommercial 1.0.0** (`LICENSE`); 1.x stays GPL-3.0-only
+  (`LICENSE-1.x.md`). New third-party code must be permissive (MIT, BSD, Apache-2.0, zlib, public domain), never
+  GPL / LGPL / AGPL, and gets a row in `LICENSES.md` "Third-party code". Outside contributions: `CONTRIBUTING.md`.
 - My Samples:
   - Scan roots are `<repo>/user-samples/` and `~/Music/Worship Rig/Samples/`; `RIG_USER_SAMPLES` overrides them.
   - The server code is in `server.js` (`scanUserSamples`). The importer is `tools/import-garageband.mjs` (CLI) over

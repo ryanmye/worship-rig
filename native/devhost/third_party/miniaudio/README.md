@@ -7,7 +7,7 @@
 | version | tag **0.11.22** (2025-02-24) |
 | sha256 `miniaudio.h` | `9019743287e443c55e5737a7297f38e5e358561701d6db2d905afb114390c410` |
 | sha256 `LICENSE` | `457f1b500e0adf6bc059edddfa78a2f62012e7c3bb43476c20e0bd23b25ba0eb` |
-| licence | public domain (Unlicense) or MIT-0, at the user's choice (ARCHITECTURE §6: GPL-3 compatible) |
+| licence | public domain (Unlicense) or MIT-0, at the user's choice (ARCHITECTURE §6: permissive, fine under D38) |
 | modifications | none |
 
 Used only by `native/devhost` (`src/miniaudio_impl.c`, compiled with `-w`). Never linked into the Apple app (which

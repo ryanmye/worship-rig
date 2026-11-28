@@ -22,8 +22,10 @@ native shell around the 2.0 core"). It is the Windows half of the plan that D27 
 - **Spike first, before any shell:** port `rig-devhost` to Windows. That means the core on clang-cl plus miniaudio
   WASAPI plus the real UI in Edge over the existing WebSocket transport. Day one gives Mac-identical sound on Windows,
   and it shows the compile and golden problems listed in §5.
-- **ASIO is now licensable for GPL apps.** Steinberg added a GPLv3 option to the ASIO SDK in October 2025 **[V]**. It
-  is still a tier-1 licence check: the exact grant text has to be read in the SDK's own LICENSE file.
+- **No ASIO in Windows 2.0 (D38): WASAPI only.** Steinberg added a GPLv3 option to the ASIO SDK in October 2025
+  **[V]**, but 2.0 is PolyForm Noncommercial 1.0.0, not GPL, so that option doesn't fit: a GPLv3 SDK can't be combined
+  into a non-GPL app. ASIO would need Steinberg's proprietary licence agreement, signed by Ryan; it waits until he
+  decides he wants it.
 - **Signing:** the cheapest clean routes are the Microsoft Store (free registration, and the Store signs MSIX for
   free) **[V]** or Azure Artifact Signing (about $9.99/month; individuals in the US and Canada only) **[V]**. Neither
   gives instant SmartScreen trust **[V]**. This is tier 1.
@@ -65,7 +67,7 @@ The Apple shell is `native/apple/Sources`, 2962 lines including 466 lines of C a
 | Installed size | ~10 MB exe/DLLs + app/ (samples ~79 MB) ≈ 90–110 MB **[E]** | Electron ~283 MB (the Linux `dist/` here **[R]**; Windows similar **[U]**) + 79 + addon ≈ 370 MB **[E]** | ~10–15 MB + app/ ≈ 95–115 MB **[E]**; +~180 MB if the WebView2 runtime is pinned ("fixedVersion") **[V]** ([Tauri Windows installer](https://v2.tauri.app/distribute/windows-installer/)) | ~150–250 MB **[E]** |
 | 500 MB rule | wide headroom | fits, ~130 MB headroom **[E]** | wide headroom | fits |
 | Language | C++ (same as core); COM/WRL boilerplate | JS (exists) + C++ addon (node-addon-api / cmake-js) | Rust (new language for the repo) | C++ / Qt (new framework) |
-| Licence fit with GPL-3.0-only | WebView2 SDK reported BSD-3-Clause **[V: per an IP review, not the file]** ([Eclipse IP issue](https://gitlab.eclipse.org/eclipsefdn/emo-team/iplab/-/issues/14072)); the runtime is an OS component | MIT | MIT / Apache-2.0 **[U]** | LGPL-3 / GPL-3: fine **[U]** |
+| Licence fit (was GPL-3.0-only; now PolyForm NC, D38: permissive deps only) | WebView2 SDK reported BSD-3-Clause **[V: per an IP review, not the file]** ([Eclipse IP issue](https://gitlab.eclipse.org/eclipsefdn/emo-team/iplab/-/issues/14072)); the runtime is an OS component | MIT | MIT / Apache-2.0 **[U]** | LGPL-3 / GPL-3: was fine under GPL, **does not fit PolyForm** (D38; Qt would need a commercial licence or LGPL dynamic linking) **[U]** |
 | Reuse of 1.x shell features | low: re-implement `window.rig` (as Swift did) | **high**: main.js, server.js, hotkeys, tray, update check | low | low |
 | Reuse of the 2.0 Apple design | **high** (same scheme, transport and C host) | medium (the core and C host carry over; the shell does not) | high (same design, in Rust) | medium |
 | Auto-update | DIY: WinSparkle **[U]** or MSIX App Installer / Store | electron-updater (needs signing) | built-in updater plugin (signed manifests) **[U]** | DIY |
@@ -119,6 +121,11 @@ Notes:
 
 ### 2.2 ASIO
 
+> **D38 (2026-11-28): Windows 2.0 ships WASAPI only, no ASIO.** 2.0's code is PolyForm Noncommercial 1.0.0, so the
+> SDK's GPLv3 option below can't be used (GPLv3 code can only go into a GPL program). The only route left is
+> Steinberg's proprietary agreement, which Ryan would have to sign; until he does, ASIO is out of scope. The research
+> below is kept for that decision; its "Compatibility with GPL-3.0-only" paragraph no longer applies.
+
 - **Licence, current state [V]:**
   - In October 2025 Steinberg made ASIO dual-licensed, proprietary or GPLv3 ([CDM](https://cdm.link/open-steinberg-vst3-and-asio/), [heise](https://heise.de/-10963451), [Libre Arts](https://librearts.org/2025/11/steinberg-relicenses-vst3-and-asio/), [Wikipedia](https://en.wikipedia.org/wiki/Audio_Stream_Input/Output)).
   - The move was tied to an OBS partnership. VST3 3.8 went MIT at the same time.
@@ -129,7 +136,7 @@ Notes:
   says:
   - the ASIO name and logo are optional under GPLv3, but if used they must follow Steinberg's usage guidelines;
   - "ASIO" may not appear in the product name.
-- **Compatibility with GPL-3.0-only:** the sources say "GPLv3" or "GPLv3+", inconsistently. Both "GPL-3.0-only" and
+- **Compatibility with GPL-3.0-only (superseded by D38, kept for the record):** the sources say "GPLv3" or "GPLv3+", inconsistently. Both "GPL-3.0-only" and
   "GPL-3.0-or-later" code can be combined into a GPL-3.0-only program, so either reading works. **To verify (tier 1,
   "a licence doubt"):** read LICENSE.txt in the official SDK zip, check that it is the full GPLv3 with no additional
   restrictions, and record it in `LICENSES.md`. Some sources still repeat the older "a proprietary SDK licence
@@ -162,7 +169,8 @@ Notes:
 **Recommended audio plan:**
 1. Spike/MVP: WASAPI shared low-latency (`noAutoConvertSRC`, Pro Audio MMCSS).
 2. Add exclusive mode as a Settings option with a warning ("other apps go silent").
-3. Parity: an ASIO host behind a device-type picker, after Ryan's licence OK.
+3. ~~Parity: an ASIO host behind a device-type picker~~. Not in Windows 2.0 (D38): only if Ryan signs Steinberg's
+   proprietary ASIO licence; then an ASIO host behind a device-type picker.
 
 ---
 
@@ -226,13 +234,13 @@ Notes:
 | **Azure Artifact Signing** (formerly Trusted Signing) | "Approximately $9.99/month" **[V]**; Basic tier 5,000 signatures/month, Premium 100,000 **[V]** ([pricing](https://azure.microsoft.com/en-us/pricing/details/trusted-signing/); the prices themselves were blank on the page) | "Individual developers are currently limited to the USA and Canada" **[V]**; no hardware token; identity check "a few business days"; publisher shown = verified legal name; billing starts at account creation and is not prorated **[V]** |
 | OV certificate | "$150–300/year" **[V]**; key on an HSM or token since June 2023 **[V]**; max validity **460 days from 2026-03-01** **[V]** ([CA/B Forum CSC-31](https://cabforum.org/2025/11/17/ballot-csc-31-maximum-validity-reduction)) | CI signing needs a cloud HSM product (extra cost **[U]**) |
 | EV certificate | "$400+/year" **[V]** | the instant-SmartScreen bypass "was removed in 2024" and EV now builds reputation like OV, so "no longer justified" **[V]** |
-| SignPath Foundation | free for qualifying OSS **[V: mentioned by Microsoft]** | eligibility, and their name on the signature **[U]** |
+| SignPath Foundation | free for qualifying OSS **[V: mentioned by Microsoft]** | eligibility, and their name on the signature **[U]**; likely needs an OSI licence, which PolyForm NC is not (D38) **[U]** |
 | Unsigned | 0 | "Strong SmartScreen block; enterprises may block entirely" **[V]**: not viable beyond a beta |
 
 - **SmartScreen:** no route gives instant trust. Reputation builds over releases signed with a consistent identity
   **[V]**.
-- **GPL and the Store [U]:** Ryan is the copyright holder of the GPL code (the vendored core code is permissive), so
-  Store distribution is his call. The CC BY-SA samples (Musyng Kite) keep their attribution in About and
+- **Licence and the Store [U]:** 2.0 is PolyForm Noncommercial (D38) and Ryan is its only copyright holder (the
+  vendored core code is permissive), so Store distribution is his call (D28 chose the website anyway). The CC BY-SA samples (Musyng Kite) keep their attribution in About and
   `LICENSES.md`. Check the current Store policy text before submitting.
 
 ### 4.3 Auto-update
@@ -368,7 +376,7 @@ and bridge layer differs, so switching costs about 1–2 weeks **[E]**.
 | **0. CI (cloud, any time after Mac/iPad 2.0)** | W1–W8, W10 fixes; `build-test-windows` (clang-cl); render-hash byte compare vs ubuntu | ctest green on windows-2025; 112/112 WAVs byte-identical to Linux g++ (or the differences explained) | 3–6 agent-days |
 | **1. Spike: devhost on Windows** | W9; miniaudio WASAPI (`noAutoConvertSRC`, Pro Audio); real UI in Edge over the existing WebSocket transport; WinMM input → `rig_midi_in` | Ryan plays on a real Windows PC: same patches sound like the Mac; buffer 128 reported; MIDI keyboard works | 3–5 agent-days + 1 Ryan session |
 | **2. MVP: WebView2 shell** | `rig://app` scheme + main.js patch; `webview2Transport`; document-start `window.rig` minimal (backupNow / latestBackup / onMenu, as `RigLibrary`); ProcessFailed → panic + reload; paths; MF AAC decode; recordings; `--self-test` in CI; unsigned zip or MSIX for testers | E4-style self-test passes on a runner; a 2-hour rehearsal without xruns on Ryan's test PC | 2–4 weeks |
-| **3. Parity** | ASIO host (after licence OK); exclusive-mode option; My Samples / pads / patch packs `/api/*`; tray, global hotkeys, login item, single instance, sleep prevention (`SetThreadExecutionState`); update check (1.x model) then a real updater; installer + signing; Windows MIDI Services SDK when GA; BLE via WinRT | feature checklist = Mac 2.0 minus Mac-only (GarageBand importer, menu-bar popover → tray) | 4–7 weeks |
+| **3. Parity** | exclusive-mode option (no ASIO host: D38, unless Ryan signs Steinberg's licence); My Samples / pads / patch packs `/api/*`; tray, global hotkeys, login item, single instance, sleep prevention (`SetThreadExecutionState`); update check (1.x model) then a real updater; installer + signing; Windows MIDI Services SDK when GA; BLE via WinRT | feature checklist = Mac 2.0 minus Mac-only (GarageBand importer, menu-bar popover → tray) | 4–7 weeks |
 | **Release** | tier 1 | Ryan's call | — |
 
 Total ≈ 2–3 months of agent time plus Ryan's hardware sessions **[E]**. These are rough ranges based on the Apple
@@ -387,12 +395,8 @@ shell's size (about 3k lines) and the devhost. They are not measured.
    - (v) Unsigned beta only.
 
    Suggested: (i) for users + (ii) for GitHub downloads, or (i) alone to keep the cost at zero.
-2. **ASIO:**
-   - OK to ship an ASIO host under the SDK's GPLv3 option, once the official LICENSE.txt has been read and recorded
-     in `LICENSES.md`?
-   - Or WASAPI-only for Windows 2.0?
-
-   Suggested: WASAPI for MVP, ASIO at parity.
+2. **ASIO: answered by D38.** Windows 2.0 is WASAPI only. The SDK's GPLv3 option doesn't fit a PolyForm app; ASIO
+   comes back only if Ryan signs Steinberg's proprietary licence agreement.
 3. **Test hardware:** which Windows PC(s), and x64 or ARM64? A Parallels VM on Apple silicon runs Windows 11 ARM:
    good for UI and MIDI smoke tests, useless for latency.
 4. **Minimum Windows version:** Windows 11 only, or Windows 10 22H2 too? Windows 10 means single-client MIDI and the
@@ -410,4 +414,4 @@ shell's size (about 3k lines) and the devhost. They are not measured.
   read on the second try; the distribution page was not read.
 - The `learn.microsoft.com` low-latency page was read through its `en-sg` mirror.
 - Not checked at all: the Windows MIDI Services SDK GA version as of 2026-11, the exact ASIO LICENSE.txt in the
-  official SDK zip, and the runner image's LLVM version.
+  official SDK zip (moot for 2.0 after D38: no ASIO), and the runner image's LLVM version.

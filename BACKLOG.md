@@ -200,9 +200,10 @@ Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Plannin
   - Replace the Electron-only parts: menu bar/tray, global hotkeys, GarageBand importer, the local server (serve the
     app from the bundle), recordings via the Files app. Library sync with the Mac via export/import (iCloud Drive)
     to start.
-  - Distribution: TestFlight / App Store needs an Apple Developer account ($99/yr). **Licensing check first:** the app
-    is GPL-3.0-only and the FSF considers GPL incompatible with App Store terms. Ryan owns the code, so he can dual
-    license or add an App Store exception. Musyng Kite stays CC BY-SA (attribution in-app).
+  - Distribution: TestFlight / App Store needs an Apple Developer account ($99/yr). Licensing: 2.0 is PolyForm
+    Noncommercial 1.0.0 (D38), not GPL, so the FSF's GPL / App Store conflict no longer applies; Ryan, as the only
+    copyright holder, can still grant Apple's terms if needed (D37: no App Store for now). Musyng Kite stays CC BY-SA
+    (attribution in-app).
   - Rough size: L (shell + MIDI bridge + iOS memory profile + touch-sized Perform layout), plus testing on real
     devices. **L, cloud (web/shell) + local (Xcode, devices)**
   - **Platform decision lives here** (cloud, 2026-11-04): stay on Electron for the Mac in 1.x. Tauri / a WKWebView

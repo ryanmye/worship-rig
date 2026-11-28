@@ -1,6 +1,7 @@
 # third_party
 
-All code here is vendored unmodified (GPL-3 compatible licences; ARCHITECTURE section 6). Fetched with curl from the
+All code here is vendored unmodified (permissive licences, fit for the PolyForm Noncommercial 2.0 app, D38;
+ARCHITECTURE section 6). Fetched with curl from the
 canonical GitHub raw URLs on 2026-11-19. Compiled with `-w` into `rig_third_party`; our own code is `-Werror`.
 
 | dir | upstream | version | licence | used by | status |

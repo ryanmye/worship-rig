@@ -104,7 +104,8 @@ W3I-1..3), `reviews/*.md`, `ARCHITECTURE.md` §7.1 (budgets; per-voice cost of e
   orchestrator decide; Ryan 2026-11-21: desktop Auto stays 128). Settings restructure into sidebar categories
   (done). Q7 answered: D5 (drone freeze kept; Settings toggle `droneFreeze`, default on, lands with the UI wave).
 - **Never** commit or package `user-samples/`, GarageBand/Logic conversions or any Apple content (`.exs`, `.caf`,
-  `.aif`). Licence is GPL-3.0-only: third-party code must be GPL-3 compatible (`ARCHITECTURE.md` §6).
+  `.aif`). Licence (D38): 2.0+ is PolyForm Noncommercial 1.0.0 (1.x stays GPL-3.0-only), so third-party code must be
+  permissive (MIT, BSD, Apache-2.0, zlib, public domain); no GPL / LGPL / AGPL code (`ARCHITECTURE.md` §6).
 - Commits as `Claude <noreply@anthropic.com>` with the trailer lines the session's attribution reminder gives
   (otherwise GitHub shows Unverified). Never rewrite pushed history unless Ryan asks. Always ask Ryan before any
   release tag.

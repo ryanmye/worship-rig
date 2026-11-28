@@ -100,8 +100,8 @@ Evidence tags as in the Windows doc: **[R]** checked in this repo, **[V]** check
 - **Biggest blocker:** no Windows test PC; CI runners have no audio device.
 - **Channel (D28, Ryan):** a download from the website, not the Store; unsigned at first (SmartScreen warning on
   first launch), paid signing optional later.
-- **Tier-1 questions still open:** ASIO under
-  its GPLv3 option (licence text still to read); test hardware (x64 or ARM64); Windows 10 support; exclusive WASAPI
+- **Tier-1 questions still open:** (ASIO answered by D38: none in Windows 2.0, WASAPI only, unless Ryan signs
+  Steinberg's proprietary licence); test hardware (x64 or ARM64); Windows 10 support; exclusive WASAPI
   default; size budget; updater style.
 
 ---

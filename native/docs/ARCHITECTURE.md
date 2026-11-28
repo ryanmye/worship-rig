@@ -269,7 +269,7 @@ host** (`native/devhost/`, ALSA/PulseAudio/null), so the realtime path (adapter,
 |---|---|---|---|
 | FFT | **pffft** (marton78 fork) | BSD-like (FFTPACK) | SIMD (SSE/NEON), small (2 files), real FFT at power-of-2 sizes; Chromium's non-Mac `FFTFrame` uses pffft (verify), helps PeriodicWave/convolver parity. vDSP not used: core stays portable |
 | MP3 / WAV decode | **dr_mp3**, **dr_wav** (dr_libs) | public domain / MIT-0 | single headers; all 1999 factory samples are MP3; WAV for My Samples/pads |
-| AAC/M4A/ALAC | platform (`host.decode_file`) | — | no small GPL-compatible portable AAC decoder (fdk-aac licence is GPL-incompatible; faad2 is GPL-2+ but large) |
+| AAC/M4A/ALAC | platform (`host.decode_file`) | — | no small permissive portable AAC decoder (fdk-aac has its own restrictive licence; faad2 is GPL-2+, ruled out under D38) |
 | resampling | **Chromium `SincResampler` port** | BSD-3 | what `decodeAudioData` uses (verify) ⇒ sample parity |
 | Web Audio kernels | ports of Chromium `Biquad`, `DynamicsCompressorKernel`, `PeriodicWave`/`OscillatorNode` tables, `UpSampler`/`DownSampler`, `AudioParamTimeline` formulas | BSD-3 | parity (Q5, Q6, Q8, Q10, Q12, Q2) |
 | bit-exact math (JS `Math.*`) | **LLVM libc** `shared/math` subset (sin cos tan exp log log2 log10 expm1 cbrt atan atan2), ports of glibc 2.39 `__pow_fma` (= ARM optimized-routines pow) and `__tanh_fma`/`__expm1_fma` (fdlibm), V8 15.7 sinh (`src/num/`, T01) | Apache-2.0 WITH LLVM-exception; MIT (Arm); Sun fdlibm notice; BSD-3 | measured, not assumed (WAVE0B_REVIEW V10, `src/num/README.md`): Chromium 157 / V8 15.7 runs these, not fdlibm; 0 mismatches on 340 k fresh Chromium cases |
@@ -279,7 +279,10 @@ host** (`native/devhost/`, ALSA/PulseAudio/null), so the realtime path (adapter,
 | tests | **doctest** | MIT | single header, fast compile |
 | desktop device I/O (dev host, Windows later) | **miniaudio** | public domain / MIT-0 | one header; not linked into the Apple app |
 
-GPL-3 compatible throughout (BSD-3, MIT, MIT-0, Apache-2.0 WITH LLVM-exception, public domain, Sun permissive).
+Permissive throughout (BSD-3, MIT, MIT-0, Apache-2.0 WITH LLVM-exception, public domain, Sun permissive), so it ships
+inside the PolyForm Noncommercial 2.0 app (D38; was chosen for GPL-3 compatibility when 2.0 was planned as GPL). One
+open question: `src/num/js_tanh.cpp`'s glibc 1997 change (LICENSES.md "Third-party code"). New dependencies must be
+permissive too: no GPL, LGPL or AGPL.
 No JUCE, no FFmpeg, no Boost.
 `third_party/README.md` records upstream URL, commit and local modifications per library.
 
