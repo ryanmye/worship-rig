@@ -598,7 +598,9 @@ the selected sources and the v1.1 direct path never plays an unselected port; a 
 goes 'disconnected' (kept in the map, as Chrome does); `msg.ts` (engine s) maps to page ms through the last tick;
 `output.send(data, ts)` → `midi send {port, data, when?}`; installing it also sends one `play {e:'panic'}` right
 after `hello` (skeptic NMA F1: the core outlives a page reload, whose new controller cannot release the old page's
-notes or pedal). MIDI clock out stays native: `config.midiClock.port`
+notes or pedal; since lane N0 the shell also posts `play panic` + `rec stop` on every main-frame commit). A first
+`listen` that fails with `timeout` / `busy` / `not-started` / `internal` is retried after 1, 2, 4, 8 s, then on each
+`ports` event, with `requestMIDIAccess()` pending meanwhile (lane N0, NMA review O3); other errors reject. MIDI clock out stays native: `config.midiClock.port`
 carries the chosen output's name (midi-clock.js `sink.portId`). The direct path removes the round trip without moving policy: JS pushes the routing table, native plays,
 and still forwards each message flagged `handled` so the UI, learn and activity keep working.
 

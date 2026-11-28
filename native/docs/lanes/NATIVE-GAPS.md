@@ -255,6 +255,16 @@ Total [E]: N1 2.0 + N0 1.5 + N10 1.0 + N2 2.0 + N3 1.5 + N5 1.5 + N4 1.5 + N8 1.
   migration-1x green against the new files; no `isElectron` gate left whose meaning is "Mac app" rather than
   "Electron process".
 
+- **Built (lane N0 builder, 2026-11-27; CONTRACT_CHANGES "N0"), where it differs from the above:**
+  - the files are `app/js/native-shell/*.js` (app/ is already a folder reference; no project.yml change);
+  - `menuOwnsShortcuts` is false on the Mac too until N5 binds the key equivalents (true now would leave ⌘. ⌘E ⌘R
+    ⌘⇧F dead); N5 flips `RigHost.shellConfig`;
+  - the Mac category shows in the native app only once a Mac-only member exists (N7–N9); until then the
+    "Low-resource mode" section stays in Look;
+  - O5 posts `rec stop` with the panic (the crash path's pair), so a reload also closes a recording;
+  - later lanes: add `NN-<feature>.js` + a `RigShellFeature` registered in `RigHost.init`; gate the app on the
+    member (`typeof rig.x === 'function'`), and on `rig.shell === 'native'` only where the meaning is "the app".
+
 ### N10: B3, the native release build and the Electron gate (1.0 d, prepare only)
 
 - **Scope:** row 1f.

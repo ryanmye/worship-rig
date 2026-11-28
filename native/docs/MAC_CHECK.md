@@ -583,6 +583,19 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
   - [ ] iPad and small windows: 51, 39, 40, 41
   - [ ] Themes and colour: 42, 43, 44, 45, 46, 47
   - [ ] Esc: 48; design passes: 49, 50
+- [ ] 16. **Native shell surface** (lane N0):
+  - Settings › About shows `Version 2.0.0 (Mac app)`, a Build line and the Backups / Recordings folders, and no
+    Electron or "Local server" row. No Settings panel says "In Chrome", "Chrome and the Mac app" or "mini panel";
+    there is no Mac category (it comes with menu-bar mode / shortcuts / the update check); Look ends with
+    "Low-resource mode". Library & Backup › Back up now says "Backup saved" and a new `rig-*.json` is in
+    `~/Library/Application Support/Worship Rig Native/backups`.
+  - Reload with notes held: hold a chord with the pedal down, then reload the page (Develop › Reload Page with the
+    Debug build, or Settings › My Samples › Reload when it shows): nothing keeps sounding after the reload, the
+    drone (if on) keeps going, and a recording that was running is closed in Music › Worship Rig and plays.
+  - ⌘. ⌘E ⌘R ⌘⇧F still work (the page handles them until the menu binds them, lane N5): each acts once.
+  - MIDI that starts late: quit the app, unplug the keyboard, open the app, plug it in while the lamp says
+    "Starting…" or "Waiting…": it connects without a reload (the first-listen retry only shows if CoreMIDI is slow;
+    nothing to force here, note it if the lamp ever stays on "Starting…").
 
 - [ ] 16. **Patch packs and the Song bank in the app** (lane N1): copy one of your real packs (or the
   `docs/patch-packs.md` example) into `~/Music/Worship Rig/Samples/`, with a bank pack (`pack.json` `"mode": "bank"`)
@@ -604,6 +617,7 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
   headphones in and out).
 - [ ] Landscape in the new layout (U9 items 39–40). The app doesn't turn to portrait: Info-iPad allows landscape
   only, full screen (`project.yml`); U9 item 51 decides whether it should (then items 35, 41 apply).
+- [ ] Settings › About says `(iPad app)`; no Mac category; no Chrome wording (lane N0, as step 4 item 16).
 - [ ] Note the free-account limits for the release notes (7-day expiry, data kept on re-install).
 - [ ] The iPad memory budget and its Auto voice limit (Lane E6) stay for 2.0.x unless Ryan wants them first.
 - [ ] **Patch packs on the iPad** (lane N1): Files › On My iPad › Worship Rig shows a **Samples** folder after the
@@ -728,6 +742,7 @@ Checks, in order (`required: false` ones are reported, not gated):
 | `hello` | the page's `hello` (seen on `webkit.messageHandlers.rig`) got `ok:true`, `protocol` 1, `minor` ≥ 5 within 15 s |
 | `boot` | `await window.__rig.ready` resolved within 25 s and `__rig.engine` is a `BridgeEngine` (the scheme handler's `main.js` patch worked, so the page uses the native core, not Web Audio) |
 | `store` | `__rig.store` exists, `get().schema === 2`, at least one song, `loadInfo.status` `ok` or `fresh` |
+| `shell` | (lane N0) `window.rig.shell === 'native'`, `isElectron` false, `getInfo().version` equals the bundle's `CFBundleShortVersionString`, `__rigShell.menu` exists and `menuReady()` is true (the controller's onMenu), and the controller merged `recording` / `library` into the shell's `__rigShell` (not replaced it). Also the first proof that RigShellScripts found and injected `app/js/native-shell/*.js` from the bundle |
 | `audio` | the page's `audio start` reached the shell: ≥ 12000 frames on the null output within 5 s, 0 render errors, a `state` event `running` |
 | `note` (not required) | `play {e:'input'}` + note 60 vel 100 through `rig_post` on the song the page committed: peak > -100 dBFS within 0.6 s |
 | `packs` (lane N1) | no `/api/user-patches` request before any pack exists; then the probe builds four files from the current song's export (an auto pack `N1 Auto Ä`, a bank pack `N1 Bank` with `pack.json` and two songs: spaces and non-ASCII on purpose), the shell writes them under `<temp>/Samples` (the self-test's My Samples root), and `controller.rescanPatchPacks()`: `/api/health` says `userPatches: true`, the auto song is in the library, the Song bank has 2 songs, Add to library works, no pack errors (`rig_hostkit` through `RigSchemeHandler`) |
@@ -747,6 +762,8 @@ The result (one line on stdout, keys sorted; check.sh copies it to `selftest.jso
 {"audio":{"engineTime":0,"frames":0,"lateBlocks":0,"renderErrors":0,"sinkStarts":1,"stateRunning":true,"states":[]},
  "boot":{"engineKind":"BridgeEngine","loadStatus":"fresh","ms":0,"phase":"ok","pristine":true,"schema":2,"songs":19,
          "store":true,"userAgent":"...","visibility":"visible"},
+ "shell":{"infoError":null,"isElectron":false,"menu":true,"menuOwnsShortcuts":false,"menuReady":true,"merged":true,
+          "platform":"macos","shell":"native","version":"2.0.0"},
  "checks":[{"detail":"...","ms":0,"name":"engine","ok":true,"required":true}],
  "failed":[],"hello":{"caps":[],"engine":"worship-rig-core ...","minor":5,"protocol":1,"sampleRate":48000,"seed":0},
  "host":{"apiVersion":65537,"app":"2.0.0 (1)","core":"...","os":"macOS 15.x","tempRoot":"...","webkit":"..."},
@@ -759,8 +776,8 @@ Each check is also logged to stderr as `selftest: ok|FAIL|warn <name>: <detail>`
 echoes them into its own output, so they are in the CI log).
 
 What it covers that nothing else did: the app's first launch (SwiftUI entry point, bundle resources, `rig://`
-scheme handler, ES modules over a custom scheme, the `main.js` engine patch, the `window.rig` polyfill and the
-document-start scripts, localStorage on `rig://app`), the BRIDGE v1 round trip through `WKScriptMessageHandler` and
+scheme handler, ES modules over a custom scheme, the `main.js` engine patch, the `window.rig` files
+(`app/js/native-shell`, lane N0) and the document-start scripts, localStorage on `rig://app`), the BRIDGE v1 round trip through `WKScriptMessageHandler` and
 `evaluateJavaScript`, the realtime core rendering inside the app process, the controller's boot on the native
 engine, the RigLibrary first-launch import end to end against a fixture, and a clean quit.
 

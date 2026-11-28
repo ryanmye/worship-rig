@@ -10199,3 +10199,88 @@ bank was empty in the Mac / iPad app. app/js needed no change (controller.rescan
   too). 24 songs, 13 packs, 28 errors: identical to server.js, byte for byte.
 - Self-test `packs` (Swift): the pass condition is split into one Bool per term (type-checker time; no behaviour
   change). patches.h's header comment no longer claims V8's SyntaxError texts are not reproduced (F1).
+
+## N0: the native shell surface (window.rig as injected files, capability flags, getInfo; NMA review O3 / O5)
+
+NATIVE-GAPS §2 "N0", §0 findings 3 and 4; LaneR O1; NMA review O3, O5.
+
+- **`window.rig` in the native app is a set of JS files, not a Swift string.** `app/js/native-shell/NN-*.js`,
+  classic scripts (no module syntax), one per feature: `00-core.js` (`__rigNative` queue, `__rigShell` core:
+  `native`, `platform`, `shellVersion`, `menu(id)`, `menuReady()`, `call(m, args)`; `window.rig` with the flags and
+  `onMenu`), `10-library.js` (`backupNow`, `latestBackup`), `20-info.js` (`getInfo`). Swift `RigShellScripts`
+  (RigShellRouter.swift) injects `window.__rigShellConfig = {keepsAwake, menuOwnsShortcuts, platform};` then every
+  file in name order, joined by `"\n;\n"`, at document start (after the self-test hook). The files live in app/
+  because app/ is already a folder reference in both targets (the plan's `native/apple/Resources/shell/` would have
+  needed a new resource phase). Chrome and Electron never request them: no page imports them (UI6 purity unchanged;
+  the native-shell suite asserts no request).
+- **One message handler, one Swift feature per method set.** `rigShell` is now `RigShellRouter`
+  (WKScriptMessageHandlerWithReply): `{m}` → the `RigShellFeature` that registered `m` (`RigLibrary`: backupNow /
+  latestBackup; `RigInfo`: getInfo); an unknown `m` answers `{error:'unknown method m'}` as before. RigLibrary lost
+  its polyfill string and its own WK handler conformance; its methods' behaviour is unchanged. `call()` never
+  rejects: `{error}` for no handler, a rejected reply, a thrown postMessage or a null reply; `m` can no longer be
+  overridden by an argument named `m`.
+- **Capability flags.** `rig.shell === 'native'` means "the Mac / iPad app"; `rig.isElectron` keeps meaning "the
+  Electron process" (recorder sink, heartbeat, ports, M5 other library). `rig.menuOwnsShortcuts` and
+  `rig.keepsAwake` are **false** in the native app until lane N5 binds the menu key equivalents and holds the
+  display-sleep assertion (the plan had `menuOwnsShortcuts` true on the Mac: that would have left ⌘. ⌘E ⌘R ⌘⇧F
+  dead). The controller honours both (`menuOwnsShortcuts` skips its ⌘ keys, `keepsAwake` skips navigator.wakeLock);
+  Electron behaves as before (`isElectron` implies both).
+- **`rig.getInfo()`** (native): `{version, build, shell:'native', platform, os, userData, port:0, portChanged:false,
+  otherLibrary:null, padsRoot:null, userSamplesDir:null, userSampleRoots:[], recordingsDir, backupsDir}` (1.x shape
+  without `electron`; `padsRoot` / `userSamplesDir` stay null until N4 / N2, so the D11 pad check and My Samples keep
+  their "not here" paths).
+- **`__rigShell` is merged into, never replaced** (finding 3). Native: `installShellHook` assigns `recording()` /
+  `library()` into the shell's object; `stop()` deletes only those two, and only while they are still its own.
+  Electron: replaced and deleted as before.
+- **Settings in the native app** (settings.js, v6/settings.js, settings-summary.js `aboutSummary({app})`):
+  - About: `Version 2.0.0 (Mac app | iPad app)`, `Build`, `Backups`, `Recordings` from getInfo; no Electron or
+    local-server rows; without getInfo `Mode: Mac app`. The v6 About summary says `Version …`, its Library summary
+    "automatic backups" (backupNow exists).
+  - Library & Backup: Back up now (rig.backupNow) instead of "Automatic backups … run in the Mac app. In Chrome, use
+    Export library."; "This app keeps its own library. To bring one from Chrome or Worship Rig 1.x, Export there and
+    Import here." instead of "Chrome and the Mac app keep separate libraries…".
+  - LaneR O1: without `rig.setMenuBarMode` (until N7) the Menu-bar section becomes "Low-resource mode": no
+    Menu-bar mode, Menu-bar songs, modes line or tray-hidden hint, no "Open mini panel" button (its `window.open` is
+    dropped by the shell), no "Open at login is available in the Mac app." The Low-resource hint drops its
+    menu-bar-mode sentence.
+  - The **Mac category** appears in the native Mac app only once it has a Mac-only member (`setMenuBarMode`,
+    `setLoginItem`, `setHotkeys`, `setUpdateCheck`: N7–N9); until then the section sits in Look, as in Chrome. (The
+    plan said "Mac category for the native Mac app": it would have held one row.)
+  - MIDI "starting" text (Settings line, lamp title, toast) and the denied text: the app's ("MIDI is taking a while
+    to start…"), not the browser's permission-prompt text; main.js's first-run MIDI permission probe is skipped.
+    My Samples, unsupported: "My Samples isn't in this version of the app yet." (not "start Worship Rig with its
+    normal launcher"). "No automatic backups here" for a 'not available' import.
+  - Pad folder gates (settings Choose / Rescan, perform.js, v6 sidebar and Edit drone) read "Electron, or the native
+    shell with `rig.choosePadFolder` / `rig.listPads`" (both absent until N4: no change today).
+  - Chrome and Electron: byte-identical copy and DOM (Electron's rows are gated on `isElectron` exactly as before).
+- **Shell-side release on every page load (NMA O5).** `RigNavigationDelegate.webView(_:didCommit:)` →
+  `RigHost.pageDidCommit()` posts `[{play panic}, {rec stop}]` (the crash path's pair, now `RigHost.releasePage`) on
+  every main-frame commit: a reload (Settings › My Samples "Reload"), the crash reload, the first load. The drone is
+  kept (allNotesOff's contract); `rec stop` makes SHELL.md's "a reload stops the recording" true (only the crash path
+  did it). The event pump is not cleared there, unlike the crash path: didCommit may arrive after the new page's
+  `hello`, whose reply must not be dropped. The page's own `allNotesOff` after `hello` (NMA F1) stays.
+- **NativeMidiAccess first-listen retry (NMA O3).** A first `midi listen` that fails with a retryable code
+  (`timeout`, `busy`, `not-started`, `internal`) is retried after `LISTEN_RETRY_MS` = 1, 2, 4, 8 s, then at every
+  `ports` event (a hot-plug, which is what the "unplug and replug" hint asks for) until one succeeds;
+  `requestMIDIAccess()` stays pending meanwhile, which the controller already shows as "MIDI starting" (L-3: a late
+  answer still wires the inputs up). Other codes (`protocol`, `bad-request`, `unsupported`, `closed`, …) reject at
+  once as before. `dispose()` stops a pending retry. `stats.listenRetries` counts them. Options `timers` (default
+  the engine's) and `retryMs`.
+- **Self-test step `shell`** (RigSelfTest.swift `shellProbe`, required): `rig.shell === 'native'`, `isElectron`
+  false, `getInfo().version` = the bundle's CFBundleShortVersionString, `__rigShell.menu` / `menuReady()` present
+  and true, and the controller's `recording` / `library` merged in.
+- Tests (Linux): unit `test/unit/native-shell/polyfill.test.mjs` (12: the files in a vm over a fake rigShell, as
+  RigShellScripts builds the script; flags, merge, menu, injected twice, a foreign window.rig, call errors, library,
+  info, and the Swift side's dirName / separator / declared methods), `test/unit/native-shell/fake-shell.mjs` (shared
+  by every suite below), `test/unit/selftest` (+1: shellProbe), `test/unit/engine-bridge/native-midi-retry.test.mjs`
+  (5); shell-unit `test/phase1/shell/native-shell.test.mjs` (7: merge / unmerge, menu ids, shortcuts and wake lock
+  per flag, Electron and Chrome unchanged); new suite **`native-shell`** (`test/phase2/native-shell/run.mjs`: the
+  real app on bridge-mock with the real shell files: flags, merged `__rigShell`, a shell menu id opens Settings, no
+  Mac category, "Low-resource mode", About, Library copy and Back up now through the shell, no Chrome phrases in any
+  panel, the v6 summaries, iPad wording, Chrome's copy kept; zero console.error, no HTTP ≥ 400);
+  `migration-1x/browser.pw.mjs` now runs the real shell files over a fake Swift side (was a hand-written copy of the
+  polyfill).
+- Swift (unbuilt here: compiled only by CI mac-check): RigShellRouter.swift (new: `RigShellFeature`,
+  `RigShellRouter`, `RigShellScripts`, `RigInfo`), RigHost.swift, RigLibrary.swift, RigNavigation.swift,
+  RigSelfTest.swift. tree-sitter-swift 0.7.4 parses all twelve Shared/*.swift files with 0 ERROR nodes (before and
+  after). Mac / iPad checks: MAC_CHECK.md step 4 item 16, step 5, self-test table.

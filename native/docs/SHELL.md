@@ -101,11 +101,14 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
 
 ## Later tasks (not started), mapped to window.rig (WEBKIT_AUDIT section 5)
 
-- isElectron / platform flags.
+- (done, lane N0) isElectron / platform flags: `rig.shell === 'native'`, `rig.platform`, `rig.menuOwnsShortcuts` /
+  `rig.keepsAwake` (false until N5). `window.rig` is `app/js/native-shell/*.js` (one file per feature, injected by
+  `RigShellScripts`), answered by `RigShellRouter` (one `RigShellFeature` per feature). A new member = a new file + a
+  feature registered in RigHost.
 - Recording stream: `rec` event plus a native recorder adapter.
 - choosePadFolder, listPads.
 - backupNow, latestBackup, importLatestBackup menu id.
-- getInfo, openFolder, openUserSamplesFolder, revealFile.
+- getInfo (done, lane N0: `RigInfo`), openFolder, openUserSamplesFolder, revealFile.
 - userSamplesDir, rescanUserSamples (and menu id).
 - garageBandScan / garageBandImport (Mac only).
 - onMenu ids: panic, fadeOutAll, nextSong, prevSong, toggleView, record, restartAudio, openSettings.
@@ -127,6 +130,9 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
   `url`). The new page boots normally: `BridgeEngine` -> `hello` -> `state` -> `get state` -> the controller re-prepares
   and commits the current song from the library (localStorage lives in the data store, not the dead process).
   Three terminations inside 60 s show a static page with a Reload link instead of looping.
+- `didCommit` (lane N0, NMA review O5) -> `RigHost.pageDidCommit`: the same `[{play panic}, {rec stop}]` on every
+  main-frame commit (a reload, the crash reload, the first load), since the core outlives every page. The pump queue
+  is not dropped there (didCommit may arrive after the new page's `hello`).
 - Audio keeps running through the crash; only the UI is reloaded.
 
 ### Recording ownership (G10), decision
@@ -148,9 +154,10 @@ The native side owns recording end to end. JS never receives audio and never wri
 ### Library migration (Electron origin -> rig://app)
 
 localStorage is per origin: Electron used `http://127.0.0.1:8438` (port can differ), the shell uses `rig://app`, so a
-first launch looks empty. No app/js change is needed: `RigLibrary` (Sources/Shared/RigLibrary.swift) injects a minimal
-`window.rig = {isElectron:false, platform, backupNow, latestBackup, onMenu}` at document start, backed by a
-`WKScriptMessageHandlerWithReply` named `rigShell`. The existing controller paths then work unchanged:
+first launch looks empty. No app/js change is needed: the native shell's `window.rig` (lane N0: `app/js/native-shell/`
+`00-core.js` and `10-library.js`, injected at document start) has `{isElectron:false, shell:'native', platform,
+backupNow, latestBackup, onMenu}`, and `RigLibrary` (Sources/Shared/RigLibrary.swift) answers backupNow /
+latestBackup through the `rigShell` WKScriptMessageHandlerWithReply (`RigShellRouter`). The existing controller paths then work unchanged:
 `backupNow` (30 s debounce, tagged `{"origin":...}`), `importLatestBackup` (replace, current library backed up first),
 the Settings "import latest backup" button.
 - Own backups: `RigPaths.backupsDir` (macOS `~/Library/Application Support/Worship Rig Native/backups`, iPad
@@ -178,7 +185,7 @@ the Settings "import latest backup" button.
   to import.
 - **Verified in JS (Lane E5, 2026-11-25).** `test/phase2/migration-1x` runs the real store and controller against
   real 1.x exports. The exports were made by v1.1.0 and v1.0.0 themselves (`test/fixtures/library-1x`).
-  - It covers this section's contract with a JS stand-in: `lib.mjs` `nativeShell` (polyfill shape, own rotation 10 /
+  - It covers this section's contract with a JS stand-in: `lib.mjs` `nativeShell` (the Swift side: own rotation 10 /
     unreadable 5, staged-once `latestBackup`, newest of ours + Electron's by mtime, the pristine probe, the remembered
     answer, picker / AirDrop staging), and main.js's (`electronHost`).
   - Proven:
@@ -220,7 +227,8 @@ the Settings "import latest backup" button.
     Import…, which offers the block with a checkbox (ticked only for this computer's marker).
   - Only unset settings are filled in; MIDI input / clock port / audio output / pad folder only when found here.
   - Verified in JS with the `nativeShell` stand-in (`device-settings.test.mjs`) and in the real page with the
-    polyfill (`browser.pw.mjs`). The Swift `via` lines themselves are unbuilt.
+    real `app/js/native-shell` files over a fake Swift side (`browser.pw.mjs`, lane N0). The Swift `via` lines
+    themselves are unbuilt.
 - Still unverified: the Swift side itself. Nothing below has run.
   - The NSAlert first-launch prompt and its UserDefaults key.
   - `electronEntries()`'s scan of Application Support (the Electron userData folder name is still [verify on the
@@ -287,4 +295,4 @@ checks and the JSON line: `MAC_CHECK.md` "Self-test". What the hooks change in t
 3. `get state` should include `rec:{state, path}`.
 4. `rig_host_audio_state(INTERRUPTED)` followed by `rig_host_audio_started` with another sample rate (finding 16).
 5. Not done here (other owners): finding 28 (JS posts `JSON.stringify`), finding 29 (tick coalescing while the scene is
-   inactive), finding 30 (RigHost deinit), pads/`choosePadFolder`, `getInfo`, the real menu bar.
+   inactive), finding 30 (RigHost deinit), pads/`choosePadFolder`, the real menu bar. (`getInfo`: lane N0.)

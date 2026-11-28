@@ -356,11 +356,11 @@ in the release checklist (`native/docs/MAC_CHECK.md` "2.0 release checklist", "B
    `runOpenPanelWith`, and `RigNavigationDelegate` doesn't. File › Import Library Backup… (NSOpenPanel) is not
    affected. On the iPad the file input should work as in Safari. Check all of it on the Mac.
 3. The "Not in the Mac and iPad app yet" list comes from `RigSchemeHandler.swift` (`/api/health` says
-   `userSamples: false, userPatches: false`), the `window.rig` polyfill in `RigLibrary.swift` (backupNow /
-   latestBackup / onMenu only), SHELL.md "Later tasks" and `WorshipRigApp.swift` (one menu item). Screen awake: 1.x
+   `userSamples: false, userPatches: false`), the `window.rig` files in `app/js/native-shell` (lane N0: backupNow /
+   latestBackup / onMenu / getInfo only), SHELL.md "Later tasks" and `WorshipRigApp.swift` (one menu item). Screen awake: 1.x
    `main.js` holds `powerSaveBlocker` 'prevent-display-sleep'; the Swift shell asks for nothing like it (only the
-   self-test calls `beginActivity`). Open at login lives in Settings › Mac, which the app doesn't show
-   (`isElectron` false). Ryan decides whether 2.0 ships with them missing.
+   self-test calls `beginActivity`). Open at login lives in Settings › Mac, which the app shows only once it has a
+   Mac-only feature (lane N0; menu-bar mode and Open at login are lane N7). Ryan decides whether 2.0 ships with them missing.
 4. Intel Macs and macOS 12–14.4: the 1.1.x update check reads GitHub's latest release, so once 2.0 is "latest" every
    1.1 user is told about it, including the ones 2.0 can't run for. See the checklist's tier-1 questions.
 5. The 2 MB rule line for charts, the Song bank and packs changes when the CAP task lands (lane-core3f, not merged

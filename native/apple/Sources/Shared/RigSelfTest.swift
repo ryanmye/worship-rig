@@ -541,9 +541,12 @@ final class RigSelfTestRunner {
             report.set("shell", d)
             let want = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "?"
             let version = d["version"] as? String ?? "?"
-            let ok = (d["shell"] as? String) == "native" && (d["isElectron"] as? Bool) == false
-                && (d["menu"] as? Bool) == true && (d["menuReady"] as? Bool) == true && (d["merged"] as? Bool) == true
-                && version == want
+            // separate lets: one long chain of optional comparisons can hit the type checker's time limit
+            let isNative: Bool = (d["shell"] as? String) == "native"
+            let notElectron: Bool = (d["isElectron"] as? Bool) == false
+            let menuOK: Bool = (d["menu"] as? Bool) == true && (d["menuReady"] as? Bool) == true
+            let merged: Bool = (d["merged"] as? Bool) == true
+            let ok = isNative && notElectron && menuOK && merged && version == want
             report.check("shell", ok, "rig.shell \(d["shell"] ?? "?"), getInfo version \(version) (bundle \(want)), "
                          + "menu \(d["menu"] ?? "?"), menuReady \(d["menuReady"] ?? "?"), merged \(d["merged"] ?? "?")")
             stepAudio()
