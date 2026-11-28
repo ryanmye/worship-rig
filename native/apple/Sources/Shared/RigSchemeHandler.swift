@@ -59,9 +59,9 @@ final class RigSchemeHandler: NSObject, WKURLSchemeHandler {
         case "/api/health":
             return queue.async { [weak self] in
                 let packs = rig_hostkit_has_patches(RigPaths.userSampleRootsJSON) == 1
+                let features: [String] = packs ? ["native", "user-samples", "user-patches"] : ["native", "user-samples"]
                 self?.json(task, ["ok": true, "app": "worship-rig", "version": "native", "userSamples": true,
-                                  "userPatches": packs,
-                                  "features": ["native", "user-samples"] + (packs ? ["user-patches"] : [])])
+                                  "userPatches": packs, "features": features])
             }
         case "/api/user-samples":
             let roots = RigPaths.userSampleRoots.map { $0.path }
