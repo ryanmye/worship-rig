@@ -651,4 +651,3 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 - Order in the slots (mine, tier 2): Mac/iPad release blockers and D35 lanes first, interleaved with Windows CI +
   W1–W11 → Windows WebView2 shell, and the Mac command bus → browser remote → iPhone remote.
 - 2.1 stays the SetFlow work (D39), after those. FX steps 2–4 (D13) still wait for the 2.0 tag.
-\n
