@@ -607,7 +607,8 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
 - [ ] Note the free-account limits for the release notes (7-day expiry, data kept on re-install).
 - [ ] The iPad memory budget and its Auto voice limit (Lane E6) stay for 2.0.x unless Ryan wants them first.
 - [ ] **Patch packs on the iPad** (lane N1): Files › On My iPad › Worship Rig shows a **Samples** folder after the
-  first launch; copy (or AirDrop to Files) a pack folder into it; Settings › Rescan; the Song bank lists its bank
+  first launch; Settings › Sounds & Samples says "Folder: On My iPad › Worship Rig › Samples" (n1-skeptic O3); copy
+  (or AirDrop to Files) a pack folder into it; Settings › Rescan; the Song bank lists its bank
   songs, Try it / Keep work, the auto songs join the library. An iCloud Drive or USB folder is not read (only the
   app's own Samples folder: picking another folder is lane N2).
 
