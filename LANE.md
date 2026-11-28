@@ -118,14 +118,23 @@ backup with Range 6× sounding the same, real pointer drag on the Mac / iPad.
 ## Skeptic (touch-skeptic, 2026-11-28)
 Brief: adversarial review of lane TOUCH (velocity-cal, assistant, controller, storage, purity-test edit, removed UI,
 native clamp/fixtures), rebase onto origin/v2-native, gates, report in native/docs/reviews/touch-skeptic.md.
-- [ ] S0. rebase onto origin/v2-native (9f844af)
-- [ ] S1. velocity-cal parse/print/eval probes
-- [ ] S2. assistant fit probes
-- [ ] S3. controller paths (silent notes, note-off, pedal, mono, learn, computer keys)
-- [ ] S4. migration/storage/exports/backups
-- [ ] S5. ui-v6 purity edit
-- [ ] S6. removed UI references / 1.x features
+- [x] S0. rebase onto origin/v2-native (9f844af): one conflict, CONTRACT_CHANGES (both sections kept)
+- [x] S1. velocity-cal parse/print/eval probes
+- [x] S2. assistant fit probes
+- [x] S3. controller paths (silent notes, note-off, pedal, mono, learn, computer keys)
+- [x] S4. migration/storage/exports/backups
+- [x] S5. ui-v6 purity edit
+- [x] S6. removed UI references / 1.x features
 - [ ] S7. native clamp, fixtures, velocityDb vs wt-v112 byte compare
 - [ ] S8. gates
 - [ ] S9. report
 Findings:
+- F1 (fixed 3a2aedc): calVelocity rounded outputs < 0.5 to silence; Heavy preset silenced key velocities 1..3 (old
+  'hard' played them). Now only an output of exactly 0 is silent; > 0 plays at least 1.
+- O2 (fixed 32bf082): parser silently dropped an empty field ("0, , 127"); text after "]" gave a wrong reason.
+- O3 (fixed 9ae8616): ui-v6 purity excluded the whole Your keyboards block; narrowed to the rows' Touch editors.
+- O4 (fixed ee6e832): stale 1..3 comments (bridge-engine, mock-native). O5: dead `.st-kb-fit` CSS selector.
+- Ryan: "Fit to my touch" (1.x 1.1.0, improved in 1.1.2) and the Feel/Softest/Loudest keyboard sliders are gone from
+  2.0 Settings (replaced by points + Calibrate…); old curves still play. Needs his OK.
+- velocityDb: JS byte-identical to wt-v112 5473b04 (function + constants + validDynRange); native same op order,
+  -ffp-contract=off. Native g++ after rebase: ctest 89/89; 112 old fixtures cmp-identical to base renders.

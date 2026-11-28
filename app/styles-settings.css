@@ -305,7 +305,7 @@
 .st-kb-sum { font-size: 13px; color: var(--muted, #a3acb8); }
 .st-kb-sum.own { color: var(--text, #f1f4f8); font-weight: 650; }
 .st-kb-acts { display: flex; gap: 6px; flex-wrap: wrap; }
-.st-kb-acts .ed-btn, .st-kb-btns .ed-btn, .st-kb-fit .ed-btn { min-height: 30px; padding: 0 10px; font-size: 13px; }
+.st-kb-acts .ed-btn, .st-kb-btns .ed-btn { min-height: 30px; padding: 0 10px; font-size: 13px; }
 .st-kb-remember.on {
   background: var(--accent, #ffc94d); color: var(--accent-ink, #1a1400); border-color: var(--accent, #ffc94d);
 }
