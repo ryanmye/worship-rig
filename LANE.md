@@ -148,3 +148,17 @@ size rule). Try to break each, fix real defects with failing-first tests, write 
   r.notified: the library-full notice is toasted twice ("x2"). Settings / bank / banner were fixed, this one missed.
 - F3 (test): test_core3.cpp:593 `buildsPending == 0` right after the rate-change commit: 7/8 FAIL at load ~2-3
   (values 4 == 0; no-hold variant 8/8): lane 1 (nice 10) still building the dropped 48 kHz job. Bounded wait.
+
+## Skeptic 2 (takes over after the box restart, 2026-11-27 21:05Z)
+
+Brief: same as above; report goes to native/docs/reviews/core3f-skeptic.md. Scratch: /home/claude/scratch/core3f-sk
+(builds, logs; `wt/` = a detached probe worktree, never committed).
+
+- [x] read RESUMABLE, LANE, CLAUDE.md, diff (native src, tests, store/views); merge-tree onto origin/v2-native clean
+- [ ] T1 independent repro: env-gated sleep between slots (no builder hook) on base 5c7ed2d vs lane, test :353
+- [ ] T1 mutation: hold taken but lane 1 ignores it; does the new test catch it?
+- [ ] native gates: g++, clang-20 -Werror, ASan ctest; fixtures byte-identical vs base
+- [ ] JS gates: shell-unit, unit, chart, migration-1x, ui-v6-bank, settings (gates.mjs)
+- [ ] review doc + final report
+
+Findings (skeptic 2):
