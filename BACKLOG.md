@@ -110,7 +110,7 @@ Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Plannin
       stage. Details still to be decided with Ryan. Builds on 2.0's background sample loading (CORE2A: the old song
       plays until the new one is loaded; the newest switch wins), and could preload the next song in the set.
       **M, cloud + Ryan hands-on**
-- [ ] **SetFlow follower (D39).** Rig joins a SetFlow host (github.com/andteklin/setflow, the MD's live arrangement
+- [ ] **2.1: SetFlow follower (D39).** Rig joins a SetFlow host (github.com/andteklin/setflow, the MD's live arrangement
       tool) as a read-only LAN client, like a musician's phone, and follows it: the song loaded (linked once, or by
       title) and its performance key (transpose; the drone follows per D26.1a), the section type (verse / chorus /
       bridge → a snapshot per type), vamp (hold, or an optional pad swell), end (a song-end fade, not PANIC) and the

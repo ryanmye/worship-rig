@@ -625,13 +625,18 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   backend behind the same interface, decided by a test on a real PC with Ryan's interface. Outside contributions from now
   on need the contributor's agreement to PolyForm (CONTRIBUTING note). Not legal advice; Ryan may want a lawyer's look.
 
-## D39: Rig follows SetFlow in 2.x (Ryan, 2026-11-28: "sure in 2.x")
+## D39: Rig works with SetFlow, in 2.1 (Ryan, 2026-11-28: "sure in 2.x", then "make this 2.1")
 - Rig 2.x gets a SetFlow follower: a read-only client of a SetFlow host's LAN WebSocket (role "musician") that follows
   the MD's song, key, section, vamp, end and setlist through `controller.*` (BACKLOG 2.x "SetFlow follower").
-- Not 2.0; queued in the after-2.0 slot (D36) after Windows CI + W1–W11 and the browser remote (D34).
+- Not 2.0. (First queued after Windows CI and the browser remote; now first in the after-2.0 slot, see below.)
 - Protocol-level interop only: SetFlow (andteklin/setflow, read at 741b972) has no LICENSE file, so no code is copied.
   Its message format is a prototype's; re-read it when the lane starts and pin the version it was built against.
 - Ryan (2026-11-28) adds two parts to D39: Rig as a SetFlow controller (its pedal/pads send NEXT/REPEAT/VAMP/JUMP/END),
   and importing a SetFlow setlist's songs into Rig (songs + setlist with key and tempo; chart later). Same lane,
   follower first, then import, then controller.
+- **D39 is 2.1** (Ryan, 2026-11-28: "we can make this 2.1 if nothing else is planned for 2.1"). Checked: nothing else
+  was planned for 2.1 (D7's chart moved to 2.0 by D33; the other after-2.0 items carry no version). So (mine, tier 2):
+  the SetFlow lane goes first in the after-2.0 slot (D36), ahead of Windows CI, the browser remote and the iPhone
+  remote, which ship in a later 2.x when ready. 2.1 = follower + setlist import + controller, plus the ChordPro chart
+  import if it fits; FX steps 2–4 (D13) may also land in 2.1 if done in time, but don't hold it.
 
