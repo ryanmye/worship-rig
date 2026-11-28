@@ -114,3 +114,18 @@ backup with Range 6× sounding the same, real pointer drag on the Mac / iPad.
   to the main repo's goldens plus the five new ones; `native/golden/pcm` holds 155 MB of git-ignored PCM dumps that
   render.mjs wrote (they change native sampler renders: compare against a base with the same PCM set).
 - Build dirs: `native/core/build-touch-base` (g++, rebuilt on the lane), `-clang20`, `-asan`; delete when merged.
+
+## Skeptic (touch-skeptic, 2026-11-28)
+Brief: adversarial review of lane TOUCH (velocity-cal, assistant, controller, storage, purity-test edit, removed UI,
+native clamp/fixtures), rebase onto origin/v2-native, gates, report in native/docs/reviews/touch-skeptic.md.
+- [ ] S0. rebase onto origin/v2-native (9f844af)
+- [ ] S1. velocity-cal parse/print/eval probes
+- [ ] S2. assistant fit probes
+- [ ] S3. controller paths (silent notes, note-off, pedal, mono, learn, computer keys)
+- [ ] S4. migration/storage/exports/backups
+- [ ] S5. ui-v6 purity edit
+- [ ] S6. removed UI references / 1.x features
+- [ ] S7. native clamp, fixtures, velocityDb vs wt-v112 byte compare
+- [ ] S8. gates
+- [ ] S9. report
+Findings:
