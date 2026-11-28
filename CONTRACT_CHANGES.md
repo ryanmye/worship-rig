@@ -10070,7 +10070,8 @@ touch fitting, the MIDI lamp and the clock-out choice all hung on it).
   duplicated (the documented contract). The superseded plan's queued jobs (discard) cannot start under it either.
   No change to offline renders (no worker offline); the web engine is untouched.
 - **Test hook.** `BuildWorker::testSwitchSlotWaitMs` (tests only, 0 = off): after each off-thread slot of a switch,
-  the control thread waits until lane 1 has started another job, for as long as it could (queued work, not held).
+  the control thread waits until lane 1 has started another job, for as long as it could (queued work, not held;
+  held, 1/100 of the time, so that a hold lane 1 ignores fails too: skeptic S1, 5/5 FAIL at 1-4 adopted / 6-9 busy).
   A fixed sleep was not deterministic here: lane 1 at nice 10 is starved on a loaded box. New case "core3f: a switch
   takes its prebuilt units in one step": the unfixed core **0 adopted, 10 busy** (5/5 runs), fixed 9 / 1 (5/5). The
   test `Rt` also takes `RIG_TEST_DECODE_THREADS` (decode pool size) for the worker-count sweep. INTERFACE_LOG

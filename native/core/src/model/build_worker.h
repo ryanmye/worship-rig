@@ -137,10 +137,11 @@ class BuildWorker {
   static std::atomic<int> testPrebuildDelayMs;
   /** Tests only (unit.core3, core3f): after each off-thread slot of a switch has taken its unit (adopted or posted),
    *  the control thread waits up to this long for the prebuild lane to start another job, for as long as it could
-   *  (queued work, not held): a control loop preempted mid-switch for as long as it takes, deterministically on a
-   *  starved utility-priority lane too. 0 = off. */
+   *  (queued work, not held; held, ms / 100: testWaitPrebuildStart): a control loop preempted mid-switch for as long
+   *  as it takes, deterministically on a starved utility-priority lane too. 0 = off. */
   static std::atomic<int> testSwitchSlotWaitMs;
-  /** The wait above (control thread; tests only). */
+  /** The wait above (control thread; tests only). Held, it still waits ms / 100 for lane 1 to start a job, which it
+   *  must not (core3f-skeptic S1: returning at once let a hold that lane 1 ignores pass the core3f case, 5/5). */
   void testWaitPrebuildStart(int ms);
 };
 

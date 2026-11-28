@@ -451,9 +451,10 @@ TEST_SUITE("core3") {
     // lane's hands". startFresh promoted one slot at a time, and lane 1 (one thread, FIFO) popped the song's next
     // queued job whenever it finished one between two slots of the loop: a second duplicate build, unbounded on a
     // preempted control thread. The hook makes every off-thread slot of a switch wait, after it took its unit, until
-    // the prebuild lane has started another job (as long as it can: queued work, not held), the worst case of a
-    // preempted control thread whatever the lane's speed (utility priority: starved on a loaded box, so a fixed
-    // sleep was not deterministic here). Before core3f: 9-10 of the 10 in the prebuild lane's hands.
+    // the prebuild lane has started another job (as long as it can: queued work, not held; held, 1/100 of it, so a
+    // hold the lane ignores fails here too: core3f-skeptic S1), the worst case of a preempted control thread whatever
+    // the lane's speed (utility priority: starved on a loaded box, so a fixed sleep was not deterministic here).
+    // Before core3f: 9-10 of the 10 in the prebuild lane's hands; a hold lane 1 ignores: 6-9.
     struct SlotWait {
       explicit SlotWait(int d) { rig::BuildWorker::testSwitchSlotWaitMs = d; }
       ~SlotWait() { rig::BuildWorker::testSwitchSlotWaitMs = 0; }

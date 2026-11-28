@@ -128,8 +128,9 @@ void BuildWorker::releasePrebuilds() {
 void BuildWorker::testWaitPrebuildStart(int ms) {
   std::unique_lock<std::mutex> l(mu_);
   const std::uint64_t from = lane1Starts_;
-  doneCv_.wait_for(l, std::chrono::milliseconds(ms),
-                   [&] { return stop_ || lane1Starts_ != from || q_[1].empty() || held_ > 0; });
+  // core3f-skeptic S1: held, a bounded chance for lane 1 to break the hold (it never ends early when the hold works)
+  const int wait = held_ > 0 ? std::max(1, ms / 100) : ms;
+  doneCv_.wait_for(l, std::chrono::milliseconds(wait), [&] { return stop_ || lane1Starts_ != from || q_[1].empty(); });
 }
 
 std::size_t BuildWorker::pending() const {
