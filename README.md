@@ -588,8 +588,12 @@ For the 2.0 app, the hands-on list is in [native/docs/MAC_CHECK.md](native/docs/
 
 ## Licenses
 
-The app's own code is free software under the **GNU GPL v3** (`LICENSE`; SPDX `GPL-3.0-only`). The bundled sounds
-keep their own licences, listed below and in `LICENSES.md`.
+From 2.0 on, Worship Rig is free and source-available for noncommercial use. Its own code is licensed under the
+**PolyForm Noncommercial License 1.0.0** (`LICENSE`; SPDX `PolyForm-Noncommercial-1.0.0`): anyone may use, change and
+share it for any noncommercial purpose, including personal use and use by churches, charities and schools. Commercial
+use is not allowed. The 1.x releases (up to 1.1.1, the `main` branch) stay under the **GNU GPL v3** (`GPL-3.0-only`);
+see `LICENSE-1.x.md`. Contributions: `CONTRIBUTING.md`. The bundled sounds and fonts keep their own licences, listed
+below and in `LICENSES.md`.
 
 The grand piano is the Salamander Grand Piano by Alexander Holm (CC BY 3.0). The upright piano comes from VS Chamber
 Orchestra 2: Community Edition by Versilian Studios (CC0). The other 21 sampled instruments come from the Musyng Kite
@@ -646,4 +650,4 @@ docs/                            developer and user docs (below)
   contract is `native/docs/ENGINE_CONTRACT.md` and the product decisions are `native/docs/DECISIONS.md`.
 - Docs: [docs/architecture.md](docs/architecture.md) (how the pieces fit, as built),
   [docs/garageband-import.md](docs/garageband-import.md) (My Samples importer), `test/README.md` (test suites),
-  `LICENSES.md`, and `CLAUDE.md` (conventions for coding sessions).
+  `LICENSES.md`, `CONTRIBUTING.md`, and `CLAUDE.md` (conventions for coding sessions).

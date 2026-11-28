@@ -5,7 +5,7 @@
   "version": "1.1.0",
   "description": "Live MIDI keys, pads and key drones for worship, ambient and lofi. Electron app + Chrome fallback.",
   "author": "Ryan Ye",
-  "license": "GPL-3.0-only",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -51,6 +51,7 @@
       "!**/user-samples/**",
       "!app/samples/**/*.trim.wav",
       "README.md",
+      "LICENSE",
       "LICENSES.md",
       "docs/**/*.md"
     ],
