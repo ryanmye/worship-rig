@@ -377,6 +377,30 @@ TEST_SUITE("hostkit-remote-server") {
     CHECK(status(request(f.port(), up + "Origin: http://evil.example\r\n\r\n")) == 403);
   }
 
+  TEST_CASE("an evicted pairing (the 9th phone) closes its WebSocket and fails its long poll (skeptic-2 C10)") {
+    ServerTimeouts to;
+    to.longPollMs = 5000;
+    Fixture f(to);
+    REQUIRE(f.server.publishState(state()));
+    const std::string first = f.pair();
+    const int fd = connectTo(f.port());
+    sendAll(fd, "GET /ws HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                "Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n");
+    readUntil(fd, "\r\n\r\n");
+    sendAll(fd, frame("{\"auth\":\"" + first + "\"}"));
+    readUntil(fd, "Way Maker");
+    for (int i = 0; i < 8; ++i) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+      f.pair();  // 8 more: `first` (least recently used) is dropped
+    }
+    std::vector<int> codes;
+    serverTexts("\r\n\r\n" + readAll(fd, 1500), &codes);
+    close(fd);
+    REQUIRE(codes.size() == 1);
+    CHECK(codes[0] == 4001);
+    CHECK(status(get(f.port(), "/api/state", first)) == 401);
+  }
+
   TEST_CASE("connection limits: 4 per IP; an idle HTTP connection is dropped") {
     ServerTimeouts to;
     to.httpMs = 400;

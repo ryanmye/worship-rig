@@ -110,6 +110,7 @@ struct Server::Client {
   std::string ip;
   bool ws = false;
   bool closing = false;  // close once `out` is flushed
+  std::int64_t closeBy = 0;  // …or at this time, flushed or not (a peer that stops reading; skeptic-2 C2)
   bool dead = false;
   std::string in, out;
   std::int64_t since = 0;         // accept time (HTTP) / last message (WS)
@@ -135,7 +136,10 @@ Server::Server(ServerHooks hooks, Limits limits, ServerTimeouts timeouts, Servic
   infoSeen_ = svc_.infoVersion();
 }
 
-Server::~Server() { stop(); }
+Server::~Server() {
+  destroying_ = true;
+  stop();
+}
 
 std::int64_t Server::nowMs() const { return now_(); }
 
@@ -209,9 +213,12 @@ bool Server::start(const StartOptions &opt, std::string *err) {
   getsockname(listenFd_, reinterpret_cast<sockaddr *>(&bound), &bl);
   port_ = ntohs(bound.ss_family == AF_INET6 ? reinterpret_cast<sockaddr_in6 *>(&bound)->sin6_port
                                             : reinterpret_cast<sockaddr_in *>(&bound)->sin_port);
-  if (pipe(wakeFds_) != 0) return fail("pipe");
-  setNonBlocking(wakeFds_[0]);
-  setNonBlocking(wakeFds_[1]);
+  {
+    std::lock_guard<std::mutex> g(wakeMu_);
+    if (pipe(wakeFds_) != 0) return fail("pipe");
+    setNonBlocking(wakeFds_[0]);
+    setNonBlocking(wakeFds_[1]);
+  }
   stop_ = false;
   running_ = true;
   thread_ = std::thread([this] { loop(); });
@@ -227,22 +234,27 @@ void Server::stop() {
   for (auto &c : clients_) close(c->fd);
   clients_.clear();
   close(listenFd_);
-  close(wakeFds_[0]);
-  close(wakeFds_[1]);
-  listenFd_ = wakeFds_[0] = wakeFds_[1] = -1;
+  listenFd_ = -1;
+  {
+    std::lock_guard<std::mutex> g(wakeMu_);
+    close(wakeFds_[0]);
+    close(wakeFds_[1]);
+    wakeFds_[0] = wakeFds_[1] = -1;
+  }
   port_ = 0;
   {
     std::lock_guard<std::mutex> g(mu_);
     svc_.forgetAll();  // switching the remote off ends every pairing (REMOTE.md §2.3)
-    svc_.newCode();
+    svc_.newCode(true);
   }
-  notifyInfo();
+  if (!destroying_) notifyInfo();
 }
 
 void Server::wake() {
+  std::lock_guard<std::mutex> g(wakeMu_);
   if (wakeFds_[1] >= 0) {
     const char b = 1;
-    [[maybe_unused]] auto n = write(wakeFds_[1], &b, 1);
+    [[maybe_unused]] auto n = write(wakeFds_[1], &b, 1);  // non-blocking: a full pipe already means "wake up"
   }
 }
 
@@ -259,7 +271,7 @@ bool Server::publishState(std::string_view json) {
 void Server::newCode() {
   {
     std::lock_guard<std::mutex> g(mu_);
-    svc_.newCode();
+    svc_.newCode(true);  // Settings "New code": a person at the Mac also ends a pause
   }
   notifyInfo();
 }
@@ -295,7 +307,8 @@ std::string Server::infoJson() {
   const bool on = running_.load();
   std::string j = "{\"on\":";
   j += on ? "true" : "false";
-  j += ",\"port\":" + std::to_string(on ? port_ : 0);
+  const std::uint16_t port = port_.load();
+  j += ",\"port\":" + std::to_string(on ? port : 0);
   j += ",\"code\":" + quote(code) + ",\"paired\":" + std::to_string(paired);
   j += ",\"pausedSec\":" + std::to_string((paused + 999) / 1000);
   j += ",\"addresses\":[";
@@ -306,7 +319,7 @@ std::string Server::infoJson() {
       if (i) j += ",";
       j += "{\"name\":" + quote(addrs[i].first) + ",\"ip\":" + quote(addrs[i].second) + "}";
     }
-    if (!addrs.empty()) url = "http://" + addrs[0].second + ":" + std::to_string(port_) + "/";
+    if (!addrs.empty()) url = "http://" + addrs[0].second + ":" + std::to_string(port) + "/";
   }
   j += "],\"url\":" + (url.empty() ? std::string("null") : quote(url));
   if (!url.empty()) {
@@ -369,11 +382,16 @@ void Server::loopOnce() {
         }
       }
     }
+    dropStaleTokens();
     pushViews();
     // timeouts
     const std::int64_t t = nowMs();
     for (auto &c : clients_) {
-      if (c->dead || c->closing) continue;
+      if (c->dead) continue;
+      if (c->closing) {
+        if (t >= c->closeBy) c->dead = true;  // a peer that never reads its reply
+        continue;
+      }
       if (c->ws) {
         if (!c->authed && t - c->openedAt > to_.wsAuthMs) wsClose(*c, 4001, "auth timeout");
         else if (t - c->since > to_.wsIdleMs) wsClose(*c, 1001, "idle");
@@ -440,6 +458,7 @@ void Server::onReadable(Client &c) {
   for (;;) {
     const ssize_t n = recv(c.fd, buf, sizeof buf, 0);
     if (n > 0) {
+      if (c.closing || (c.ws && c.parser.failed())) continue;  // closing: drain and drop (skeptic-2 C1)
       if (c.ws) {
         c.parser.feed(buf, static_cast<std::size_t>(n));
         if (c.parser.buffered() > 2 * kMaxWsMessage + 64) {  // a frame bigger than allowed is refused by the parser;
@@ -447,7 +466,7 @@ void Server::onReadable(Client &c) {
           return;
         }
       } else {
-        if (c.closing || c.polling) continue;  // one request per connection: ignore anything after it
+        if (c.polling) continue;  // one request per connection: ignore anything after it
         c.in.append(buf, static_cast<std::size_t>(n));
         if (c.in.size() > kMaxIn) {
           respond(c, 413, "text/plain", "too large");
@@ -466,9 +485,15 @@ void Server::onReadable(Client &c) {
   else if (!c.closing && !c.polling) onHttp(c);
 }
 
+void Server::closeLater(Client &c) {
+  if (c.closing) return;
+  c.closing = true;
+  c.closeBy = nowMs() + 5000;
+}
+
 void Server::respond(Client &c, int code, std::string_view type, std::string_view body, std::string_view extra) {
   c.out += httpResponse(code, type, body, extra);
-  c.closing = true;
+  closeLater(c);
   flush(c);
 }
 
@@ -596,7 +621,7 @@ void Server::wsSend(Client &c, std::string_view text) {
 void Server::wsClose(Client &c, std::uint16_t code, std::string_view why) {
   if (c.closing) return;
   wsEncodeFrame(c.out, WsOp::Close, wsClosePayload(code, why));
-  c.closing = true;
+  closeLater(c);
   flush(c);
 }
 
@@ -615,7 +640,7 @@ void Server::onWs(Client &c) {
       }
       case WsParser::Event::Close:
         wsEncodeFrame(c.out, WsOp::Close, wsClosePayload(1000, ""));
-        c.closing = true;
+        closeLater(c);
         flush(c);
         return;
       case WsParser::Event::Message: {
@@ -658,6 +683,26 @@ void Server::onWs(Client &c) {
       }
       default:
         break;
+    }
+  }
+}
+
+/** A token dropped meanwhile (the 9th phone evicted the least recent, forgetAll): its WebSocket and long poll end
+ *  too (skeptic-2 C10). At most 16 clients × 8 tokens: cheap every turn. */
+void Server::dropStaleTokens() {
+  std::vector<Client *> gone;
+  {
+    std::lock_guard<std::mutex> g(mu_);
+    for (auto &c : clients_) {
+      if (c->dead || c->closing) continue;
+      if (((c->ws && c->authed) || c->polling) && !svc_.hasToken(c->token)) gone.push_back(c.get());
+    }
+  }
+  for (Client *c : gone) {
+    if (c->ws) wsClose(*c, 4001, "not-paired");
+    else {
+      c->polling = false;
+      respond(*c, 401, "application/json", "{\"error\":\"not-paired\"}");
     }
   }
 }

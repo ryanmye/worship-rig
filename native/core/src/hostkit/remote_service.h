@@ -21,7 +21,8 @@ struct Limits {
   std::size_t maxTokens = 8;              // paired phones kept (least recently used dropped)
   int ipFailuresPerWindow = 5;            // wrong codes per peer IP per window
   int globalFailuresBeforeRotate = 20;    // wrong codes in total before the code rotates
-  std::int64_t failureWindowMs = 60000;   // the per-IP window, and the pause after a rotation
+  std::int64_t failureWindowMs = 60000;   // the per-IP window, and the first pause after a rotation
+  std::int64_t maxPauseMs = 3600000;      // the pause doubles with each rotation up to this (skeptic-2 C3)
   double cmdRatePerSec = 10;              // per token
   double cmdBurst = 20;
   double reqRatePerSec = 30;              // per peer IP, every route
@@ -63,13 +64,18 @@ class Service {
   // ---- pairing
   /** The current code (codeDigits digits, leading zeros kept). */
   const std::string &code() const { return code_; }
-  /** A fresh code; existing pairings stay. Bumps infoVersion(). */
-  void newCode();
+  /**
+   * A fresh code; existing pairings stay. Bumps infoVersion(). `byUser` (Settings "New code"): also ends a pause
+   * and resets the backoff, since a person at the Mac asked for it (skeptic-2 C4).
+   */
+  void newCode(bool byUser = false);
   /** Try a code from `ip`. */
   PairResult pair(const std::string &ip, std::string_view code);
   /** Pairing paused after a rotation: ms left, 0 = not paused. */
   std::int64_t pausedMs() const;
   bool tokenValid(std::string_view token);
+  /** tokenValid without counting as a use (an open WebSocket must not keep its token "recently used"). */
+  bool hasToken(std::string_view token) const;
   /** Ends every pairing (Settings "Forget phones", the remote switched off). */
   void forgetAll();
   std::size_t pairedCount() const { return tokens_.size(); }
@@ -122,6 +128,7 @@ class Service {
   Random random_;
   std::string code_;
   int globalFailures_ = 0;
+  int rotations_ = 0;  // automatic rotations since the last pairing or user "New code": the pause doubles
   std::int64_t pausedUntil_ = 0;
   std::vector<Token> tokens_;
   std::map<std::string, IpEntry> ips_;

@@ -122,6 +122,54 @@ TEST_SUITE("hostkit-remote-service") {
     CHECK(r.svc.pairedCount() == 2);  // pairings made before the rotation stay
   }
 
+  TEST_CASE("brute force backoff: the pause doubles with each rotation up to an hour; New code or a pairing resets it") {
+    Rig r;
+    auto burn = [&](int base) {  // 20 wrong codes from 20 IPs: one rotation
+      const std::string wrong = r.svc.code() == "000000" ? "000001" : "000000";
+      for (int i = 0; i < 20; ++i) REQUIRE(r.svc.pair("10.9." + std::to_string(base) + "." + std::to_string(i), wrong)
+                                           .status == 403);
+    };
+    const std::int64_t want[] = {60000, 120000, 240000, 480000, 960000, 1920000, 3600000, 3600000};
+    for (int k = 0; k < 8; ++k) {
+      burn(k);
+      CHECK(r.svc.pausedMs() == want[k]);
+      r.t += want[k];
+    }
+    // a guess every pause, forever: ≤ 20 per hour once grown (10^6 codes: ~0.05 % a day)
+    burn(50);
+    CHECK(r.svc.pausedMs() == 3600000);
+    r.svc.newCode(true);  // Settings "New code": a person at the Mac ends the pause and resets the backoff
+    CHECK(r.svc.pausedMs() == 0);
+    burn(51);
+    CHECK(r.svc.pausedMs() == 60000);
+    r.t += 60000;
+    burn(52);
+    CHECK(r.svc.pausedMs() == 120000);
+    r.t += 120000;
+    r.pairOk("10.8.0.1");  // a phone paired: the backoff starts over
+    burn(53);
+    CHECK(r.svc.pausedMs() == 60000);
+  }
+
+  TEST_CASE("hasToken does not count as a use (LRU)") {
+    Rig r;
+    std::vector<std::string> toks;
+    for (int i = 0; i < 8; ++i) {
+      toks.push_back(r.pairOk());
+      r.t += 10;
+    }
+    CHECK(r.svc.hasToken(toks[0]));  // not a use: toks[0] stays the least recent
+    r.pairOk();
+    CHECK_FALSE(r.svc.hasToken(toks[0]));
+    CHECK(r.svc.hasToken(toks[1]));
+  }
+
+  TEST_CASE("view: huge counts are capped, not cast (UB)") {
+    Rig r;
+    CHECK(r.svc.setState(state(R"(,"scene":{"n":null,"count":1e300})")));
+    CHECK(r.svc.viewJson().find(R"("snapshotCount":1000000000)") != std::string::npos);
+  }
+
   TEST_CASE("tokens: at most 8, least recently used dropped; forgetAll ends every pairing") {
     Rig r;
     std::vector<std::string> toks;

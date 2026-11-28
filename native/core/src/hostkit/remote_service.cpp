@@ -28,6 +28,13 @@ bool validId(const std::string &s) {
   });
 }
 
+/** A JSON number already checked as an integer index or count, as text; huge values are capped (skeptic-2 C8:
+ *  casting 1e300 to an integer is undefined behaviour). */
+std::string intText(double d) {
+  if (!(d >= 0)) return "0";
+  return std::to_string(static_cast<long long>(d < 1e9 ? d : 1e9));
+}
+
 /** The first `max` code points of WTF-8 text. */
 std::string cutCodePoints(const std::string &s, std::size_t max) {
   std::size_t i = 0, n = 0;
@@ -65,7 +72,11 @@ Service::Service(Limits limits, NowMs now, Random random)
   newCode();
 }
 
-void Service::newCode() {
+void Service::newCode(bool byUser) {
+  if (byUser) {
+    pausedUntil_ = 0;
+    rotations_ = 0;
+  }
   std::uint32_t limit = 1;
   for (int i = 0; i < lim_.codeDigits; ++i) limit *= 10;
   const std::uint32_t top = (0xFFFFFFFFu / limit) * limit;  // reject above: every code equally likely
@@ -165,7 +176,12 @@ PairResult Service::pair(const std::string &ip, std::string_view code) {
     e.failures.push_back(t);
     if (++globalFailures_ >= lim_.globalFailuresBeforeRotate) {
       newCode();  // resets globalFailures_; Settings shows the new code
-      pausedUntil_ = t + lim_.failureWindowMs;
+      // the pause doubles with each rotation (60 s, 2 min, … 1 h): at most ~20 guesses an hour once it has grown,
+      // against 10^6 codes (skeptic-2 C3: a flat minute allowed ~28,800 a day)
+      std::int64_t pause = lim_.failureWindowMs;
+      for (int i = 0; i < rotations_ && pause < lim_.maxPauseMs; ++i) pause *= 2;
+      pausedUntil_ = t + std::min(pause, lim_.maxPauseMs);
+      ++rotations_;
     }
     r.status = 403;
     r.error = "wrong-code";
@@ -182,6 +198,7 @@ PairResult Service::pair(const std::string &ip, std::string_view code) {
   }
   r.token = tok.value;
   tokens_.push_back(std::move(tok));
+  rotations_ = 0;  // a phone paired: whoever was guessing is not winning, start the backoff over
   ++infoVersion_;
   return r;
 }
@@ -196,6 +213,12 @@ Service::Token *Service::findToken(std::string_view token) {
 }
 
 bool Service::tokenValid(std::string_view token) { return findToken(token) != nullptr; }
+
+bool Service::hasToken(std::string_view token) const {
+  bool found = false;
+  for (const Token &t : tokens_) found = constantTimeEquals(token, t.value) || found;
+  return found;
+}
 
 void Service::forgetAll() {
   tokens_.clear();
@@ -216,9 +239,9 @@ bool Service::setState(std::string_view json) {
   body += ",\"snapshot\":";
   body += name && n && n->type == JVal::Num ? quote(name->str) : "null";
   body += ",\"snapshotN\":";
-  body += n && n->type == JVal::Num ? std::to_string(static_cast<long long>(n->num)) : "null";
+  body += n && n->type == JVal::Num ? intText(n->num) : "null";
   body += ",\"snapshotCount\":";
-  body += scene ? std::to_string(static_cast<long long>(scene->get("count")->num)) : "0";
+  body += scene ? intText(scene->get("count")->num) : "0";
   locked_ = locked && locked->b;
   body += m.get("droneOn")->b ? ",\"droneOn\":true" : ",\"droneOn\":false";
   body += locked_ ? ",\"locked\":true" : ",\"locked\":false";

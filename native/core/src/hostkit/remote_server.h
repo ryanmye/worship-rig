@@ -53,7 +53,7 @@ class Server {
   /** Stop the thread, close every socket, end every pairing and roll the code. Idempotent. */
   void stop();
   bool running() const { return running_.load(); }
-  std::uint16_t port() const { return port_; }
+  std::uint16_t port() const { return port_.load(); }
 
   /** A bus state from the main page; false when it is invalid (ignored). Wakes long-polls / WebSockets. */
   bool publishState(std::string_view json);
@@ -80,6 +80,8 @@ class Server {
   void wsSend(Client &c, std::string_view text);
   void wsClose(Client &c, std::uint16_t code, std::string_view why);
   void pushViews();
+  void dropStaleTokens();
+  void closeLater(Client &c);
   void notifyInfo();
   std::int64_t nowMs() const;
 
@@ -96,8 +98,10 @@ class Server {
   std::atomic<bool> running_{false};
   std::atomic<bool> stop_{false};
   int listenFd_ = -1;
+  std::mutex wakeMu_;  // wake() (any thread) vs stop() closing the pipe (skeptic-2 C5)
   int wakeFds_[2] = {-1, -1};
-  std::uint16_t port_ = 0;
+  std::atomic<std::uint16_t> port_{0};
+  bool destroying_ = false;  // ~Server: stop() fires no hook (the host may be tearing down; skeptic-2 C7)
   std::vector<std::unique_ptr<Client>> clients_;  // server thread only
   std::uint64_t lastSeq_ = 0;
   std::atomic<std::uint64_t> forgetEpoch_{0};
