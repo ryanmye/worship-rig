@@ -7,11 +7,12 @@ Report: native/docs/reviews/site-install-skeptic.md. Commits prefixed `site-skep
 
 ## Steps
 - [x] reset to origin/v2-native (clean, nothing ahead)
-- [ ] 1 macOS steps vs Apple
-- [ ] 2 download links vs v1.1.1 assets
-- [ ] 3 HTML + screenshots
-- [ ] 4 licence wording
-- [ ] fixes, report, commit
+- [x] 1 macOS steps vs Apple
+- [x] 2 download links vs v1.1.1 assets
+- [x] 3 HTML + screenshots
+- [x] 4 licence wording
+- [x] fixes, report, commit
 
 ## Findings
-(none yet)
+F1-F3 fixed in 8febb02 (Sonoma wording, App Store-only claim); O1 MAC_CHECK pre-release note; see report.
+Next: none (hand back).
