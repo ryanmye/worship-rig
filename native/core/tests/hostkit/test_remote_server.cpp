@@ -437,7 +437,14 @@ TEST_SUITE("hostkit-remote-server") {
     CHECK(readAll(early, 600).empty());
     close(early);
     for (int fd : fds) close(fd);
-    CHECK(status(get(f.port(), "/")) == 200);
+    // ...and once they close, there is room again. The server thread reaps the closed sockets on its next poll pass;
+    // until then they still count (and are within the grace), so the newcomer may be refused: retry, bounded.
+    int st = 0;
+    for (const std::int64_t end = nowMs() + 2500; st != 200 && nowMs() < end;) {
+      st = status(get(f.port(), "/"));
+      if (st != 200) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    CHECK(st == 200);
   }
 
   TEST_CASE("new connections per IP are rate-limited (skeptic-2 H1); loopback is exempt by default") {
