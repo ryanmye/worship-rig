@@ -125,7 +125,7 @@ native clamp/fixtures), rebase onto origin/v2-native, gates, report in native/do
 - [x] S4. migration/storage/exports/backups
 - [x] S5. ui-v6 purity edit
 - [x] S6. removed UI references / 1.x features
-- [ ] S7. native clamp, fixtures, velocityDb vs wt-v112 byte compare
+- [x] S7. native clamp, fixtures, velocityDb vs wt-v112 byte compare
 - [ ] S8. gates
 - [ ] S9. report
 Findings:
@@ -137,4 +137,6 @@ Findings:
 - Ryan: "Fit to my touch" (1.x 1.1.0, improved in 1.1.2) and the Feel/Softest/Loudest keyboard sliders are gone from
   2.0 Settings (replaced by points + Calibrate…); old curves still play. Needs his OK.
 - velocityDb: JS byte-identical to wt-v112 5473b04 (function + constants + validDynRange); native same op order,
-  -ffp-contract=off. Native g++ after rebase: ctest 89/89; 112 old fixtures cmp-identical to base renders.
+  -ffp-contract=off. Native after rebase: g++ ctest 89/89, clang-20 0 warnings 89/89, ASan+UBSan 89/89 (79 + 10
+  rerun after a 30-min cut); 112 old fixtures cmp-identical to base renders with g++ and clang-20.
+- Next: S8 JS gates (shell-unit,unit,settings,ui-core,ui-v6,edit-v2,ui-v6-edit,migration-1x,chart), then report.
