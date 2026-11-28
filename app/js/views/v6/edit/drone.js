@@ -10,6 +10,10 @@ import { formatValue } from '../../../shared/params.js';
 import droneModule, { droneKeyLabel } from '../sidebar/drone.js';
 import { catPanel, relsDiffer } from './catpanel.js';
 
+/** Lane N0: a shell that rescans a pad folder itself (Electron; the native app once lane N4 adds rig.listPads). */
+const shellPads = (rig) => !!(rig
+  && (rig.isElectron || (rig.shell === 'native' && typeof rig.listPads === 'function')));
+
 /** The categories (mockup DRONE_CATS). */
 export const DRONE_CATS = Object.freeze([
   { id: 'sound', label: 'Key & sound', blurb: 'the same Drone module as Perform’s sidebar' },
@@ -124,7 +128,7 @@ export function mountDrone(host, ctx, opts, env) {
       folderBtn.addEventListener('click', () => {
         const st = ctx.store.get().settings;
         const p = padCount();
-        if (p && p.total > 0 && ctx.app?.rig?.isElectron && typeof ctx.controller?.reloadPads === 'function'
+        if (p && p.total > 0 && shellPads(ctx.app?.rig) && typeof ctx.controller?.reloadPads === 'function'
           && st.padFolder) {
           ctx.controller.reloadPads().then((r) => {
             if (!r || r.error) return;
@@ -143,7 +147,7 @@ export function mountDrone(host, ctx, opts, env) {
         }
         else t = files ? 'No pad folder yet: the built-in synth drone plays.' : 'No pad folder yet.';
         setText(status, t);
-        setText(folderBtn, p && p.total > 0 && ctx.app?.rig?.isElectron && folder ? 'Rescan'
+        setText(folderBtn, p && p.total > 0 && shellPads(ctx.app?.rig) && folder ? 'Rescan'
           : folder ? 'Pad folder…' : 'Choose folder…');
       };
       binder.fn(['drone'], paint);

@@ -4,8 +4,11 @@
 //   core event callback (control thread) --> pending batch --main--> window.__rigNative.receive([...])
 //   core --rig_host vtable--> RigAudio (AUHAL/RemoteIO, C render callback) and RigMIDI (CoreMIDI)
 //
-// What this deliberately does not do yet (native/docs/SHELL.md, "later tasks"): menu bar, hotkeys, the rest of
-// window.rig (only backupNow/latestBackup/onMenu exist: RigLibrary), importer, pads, update check.
+//   page JS --webkit.messageHandlers.rigShell {m}--> RigShellRouter --> RigLibrary / RigInfo  (window.rig, lane N0:
+//            the JS is app/js/native-shell/*.js, injected at document start by RigShellScripts)
+//
+// What this deliberately does not do yet (native/docs/lanes/NATIVE-GAPS.md lanes N1-N9): menu bar, hotkeys, the rest
+// of window.rig (backupNow / latestBackup / onMenu / getInfo exist), importer, pads, update check.
 import Foundation
 import SwiftUI
 import WebKit
@@ -17,6 +20,8 @@ final class RigHost: NSObject, ObservableObject {
     private let bridge: RigBridgeHandler
     private let navigation: RigNavigationDelegate
     let library: RigLibrary
+    /// window.rig's message handler (`rigShell`); WeakReplyHandler holds it weakly, so the host keeps it.
+    private let shellRouter: RigShellRouter
     private(set) var audio: RigAudio!
     private(set) var midi: RigMIDI!
     private var lifecycle: RigLifecycle?
@@ -46,6 +51,10 @@ final class RigHost: NSObject, ObservableObject {
         let bridgeHandler = RigBridgeHandler()
         let navDelegate = RigNavigationDelegate()
         let libraryHandler = RigLibrary()
+        let router = RigShellRouter()
+        router.register(libraryHandler)
+        router.register(RigInfo())
+        shellRouter = router
         scheme = schemeHandler
         bridge = bridgeHandler
         navigation = navDelegate
@@ -64,9 +73,9 @@ final class RigHost: NSObject, ObservableObject {
                                            forMainFrameOnly: true))
         }
         ucc.add(WeakScriptHandler(bridgeHandler), name: "rig")
-        ucc.addScriptMessageHandler(WeakReplyHandler(libraryHandler), contentWorld: .page, name: "rigShell")
-        ucc.addUserScript(WKUserScript(source: RigHost.documentStartScript, injectionTime: .atDocumentStart,
-                                       forMainFrameOnly: true))
+        ucc.addScriptMessageHandler(WeakReplyHandler(router), contentWorld: .page, name: "rigShell")
+        let shellScript = RigShellScripts.documentStart(appDir: RigPaths.appDir, config: RigHost.shellConfig)
+        ucc.addUserScript(WKUserScript(source: shellScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         conf.userContentController = ucc
         conf.preferences.javaScriptCanOpenWindowsAutomatically = false
         #if os(iOS)
@@ -100,18 +109,32 @@ final class RigHost: NSObject, ObservableObject {
         webView.load(URLRequest(url: url))
     }
 
+    /// What a page leaves behind in the core when it goes: its held notes and pedal, and its recording.
+    private static let releasePage = Data(#"[{"v":1,"op":"play","e":"panic"},{"v":1,"op":"rec","action":"stop"}]"#.utf8)
+
     /// The web content process died (SETUP_REVIEW 27a). The core keeps running; the dead page can no longer release
     /// its notes or stop its recording, so do that here, drop events addressed to the dead page, and load the UI again.
     func webContentDidTerminate(loop: Bool) {
         pumpLock.lock()
         pending.removeAll()
         pumpLock.unlock()
-        post(Data(#"[{"v":1,"op":"play","e":"panic"},{"v":1,"op":"rec","action":"stop"}]"#.utf8))
+        post(Self.releasePage)
         if loop {
             webView.loadHTMLString(RigNavigationDelegate.crashLoopHTML, baseURL: nil)
         } else {
             loadUI() // reload() is unreliable here: webView.url may be nil after a termination
         }
+    }
+
+    /// NMA review O5 (lane N0): every main-frame load (a reload such as Settings › My Samples "Reload", the crash
+    /// reload, the first load) gets the same release as a crash: the core outlives the page, and the new page's
+    /// controller cannot release notes, a pedal or a recording the old one held. `play panic` keeps the drone
+    /// (ENGINE_CONTRACT allNotesOff); `rec stop` with nothing recording is a no-op (SHELL.md "Recording ownership":
+    /// a reload stops the recording, as a 1.x reload did). The pump queue is NOT dropped here: didCommit can arrive
+    /// after the new page has already posted `hello`, whose reply must not be lost. The page side does its own
+    /// allNotesOff after `hello` (skeptic NMA F1); this is the native belt.
+    func pageDidCommit() {
+        post(Self.releasePage)
     }
 
     deinit {
@@ -122,15 +145,13 @@ final class RigHost: NSObject, ObservableObject {
         keep.forEach { free($0) }
     }
 
-    /// Runs before any page script: native -> JS deliveries that arrive early are parked in `queue`, and
-    /// webkitTransport() (app/js/engine-bridge/transports.js) replays them when the engine bridge attaches.
-    static let documentStartScript = """
-    (function () {
-      if (!window.__rigNative) window.__rigNative = { queue: [], receive: function (b) { this.queue.push(b); } };
-      window.__rigShell = { native: true, platform: '\(RigHost.platformName)', shellVersion: 2 };
-    })();
-    \(RigLibrary.polyfill(platform: RigHost.platformName))
-    """
+    /// window.__rigShellConfig for app/js/native-shell/00-core.js (which also parks early native -> JS deliveries in
+    /// `__rigNative.queue` for webkitTransport()). menuOwnsShortcuts / keepsAwake stay false until lane N5 binds the
+    /// menu key equivalents and holds the display-sleep assertion: true without them would leave ⌘. ⌘E ⌘R ⌘⇧F dead
+    /// and the screen free to sleep.
+    static var shellConfig: [String: Any] {
+        ["platform": platformName, "menuOwnsShortcuts": false, "keepsAwake": false]
+    }
 
     static var platformName: String {
         #if os(macOS)

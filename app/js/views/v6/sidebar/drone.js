@@ -16,6 +16,10 @@ import { droneOnMode } from '../../../shared/song-diff.js';
 import { holdGate, brightnessWord, movementWord } from '../../perform.js';
 import { button } from '../lib.js';
 
+/** Lane N0: a shell that rescans a pad folder itself (Electron; the native app once lane N4 adds rig.listPads). */
+const shellPads = (rig) => !!(rig
+  && (rig.isElectron || (rig.shell === 'native' && typeof rig.listPads === 'function')));
+
 /** "C major", "F# minor" (perform.js renderDroneReadout's wording). */
 export const droneKeyLabel = (pc, minor) => `${keyName(pc, minor).replace(/m$/, '')} ${minor ? 'minor' : 'major'}`;
 
@@ -159,7 +163,7 @@ export default {
     const padBtn = button(d, '.v6-pad-btn', 'Choose folder…', { 'data-testid': 'v6-drone-pads' });
     d.listen(padBtn, 'click', () => {
       const st = store.get().settings;
-      if (padsInfo && padsInfo.total > 0 && m.ctx.rig?.isElectron && typeof controller.reloadPads === 'function'
+      if (padsInfo && padsInfo.total > 0 && shellPads(m.ctx.rig) && typeof controller.reloadPads === 'function'
         && st.padFolder) {
         controller.reloadPads().then((r) => {
           if (r && !r.error) m.toast(`Pad folder rescanned: ${r.count} key${r.count === 1 ? '' : 's'} found.`, 'ok');
@@ -226,7 +230,7 @@ export default {
       const md = s?.drone.mode;
       if (p && p.total > 0) {
         setText(padText, `My Pads: ${p.count} key${p.count === 1 ? '' : 's'}`);
-        setText(padBtn, m.ctx.rig?.isElectron && st.settings.padFolder ? 'Rescan' : 'Change…');
+        setText(padBtn, shellPads(m.ctx.rig) && st.settings.padFolder ? 'Rescan' : 'Change…');
       } else if (st.settings.padFolder) {
         setText(padText, md === 'files' ? 'Pad folder not connected: using the synth' : 'Pad folder chosen');
         setText(padBtn, 'Pad folder…');
@@ -238,7 +242,7 @@ export default {
       // the column is short: the pad-folder line shows while My Pads is the sound (where it matters; tap My Pads to
       // reach "Choose folder…"), and always in the wide panel
       pads.hidden = md !== 'files' && m.size !== 'wide';
-      padBtn.disabled = !!st.settings.performLock && !(m.ctx.rig?.isElectron && p && p.total > 0);
+      padBtn.disabled = !!st.settings.performLock && !(shellPads(m.ctx.rig) && p && p.total > 0);
     }
 
     function render() {

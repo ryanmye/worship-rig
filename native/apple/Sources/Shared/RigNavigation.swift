@@ -7,6 +7,7 @@
 //     load the UI again. The fresh page runs the normal boot: BridgeEngine -> `hello` -> `state` -> `get state` ->
 //     the controller re-prepares and commits the current song from the library (localStorage survives the crash).
 //     A loop of crashes (3 in 60 s) stops at a static page with a Reload link instead of reloading forever.
+//  3. Every main-frame commit (lane N0, NMA review O5): panic + rec stop for whatever the previous page held.
 import Foundation
 import WebKit
 #if os(macOS)
@@ -63,6 +64,12 @@ final class RigNavigationDelegate: NSObject, WKNavigationDelegate, WKUIDelegate 
             RigExternal.open(url)
         }
         return nil
+    }
+
+    /// Lane N0 (NMA review O5): the old page is gone once a main-frame navigation commits; release what it held in
+    /// the core (RigHost.pageDidCommit: panic + rec stop), whatever replaced it (a reload, the crash page, the UI).
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        host?.pageDidCommit()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

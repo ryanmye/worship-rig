@@ -9,6 +9,7 @@ import os from 'node:os';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { createStore, memoryStorage, SCHEMA } from '../../../app/js/store.js';
+import { loadShell } from '../native-shell/fake-shell.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const swiftFile = path.join(root, 'native/apple/Sources/Shared/RigSelfTest.swift');
@@ -79,7 +80,7 @@ function fakeWindow({ handler = true } = {}) {
 }
 
 test('the Swift file has no interpolation or escapes inside the JS (raw strings only)', () => {
-  for (const name of ['pageHook', 'bootProbe', 'importProbe', 'packsProbe']) {
+  for (const name of ['pageHook', 'bootProbe', 'importProbe', 'packsProbe', 'shellProbe']) {
     const body = rawString(name);
     assert.ok(!body.includes('"""'), name);
     const compile = () => (name === 'pageHook' ? new Function('window', body)
@@ -179,6 +180,26 @@ test('bootProbe: a rejected __rig.ready, a page that never sets __rig, and a rea
   const c = JSON.parse(await probe('bootProbe', { timeoutMs: 300 })(never));
   assert.equal(c.phase, 'timeout');
   assert.equal(c.store, false);
+});
+
+test('shellProbe (lane N0): the injected native shell after the controller merged its quit hook', async () => {
+  const { win } = loadShell({ handlers: { getInfo: () => ({ version: '2.0.0', build: '1', shell: 'native' }) } });
+  win.rig.onMenu(() => {}); // controller.start's onMenu
+  Object.assign(win.__rigShell, { recording: () => false, library: () => null }); // controller installShellHook
+  const out = JSON.parse(await probe('shellProbe', {})(win));
+  assert.deepEqual(out, { shell: 'native', isElectron: false, platform: 'macos', menuOwnsShortcuts: false, menu: true,
+    menuReady: true, merged: true, version: '2.0.0', infoError: null });
+
+  const replaced = loadShell({ handlers: { getInfo: () => ({ error: 'shell gone' }) } }).win;
+  replaced.__rigShell = { recording: () => false, library: () => null }; // the pre-N0 Electron-style replace
+  const bad = JSON.parse(await probe('shellProbe', {})(replaced));
+  assert.equal(bad.menu, false, 'a replaced __rigShell is caught (menu gone)');
+  assert.equal(bad.version, null);
+  assert.equal(bad.infoError, 'shell gone');
+
+  const none = JSON.parse(await probe('shellProbe', {})({}));
+  assert.equal(none.shell, null);
+  assert.equal(none.infoError, 'no getInfo');
 });
 
 test('fixture: a 1.x Electron rotation backup that RigBackups accepts', () => {

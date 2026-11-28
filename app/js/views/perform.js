@@ -33,6 +33,10 @@ import { KEY_MAP } from '../controller.js';
 import { openOverlay } from './components/overlay.js';
 import { say, onVoiceChange } from './components/voice.js';
 
+/** Lane N0: a shell that rescans a pad folder itself (Electron; the native app once lane N4 adds rig.listPads). */
+const shellPads = (rig) => !!(rig
+  && (rig.isElectron || (rig.shell === 'native' && typeof rig.listPads === 'function')));
+
 const lerp = (a, b, x) => a + (b - a) * x;
 const MINUS = '−';
 const HOLD_MS = 600;
@@ -714,7 +718,7 @@ export function mountPerform(root, ctx) {
   const padBtn = btn('.pad-btn', 'Choose folder…', { 'data-testid': 'pad-folder-btn' });
   d.listen(padBtn, 'click', () => {
     const st = store.get().settings;
-    if (padsInfo && padsInfo.total > 0 && ctx.rig?.isElectron && typeof controller.reloadPads === 'function' && st.padFolder) {
+    if (padsInfo && padsInfo.total > 0 && shellPads(ctx.rig) && typeof controller.reloadPads === 'function' && st.padFolder) {
       controller.reloadPads().then((r) => {
         if (r && !r.error) ctx.toast?.(`Pad folder rescanned: ${r.count} key${r.count === 1 ? '' : 's'} found.`, 'ok');
       });
@@ -1653,7 +1657,7 @@ export function mountPerform(root, ctx) {
     const locked = !!st.performLock;
     if (padsInfo && padsInfo.total > 0) {
       setText(padText, `My Pads: ${padsInfo.count} key${padsInfo.count === 1 ? '' : 's'} from ${padsInfo.total} file${padsInfo.total === 1 ? '' : 's'}`);
-      setText(padBtn, ctx.rig?.isElectron && st.padFolder ? 'Rescan' : 'Change…');
+      setText(padBtn, shellPads(ctx.rig) && st.padFolder ? 'Rescan' : 'Change…');
     } else if (st.padFolder) {
       setText(padText, mode === 'files' ? 'Pad folder not connected — using the synth drone' : 'Pad folder chosen (not loaded yet)');
       setText(padBtn, 'Pad folder…');
@@ -1662,7 +1666,7 @@ export function mountPerform(root, ctx) {
       setText(padBtn, 'Choose folder…');
     }
     padStatus.classList.toggle('attention', mode === 'files' && !(padsInfo && padsInfo.count > 0));
-    padBtn.disabled = locked && !(ctx.rig?.isElectron && padsInfo && padsInfo.total > 0);
+    padBtn.disabled = locked && !(shellPads(ctx.rig) && padsInfo && padsInfo.total > 0);
   }
 
   /** v11-scenes: the scene numbers (hidden until the song has a scene). */

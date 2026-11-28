@@ -5,14 +5,15 @@
 // The Electron app already writes `rig-YYYYMMDD-HHMMSS[-n].json` rotation files (newest 10, tagged
 // `{"origin":"...",...library}`) to <userData>/backups on every edit (30 s debounce) and on window close; the UI's
 // existing "import latest backup" path (controller.importLatestBackup -> window.rig.latestBackup()) reads one.
-// This file provides a minimal window.rig (isElectron:false) over a WKScriptMessageHandlerWithReply named `rigShell`:
+// This file is the library feature of window.rig (lane N0: the JS is app/js/native-shell/10-library.js, injected by
+// RigShellScripts; this class answers its methods through RigShellRouter, `rigShell`):
 //     backupNow(json, kind)  -> {path} | {error}       writes the same rotation into RigPaths.backupsDir
 //     latestBackup()         -> {path, origin, savedAt, text, via} | {error}   (via, D11: 'backups' | 'first-launch'
 //                               | 'picked'; 'files' = the iPad's Backups folder)
 //                               a staged file (picker / AirDrop) wins once, else the newest library file that
 //                               parses among our own backups and, on macOS, the Electron app's backups
-//     onMenu(cb)             -> unsubscribe            the shell calls cb('importLatestBackup') from Swift
-// No app/js file changes. isElectron stays false, so recording, menus and shortcuts keep their non-Electron paths.
+//     onMenu(cb)             -> unsubscribe            (00-core.js) the shell calls cb('importLatestBackup') from Swift
+// isElectron stays false; rig.shell === 'native' is the app's flag for "the Mac / iPad app" (lane N0).
 import Foundation
 import WebKit
 import UniformTypeIdentifiers
@@ -165,7 +166,8 @@ enum RigBackups {
     }
 }
 
-final class RigLibrary: NSObject, WKScriptMessageHandlerWithReply {
+final class RigLibrary: NSObject, RigShellFeature {
+    let methods: [String] = ["backupNow", "latestBackup"]
     weak var host: RigHost?
     private var staged: [String: Any]?
     private var didOffer = false
@@ -181,49 +183,10 @@ final class RigLibrary: NSObject, WKScriptMessageHandlerWithReply {
     private var pickerDelegate: PickerDelegate?
     #endif
 
-    // MARK: window.rig polyfill (runs at document start, before any page script)
-
-    static func polyfill(platform: String) -> String {
-        """
-        (function () {
-          var shell = window.__rigShell = window.__rigShell || {};
-          var menu = [];
-          shell.menu = function (id) {
-            menu.slice().forEach(function (cb) { try { cb(id); } catch (e) { console.warn(e); } });
-          };
-          shell.menuReady = function () { return menu.length > 0; };
-          function call(m, a) {
-            var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.rigShell;
-            if (!h) return Promise.resolve({ error: 'shell unavailable' });
-            return h.postMessage(Object.assign({ m: m }, a || {})).catch(function (e) {
-              return { error: String((e && e.message) || e) };
-            });
-          }
-          if (window.rig) return;
-          window.rig = {
-            isElectron: false,
-            platform: '\(platform)',
-            backupNow: function (json, kind) {
-              return call('backupNow', { json: typeof json === 'string' ? json : JSON.stringify(json), kind: kind });
-            },
-            latestBackup: function () { return call('latestBackup'); },
-            onMenu: function (cb) {
-              if (typeof cb !== 'function') return function () {};
-              menu.push(cb);
-              return function () { menu = menu.filter(function (f) { return f !== cb; }); };
-            }
-          };
-        })();
-        """
-    }
-
     // MARK: JS -> Swift
 
-    func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage,
-                               replyHandler: @escaping (Any?, String?) -> Void) {
-        guard let body = message.body as? [String: Any], let m = body["m"] as? String else {
-            return replyHandler(nil, "bad message")
-        }
+    /// RigShellRouter hands over `{m}` for backupNow / latestBackup (main thread).
+    func handle(_ m: String, _ body: [String: Any], reply replyHandler: @escaping (Any?, String?) -> Void) {
         switch m {
         case "backupNow":
             guard let json = body["json"] as? String else { return replyHandler(["error": "no json"], nil) }

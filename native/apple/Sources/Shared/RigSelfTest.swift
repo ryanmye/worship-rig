@@ -11,6 +11,9 @@
 //   hello      the page's BridgeEngine sent `hello` and the core replied ok, protocol 1, minor >= requiredMinor
 //   boot       window.__rig.ready resolved and the engine object is a BridgeEngine (the native path, not Web Audio)
 //   store      window.__rig.store exists, state.schema == 2, the factory library is seeded
+//   shell      (lane N0) window.rig is the native shell's (shell 'native', isElectron false), getInfo().version is
+//              the bundle's CFBundleShortVersionString, and the controller merged recording() / library() into
+//              __rigShell without dropping menu() / menuReady() (the first-launch import needs both)
 //   audio      the page's `audio start` reached the shell and the null output rendered frames without errors
 //   note       (not required) a note-on through the core made signal on the null output (peak > -100 dBFS)
 //   migration  (only with RIG_ELECTRON_BACKUPS) the RigLibrary first-launch offer against that folder, answered Yes
@@ -183,6 +186,29 @@ enum RigSelfTestScripts {
       out.engineKind = e && e.constructor ? e.constructor.name : null;
       out.visibility = typeof document !== 'undefined' ? document.visibilityState : null;
       out.userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : null;
+    } catch (err) {
+      out.probeError = String((err && err.message) || err);
+    }
+    return JSON.stringify(out);
+    """#
+
+    /// callAsyncJavaScript body (lane N0), no arguments: the native shell's window.rig and __rigShell after boot.
+    /// Returns a JSON string.
+    static let shellProbe = #"""
+    const out = {};
+    try {
+      const r = window.rig || null;
+      out.shell = r ? r.shell || null : null;
+      out.isElectron = r ? r.isElectron : null;
+      out.platform = r ? r.platform || null : null;
+      out.menuOwnsShortcuts = r ? r.menuOwnsShortcuts : null;
+      const s = window.__rigShell || null;
+      out.menu = !!(s && typeof s.menu === 'function');
+      out.menuReady = !!(s && typeof s.menuReady === 'function' && s.menuReady());
+      out.merged = !!(s && typeof s.recording === 'function' && typeof s.library === 'function');
+      const info = r && typeof r.getInfo === 'function' ? await r.getInfo() : null;
+      out.version = info && !info.error ? info.version || null : null;
+      out.infoError = info ? info.error || null : 'no getInfo';
     } catch (err) {
       out.probeError = String((err && err.message) || err);
     }
@@ -486,7 +512,7 @@ final class RigSelfTestRunner {
             guard let d else {
                 report.check("boot", false, ms: ms(since: t), "probe failed: \(err ?? "?")")
                 report.check("store", false, "not probed")
-                return stepAudio()
+                return stepShell()
             }
             report.set("boot", d)
             let phase = d["phase"] as? String ?? "?"
@@ -501,6 +527,25 @@ final class RigSelfTestRunner {
                          && (status == "ok" || status == "fresh"),
                          "__rig.store \((d["store"] as? Bool) == true ? "present" : "missing"), schema \(schema), "
                          + "\(songs) songs, load \(status), pristine \(d["pristine"] ?? "?")")
+            stepShell()
+        }
+    }
+
+    /// Lane N0: window.rig is the injected native shell, getInfo answers, __rigShell was merged (not replaced).
+    private func stepShell() {
+        js(RigSelfTestScripts.shellProbe, [:]) { [self] d, err in
+            guard let d else {
+                report.check("shell", false, "probe failed: \(err ?? "?")")
+                return stepAudio()
+            }
+            report.set("shell", d)
+            let want = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "?"
+            let version = d["version"] as? String ?? "?"
+            let ok = (d["shell"] as? String) == "native" && (d["isElectron"] as? Bool) == false
+                && (d["menu"] as? Bool) == true && (d["menuReady"] as? Bool) == true && (d["merged"] as? Bool) == true
+                && version == want
+            report.check("shell", ok, "rig.shell \(d["shell"] ?? "?"), getInfo version \(version) (bundle \(want)), "
+                         + "menu \(d["menu"] ?? "?"), menuReady \(d["menuReady"] ?? "?"), merged \(d["merged"] ?? "?")")
             stepAudio()
         }
     }

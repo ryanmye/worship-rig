@@ -111,8 +111,9 @@ export const LEARN_MESSAGES = Object.freeze({
 export const GARAGEBAND_DOC = 'docs/garageband-import.md';
 
 /**
- * 2.0 Settings categories, in sidebar order. `mac`: only in the Mac app (rig.isElectron); in Chrome its Menu bar
- * section (mini panel, low-resource) sits in Look instead.
+ * 2.0 Settings categories, in sidebar order. `mac`: only in the Mac app (rig.isElectron; the native 2.0 app once it
+ * has a Mac-only feature: lane N0 `macFeatures`); in Chrome its Menu bar section (mini panel, low-resource) sits in
+ * Look instead.
  */
 export const SETTINGS_CATEGORIES = Object.freeze([
   Object.freeze({ id: 'sound', label: 'Sound' }),
@@ -150,8 +151,12 @@ export const LAST_CATEGORY_KEY = 'worship-rig.settings.category';
  * @param {boolean} [electron]
  * @returns {string}
  */
-export function midiStatusText(m, electron = false) {
+export function midiStatusText(m, electron = false, native = false) {
   const reason = m && (m.pending ? 'pending' : m.reason);
+  // lane N0: the native app has no permission prompt (MIDI comes from CoreMIDI through the bridge)
+  if (reason === 'pending' && native) {
+    return 'MIDI is taking a while to start. The computer keys A–; play notes meanwhile.';
+  }
   if (reason === 'pending') return 'MIDI starting… answer the browser’s permission prompt if it appears.';
   if (reason === 'denied') {
     // the app grants MIDI itself (main.js permission handler), so there is no site setting to point at there
@@ -293,6 +298,21 @@ export function mountSettings(el, ctx) {
   const { store, controller, engine, midi } = ctx;
   const rig = globalThis.rig || null;
   const isElectron = !!(rig && rig.isElectron);
+  // lane N0: the native 2.0 app (WKWebView, app/js/native-shell). isElectron keeps meaning the Electron process; the
+  // Mac-app copy and gates read `isApp`, and each native feature is gated on its own window.rig member
+  const nativeShell = !!(rig && rig.shell === 'native');
+  const isApp = isElectron || nativeShell;
+  const appName = nativeShell && rig.platform === 'ipados' ? 'iPad app' : 'Mac app';
+  // the Mac category: Electron always; the native Mac app once a lane gives it a Mac-only feature (N7 menu bar and
+  // login item, N8 global shortcuts, N9 update check). Until then its one row (Low-resource) stays in Look, as in
+  // Chrome
+  const macFeatures = isElectron || (nativeShell && rig.platform === 'macos'
+    && ['setMenuBarMode', 'setLoginItem', 'setHotkeys', 'setUpdateCheck'].some((k) => typeof rig[k] === 'function'));
+  // LaneR O1: menu-bar mode needs the shell's tray (Electron; native once N7 adds setMenuBarMode); Chrome has the mini
+  // panel window instead. The native app without it shows neither
+  const menuBarRows = !nativeShell || typeof rig.setMenuBarMode === 'function';
+  const shellBackups = isElectron || (nativeShell && typeof rig.backupNow === 'function');
+  const canPadFolder = isElectron || (nativeShell && typeof rig.choosePadFolder === 'function');
   const toast = (msg, kind = 'info') => {
     if (typeof ctx.toast === 'function') ctx.toast(msg, kind);
   };
@@ -359,7 +379,7 @@ export function mountSettings(el, ctx) {
   const closeBtn = btn('Close', requestClose, { class: 'st-close', 'aria-label': 'Close settings' });
   // 2.0 restructure: a tab list (role=tablist, roving tabindex, arrows move and select) and one tabpanel per category
   // inside the scrolling .st-body; only the selected panel is shown
-  const cats = SETTINGS_CATEGORIES.filter((c) => !c.mac || isElectron);
+  const cats = SETTINGS_CATEGORIES.filter((c) => !c.mac || macFeatures);
   const uid = titleId.slice(9);
   const nav = h('div.st-nav', { role: 'tablist', 'aria-label': 'Settings categories', 'aria-orientation': 'vertical',
     'data-testid': 'settings-nav' });
@@ -1021,7 +1041,7 @@ export function mountSettings(el, ctx) {
     return info;
   }
   async function choosePads() {
-    if (isElectron && typeof rig.choosePadFolder === 'function') {
+    if (canPadFolder && typeof rig.choosePadFolder === 'function') {
       const r = await rig.choosePadFolder();
       if (!r || r.error || !r.path) {
         if (r && r.error) {
@@ -1091,7 +1111,7 @@ export function mountSettings(el, ctx) {
           : `Folder: ${pf.name || 'chosen folder'}${attachedThisSession ? '' : ' — press Reconnect to use it this session.'}`,
     );
     const kids = [
-      btn(pf ? 'Change pad folder…' : isElectron || canFsa ? 'Choose pad folder…' : 'Choose pad files…', choosePads, { class: 'st-pads-choose' }),
+      btn(pf ? 'Change pad folder…' : canPadFolder || canFsa ? 'Choose pad folder…' : 'Choose pad files…', choosePads, { class: 'st-pads-choose' }),
       pf && (pf.kind === 'electron' || !attachedThisSession) ? btn(pf.kind === 'electron' ? 'Reload' : 'Reconnect', reconnectPads, { class: 'st-pads-reload' }) : null,
       pf
         ? btn('Forget', () => {
@@ -1219,7 +1239,8 @@ export function mountSettings(el, ctx) {
       if (e && e !== 'not available' && e !== 'no backup found') console.warn('[settings] importLatestBackup', e);
       toast(
         e === 'not available'
-          ? 'Automatic backups are kept by the Mac app. In Chrome, use Import… with a file you exported.'
+          ? nativeShell ? 'No automatic backups here. Use Import… with a file you exported.'
+            : 'Automatic backups are kept by the Mac app. In Chrome, use Import… with a file you exported.'
           : e === 'no backup found'
             ? 'No backup has been saved yet.'
             : 'The backup could not be imported. Your library was not changed.',
@@ -1354,7 +1375,8 @@ export function mountSettings(el, ctx) {
     const n = userSampleCount();
     setText(samplesPath, dir ? `Folder: ${dir}` : supported ? 'Your My Samples folder is ready.' : 'My Samples isn’t turned on here.');
     samplesPath.title = dir || '';
-    setText(samplesNote, supported ? '' : 'My Samples isn’t turned on here — start Worship Rig with its normal launcher to use it.');
+    setText(samplesNote, supported ? '' : nativeShell ? 'My Samples isn’t in this version of the app yet.'
+      : 'My Samples isn’t turned on here — start Worship Rig with its normal launcher to use it.');
     samplesNote.hidden = supported;
     setText(
       samplesStatus,
@@ -1505,7 +1527,7 @@ export function mountSettings(el, ctx) {
   async function renderAbout() {
     const rows = [];
     let info = null;
-    if (isElectron && typeof rig.getInfo === 'function') {
+    if (isApp && typeof rig.getInfo === 'function') {
       try {
         info = await rig.getInfo();
       } catch {
@@ -1513,16 +1535,24 @@ export function mountSettings(el, ctx) {
       }
     }
     aboutInfo = info && !info.error ? info : null; // UI v6 U6: the About summary
-    if (info && !info.error) {
+    if (info && !info.error && nativeShell) {
+      // lane N0: the native app has no Electron and no local server (rig://app), so neither row
+      rows.push(['Version', `${info.version || '?'} (${appName})`]);
+      if (info.build) rows.push(['Build', String(info.build)]);
+      if (info.backupsDir) rows.push(['Backups', info.backupsDir]);
+      if (info.recordingsDir) rows.push(['Recordings', info.recordingsDir]);
+    } else if (info && !info.error) {
       rows.push(['Version', `${info.version || '?'} (Mac app)`], ['Electron', info.electron || '?'], ['Local server port', String(info.port ?? location.port)]);
       if (info.backupsDir) rows.push(['Backups', info.backupsDir]);
       if (info.recordingsDir) rows.push(['Recordings', info.recordingsDir]);
+    } else if (nativeShell) {
+      rows.push(['Mode', appName]);
     } else {
       rows.push(['Mode', 'Chrome'], ['Local server', location.host]);
     }
     aboutBox.replaceChildren(...rows.flatMap(([k, v]) => [h('dt', { text: k }), h('dd', { text: v })]));
     backupBox.replaceChildren();
-    if (isElectron) {
+    if (shellBackups) {
       backupBox.append(
         btn('Back up now', async () => {
           const r = await rig.backupNow(store.exportJSON({ pretty: false }));
@@ -1628,7 +1658,9 @@ export function mountSettings(el, ctx) {
         importInput,
       ),
       importOffer,
-      h('p.st-hint', { text: 'Chrome and the Mac app keep separate libraries: Export in one, Import in the other.' }),
+      h('p.st-hint', { text: nativeShell
+        ? 'This app keeps its own library. To bring one from Chrome or Worship Rig 1.x, Export there and Import here.'
+        : 'Chrome and the Mac app keep separate libraries: Export in one, Import in the other.' }),
       storageNote,
       backupBox,
       h('div.st-inline.st-restores', {}, restoreBox, previousBox),
@@ -1779,29 +1811,29 @@ export function mountSettings(el, ctx) {
   });
   cleanups.push(() => clearInterval(mbTimer));
   // Chrome: the popover runs as a small window over BroadcastChannel (same origin); the Mac app uses the tray icon
-  const mbOpenMini = isElectron ? null : btn('Open mini panel', () => {
+  const mbOpenMini = isApp ? null : btn('Open mini panel', () => {
     window.open('mini.html', 'worship-rig-mini', 'popup,width=320,height=440');
   }, { class: 'st-mb-open-mini', 'data-testid': 'setting-mb-open-mini' });
   // 2.0 restructure: Settings › Mac in the Mac app; Chrome has no Mac category, so its Menu bar section (mini panel,
   // menu-bar songs, low-resource) closes the Look category instead
   const macCat = panels.has('mac') ? 'mac' : 'look';
   place(macCat,
-    h('section.st-section.st-menubar', { 'aria-label': 'Menu bar', 'data-section': 'menubar',
-      'data-testid': 'settings-menubar' },
-    h('h2.st-h2', { text: 'Menu bar' }),
-    row('Menu-bar mode', mbMode.el, isElectron
+    h('section.st-section.st-menubar', { 'aria-label': menuBarRows ? 'Menu bar' : 'Low-resource mode',
+      'data-section': 'menubar', 'data-testid': 'settings-menubar' },
+    h('h2.st-h2', { text: menuBarRows ? 'Menu bar' : 'Low-resource mode' }),
+    menuBarRows ? row('Menu-bar mode', mbMode.el, isApp
       ? 'Closing the window keeps the sound running; switch modes from the menu-bar icon. Quit from its menu.'
-      : 'Used by the Mac app. In Chrome, keep this tab open and use the mini panel.'),
+      : 'Used by the Mac app. In Chrome, keep this tab open and use the mini panel.') : null,
     // onboarding O9: "Modes" defined where it first appears
-    row('Menu-bar songs', h('div.st-inline', {}, mbSetSelect),
-      'The songs (“modes”) the menu-bar icon switches between, up to 6.'),
-    mbTrayHidden,
-    mbModes,
-    row('Low-resource', mbLow.el, 'Only the current song stays loaded and the meters stop; the sound is the same. '
-      + 'On by itself while the window is hidden in menu-bar mode.'),
+    menuBarRows ? row('Menu-bar songs', h('div.st-inline', {}, mbSetSelect),
+      'The songs (“modes”) the menu-bar icon switches between, up to 6.') : null,
+    menuBarRows ? mbTrayHidden : null,
+    menuBarRows ? mbModes : null,
+    row('Low-resource', mbLow.el, 'Only the current song stays loaded and the meters stop; the sound is the same.'
+      + (menuBarRows ? ' On by itself while the window is hidden in menu-bar mode.' : '')),
     mbLogin
       ? row('Open at login', mbLogin.el, 'Start in the menu bar when you log in.')
-      : h('p.st-hint.st-mb-login-hint', { text: 'Open at login is available in the Mac app.' }),
+      : nativeShell ? null : h('p.st-hint.st-mb-login-hint', { text: 'Open at login is available in the Mac app.' }),
     mbOpenMini ? row('Mini panel', mbOpenMini, 'Mode buttons, master, drone and panic in a small window.') : null,
     hotkeys ? hotkeys.el : null,
     ),
@@ -2056,7 +2088,7 @@ export function mountSettings(el, ctx) {
         setText(
           midiStatus,
           !m.available
-            ? midiStatusText(m, isElectron)
+            ? midiStatusText(m, isElectron, nativeShell)
             : m.connected
               ? `Connected: ${m.name}`
               : 'No keyboard connected — plug one in (it connects by itself), or play the computer keys A–;.',
@@ -2145,7 +2177,7 @@ export function mountSettings(el, ctx) {
   // everything back. One source of behaviour: the v6 module moves and restyles these nodes, it never copies them.
   const v6Api = {
     el, dialog, nav, body, closeBtn, tabs, panels, advs, cats, C,
-    store, controller, midi, engine, rig, isElectron, ctx, toast,
+    store, controller, midi, engine, rig, isElectron, nativeShell, isApp, shellBackups, ctx, toast,
     showCategory, revealSection, resolveSection, syncOrientation, isOpen: () => isOpen, current: () => current,
     nodes: { learnSection, perfSection, chartRow, appearance, themeCards, themeGrid, lightRow, bankBox, outputSelect },
     renderPacks, learnName, mappingText, velLabel: (v) => (VEL_OPTS.find((o) => o.value === v) || VEL_OPTS[1]).label,

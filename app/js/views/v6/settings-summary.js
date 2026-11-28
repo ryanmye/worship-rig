@@ -112,11 +112,12 @@ export function macSummary(o = {}) {
 }
 
 /**
- * About: the app's version (Mac app), else where it runs.
- * @param {{version?:string|null, electron?:boolean}} o
+ * About: the app's version (Mac app), else where it runs (`app`: the native shell's name for itself, lane N0).
+ * @param {{version?:string|null, electron?:boolean, app?:string|null}} o
  * @returns {string}
  */
 export function aboutSummary(o = {}) {
   if (o.version) return `Version ${o.version}`;
+  if (o.app) return o.app;
   return o.electron ? 'Mac app' : 'Chrome';
 }

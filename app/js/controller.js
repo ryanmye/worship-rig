@@ -200,7 +200,7 @@ function isButtonish(el) {
  * @param {Document|EventTarget|null} [o.doc]
  * @param {Navigator|null} [o.nav]
  * @param {Window|EventTarget|null} [o.win]
- * @param {object|null} [o.rig]  window.rig (Electron)
+ * @param {object|null} [o.rig]  window.rig (Electron's preload, or the native shell's app/js/native-shell)
  * @param {{setTimeout,clearTimeout,setInterval,clearInterval}} [o.timers]
  * @param {() => number} [o.now]
  * @param {number} [o.watchdogMs=1000]
@@ -222,6 +222,11 @@ export function createController(o) {
   const win = o.win !== undefined ? o.win : typeof globalThis.addEventListener === 'function' && globalThis.document ? globalThis : null;
   const rig = o.rig !== undefined ? o.rig : globalThis.rig || null;
   const isElectron = !!(rig && rig.isElectron);
+  // lane N0: the Mac / iPad app (WKWebView). isElectron keeps meaning "the Electron process"; the native shell says
+  // what it does itself: menuOwnsShortcuts (its menu binds ⌘. ⌘E ⌘R ⌘⇧F), keepsAwake (it holds the display awake)
+  const nativeShell = !!(rig && rig.shell === 'native');
+  const menuOwnsShortcuts = isElectron || !!(nativeShell && rig.menuOwnsShortcuts === true);
+  const shellKeepsAwake = isElectron || !!(nativeShell && rig.keepsAwake === true);
   // L11-8: low-resource drops the decoded buffers, but on macOS the renderer only gives that memory back after a V8
   // GC, and an idle hidden page may go minutes without one (Mac: 1057 MB for 5 min → 392 MB after a GC). Electron
   // exposes gc (main.js --expose-gc); Chrome doesn't, so this is a no-op there.
@@ -1729,7 +1734,7 @@ export function createController(o) {
         else nextSong();
         return;
       }
-      if (isElectron) return; // the app menu owns ⌘. ⌘E ⌘R ⌘⇧F in Electron
+      if (menuOwnsShortcuts) return; // the app menu owns ⌘. ⌘E ⌘R ⌘⇧F (Electron; native once lane N5 binds them)
       const k = String(e.key || '').toLowerCase();
       if (e.repeat) return;
       if (k === '.') {
@@ -3030,10 +3035,10 @@ export function createController(o) {
     return { ok: true, id: r.id, ...(r.existing ? { existing: true } : {}), selected: ok };
   }
 
-  // ---- wake lock (Chrome) — Electron uses powerSaveBlocker in main
+  // ---- wake lock (Chrome) — Electron uses powerSaveBlocker in main, the native shell its own assertion (keepsAwake)
   let wakeLock = null;
   async function acquireWakeLock() {
-    if (isElectron || !nav || !nav.wakeLock || typeof nav.wakeLock.request !== 'function') return;
+    if (shellKeepsAwake || !nav || !nav.wakeLock || typeof nav.wakeLock.request !== 'function') return;
     if (wakeLock && !wakeLock.released) return;
     try {
       wakeLock = await nav.wakeLock.request('screen');
@@ -3788,13 +3793,33 @@ export function createController(o) {
     }
   }
 
-  /** Electron quit hook (main.js asks before closing: recording? + a last library backup). */
+  /**
+   * Quit hook: the shell asks before closing (recording? + a last library backup). Electron's main.js reads a
+   * `__rigShell` the controller owns. The native shell owns its `__rigShell` (menu(), menuReady(), call(): the menu
+   * dispatcher and the first-launch probe, NATIVE-GAPS §0 finding 3), so there the two members are merged in and
+   * stop() removes only those (lane N0).
+   */
+  let shellHook = null;
   function installShellHook() {
-    if (!isElectron || typeof globalThis !== 'object') return;
-    globalThis.__rigShell = {
+    if (typeof globalThis !== 'object') return;
+    const hook = {
       recording: () => !!(recorder && recorder.isRecording),
       library: () => (secondary || store.pristine ? null : libraryJSON()), // round2-shell #2 (see backupNow)
     };
+    if (isElectron) {
+      globalThis.__rigShell = hook;
+    } else if (nativeShell && globalThis.__rigShell && typeof globalThis.__rigShell === 'object') {
+      Object.assign(globalThis.__rigShell, hook);
+      shellHook = hook;
+    }
+  }
+  function removeShellHook() {
+    const shell = globalThis.__rigShell;
+    if (shell && isElectron) delete globalThis.__rigShell;
+    else if (shell && shellHook) {
+      for (const k of Object.keys(shellHook)) if (shell[k] === shellHook[k]) delete shell[k];
+    }
+    shellHook = null;
   }
 
   /**
@@ -3982,7 +4007,7 @@ export function createController(o) {
     if (wakeLock && !wakeLock.released) wakeLock.release?.().catch?.(() => {});
     if (releaseLock) releaseLock();
     releaseLock = null;
-    if (globalThis.__rigShell && isElectron) delete globalThis.__rigShell;
+    removeShellHook();
     started = false;
   }
 

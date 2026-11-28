@@ -106,6 +106,9 @@ export function enhanceSettings(api) {
 function enhance(api, d) {
   const { dialog, nav, body, tabs, panels, store, controller, midi, nodes } = api;
   const isElectron = !!api.isElectron;
+  // lane N0: the native 2.0 app keeps backups too (rig.backupNow), and its About names the app, never Chrome
+  const shellBackups = api.shellBackups !== undefined ? !!api.shellBackups : isElectron;
+  const appLabel = api.nativeShell ? (api.rig && api.rig.platform === 'ipados' ? 'iPad app' : 'Mac app') : null;
   const S = () => store.get().settings;
 
   // ---------------------------------------------------------------- journalled DOM changes
@@ -398,10 +401,10 @@ function enhance(api, d) {
       samples: samplesSummary({ packs: packsOf(), samples: sampleCount(), padFolder: !!s.padFolder }),
       layout: layoutSummary({ sidebarOpen: sb.prefs().open, snapsFolded: snapsFolded() }),
       look: lookSummary({ name: t?.name, mode: t?.mode, light: lightOf(s), cvd: s.cvd }),
-      library: librarySummary({ electron: isElectron, lastBackupAt: lastAt || null,
+      library: librarySummary({ electron: shellBackups, lastBackupAt: lastAt || null,
         songs: (state.songOrder || []).length }),
       mac: macSummary({ menuBarMode: !!s.menuBarMode, updateCheck: s.updateCheck }),
-      about: aboutSummary({ version: api.about()?.version || null, electron: isElectron }),
+      about: aboutSummary({ version: api.about()?.version || null, electron: isElectron, app: appLabel }),
     };
   }
   function renderSums() {

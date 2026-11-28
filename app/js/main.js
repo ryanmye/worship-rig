@@ -19,6 +19,10 @@ import { mirrorShellSettings } from './shell-mirror.js';
 const $ = (id) => document.getElementById(id);
 const rig = globalThis.rig || null;
 const isElectron = !!(rig && rig.isElectron);
+// lane N0: the native 2.0 app (app/js/native-shell). MIDI there comes from CoreMIDI through the bridge: no browser
+// permission prompt, so it gets the app's MIDI texts, not Chrome's
+const nativeShell = !!(rig && rig.shell === 'native');
+const appMidiText = isElectron || nativeShell;
 
 // ------------------------------------------------------------------------------------------ toasts
 const TOAST_MS = { info: 4500, ok: 4000, warn: 7000, error: 10000 };
@@ -893,8 +897,9 @@ function renderMidiStatus(s) {
     setText(midiName, 'Waiting…');
   }
   const pending = !!(m.pending || m.reason === 'pending');
-  $('midi-status').title = m.connected ? `MIDI input: ${m.name}` : pending ? MIDI_PENDING_TEXT
-    : m.reason === 'denied' && !isElectron ? midiDeniedText()
+  $('midi-status').title = m.connected ? `MIDI input: ${m.name}` : pending
+    ? nativeShell ? MIDI_PENDING_TEXT_ELECTRON : MIDI_PENDING_TEXT
+    : m.reason === 'denied' && !appMidiText ? midiDeniedText()
       : m.reason === 'failed' ? 'MIDI could not start — unplug and replug the keyboard'
         : m.reason ? `MIDI unavailable (${m.reason})` : 'MIDI input';
 }
@@ -912,7 +917,7 @@ controller.onStatus((s) => {
   // pending is not a failure: no "could not start" toast, and midiHintShown stays free for a later denial
   if (pending && !midiPendingShown) {
     midiPendingShown = true;
-    if (isElectron) toast(MIDI_PENDING_TEXT_ELECTRON, 'info', { ms: 10000 });
+    if (appMidiText) toast(MIDI_PENDING_TEXT_ELECTRON, 'info', { ms: 10000 });
     else if (!midiPromptHintShown) toast(MIDI_PENDING_TEXT, 'info', { ms: 10000 });
   }
   // round4-perform P7: the "starting" toast goes as soon as MIDI has answered (the lamp says the rest)
@@ -922,7 +927,7 @@ controller.onStatus((s) => {
   }
   if (!midiHintShown && !pending && m.reason && m.reason !== lastStatus?.midi?.reason) {
     midiHintShown = true;
-    if (m.reason === 'denied') toast(isElectron ? 'MIDI access was denied.' : midiDeniedText(), 'warn', { ms: 10000 });
+    if (m.reason === 'denied') toast(appMidiText ? 'MIDI access was denied.' : midiDeniedText(), 'warn', { ms: 10000 });
     else if (m.reason === 'unsupported') toast('This browser has no Web MIDI. Use Chrome or the Worship Rig app to play a MIDI keyboard.', 'warn', { ms: 10000 });
     else toast('MIDI could not start. Unplug and replug the keyboard, then reload.', 'warn');
   }
@@ -1425,7 +1430,7 @@ engine.addEventListener('statechange', () => {
 });
 
 async function firstRunHints() {
-  if (isElectron || !navigator.permissions?.query) return;
+  if (isElectron || nativeShell || !navigator.permissions?.query) return; // no MIDI permission prompt in the apps
   try {
     const p = await navigator.permissions.query({ name: 'midi' });
     if (p.state !== 'prompt') return;

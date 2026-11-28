@@ -15,10 +15,10 @@ Worktree /home/claude/wt-n0, branch lane-n0 from origin/v2-native c7bccec.
 
 ## Steps
 - [x] 0. worktree, read the brief inputs, LANE.md
-- [ ] 1. polyfill files app/js/native-shell/*.js + test/unit/native-shell (fake shell, vm)
-- [ ] 2. Swift: RigShellRouter (router + features), script loader, RigLibrary as a feature, RigInfo (getInfo),
+- [x] 1. polyfill files app/js/native-shell/*.js + test/unit/native-shell (fake shell, vm)
+- [x] 2. Swift: RigShellRouter (router + features), script loader, RigLibrary as a feature, RigInfo (getInfo),
         panic + rec stop on every main-frame commit, self-test `shell` step
-- [ ] 3. app edits: controller (menuOwnsShortcuts, keepsAwake, __rigShell merge), settings / v6 settings (Mac
+- [x] 3. app edits: controller (menuOwnsShortcuts, keepsAwake, __rigShell merge), settings / v6 settings (Mac
         category, About, backups copy, Menu bar, MIDI text), main.js MIDI texts, pad gates
 - [ ] 4. native-midi.js: first-listen retry (backoff, then next `ports`) + unit tests
 - [ ] 5. Playwright: native-shell suite (real app, bridge-mock, real polyfill files); migration-1x repointed
@@ -26,10 +26,18 @@ Worktree /home/claude/wt-n0, branch lane-n0 from origin/v2-native c7bccec.
 - [ ] 7. gates via tools/cloud/gates.mjs; final report here
 
 ## Next step
-1.
+4. native-midi listen retry; then 5 (Playwright).
 
 ## Findings / decisions so far
 - Files go under `app/js/native-shell/` (brief), not `native/apple/Resources/shell/` (plan): app/ is already a folder
   reference in both targets (project.yml), so no new resource phase; Chrome / Electron never request them.
+- Plan says `menuOwnsShortcuts` Mac true: wrong for N0. Nothing binds ⌘. ⌘E ⌘R ⌘⇧F natively until N5, so true now
+  would leave them dead. Shipped false on both platforms (Swift `RigHost.shellConfig`); the controller honours it.
+- Plan says the Mac category shows for `isMacApp`: in N0 it would hold only Low-resource. Instead it appears in the
+  native app once a Mac-only member exists (setMenuBarMode / setLoginItem / setHotkeys / setUpdateCheck: N7-N9);
+  until then the section stays in Look as "Low-resource mode" (no menu-bar rows, no mini panel, no login hint).
+- Page-load release (O5): `RigNavigationDelegate.didCommit` → `RigHost.pageDidCommit` posts `play panic` AND
+  `rec stop` (the crash path's pair; SHELL.md "Recording ownership" already says a reload stops the recording, but
+  only the crash path did). The pump queue is not dropped there (didCommit may arrive after the new page's hello).
 
 ## Open questions
