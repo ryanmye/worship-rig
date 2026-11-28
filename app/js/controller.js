@@ -70,6 +70,8 @@ export const KEY_MAP = Object.freeze({
 /** Momentary learnable actions (note-on or CC ≥ 64). */
 export const BUTTON_CONTROLS = Object.freeze(['nextSong', 'prevSong', 'panic', 'fadeOutAll', 'swell', 'nextScene',
   'prevScene', 'go', 'cueNext', 'cuePrev']);
+/** remote lane (D45): the bus commands the browser remote may send (via: 'remote'); D34's whole list. */
+const REMOTE_COMMANDS = Object.freeze(['prevSong', 'nextSong', 'prevScene', 'nextScene', 'panic', 'droneToggle']);
 /** Web Lock name for the single-instance guard (H2). */
 export const INSTANCE_LOCK = 'rig-instance';
 export const SECONDARY_MESSAGE = 'Another Worship Rig window is open — this one is read-only and muted. Close the other window to play here.';
@@ -4268,6 +4270,19 @@ export function createController(o) {
     return Math.round((Number.isFinite(heap) ? heap / 1048576 : 0) + (Number.isFinite(dec) ? dec : 0));
   }
   /**
+   * v11-scenes `scene` (present only while the current song has scenes) with D45's optional `name`: the playing
+   * snapshot's own name (D25, already normalised to ≤ SCENE_NAME_MAX code points); absent while none plays or it has
+   * no name (the remote then says "Scene n").
+   */
+  function sceneBusField() {
+    const si = sceneInfo();
+    if (!si.count) return {};
+    const song = si.id ? store.getSong(si.id) : null;
+    const sc = si.n !== null ? scenesOf(song)[si.n] : null;
+    const name = sc && typeof sc.name === 'string' && sc.name ? sc.name : null;
+    return { scene: { n: si.n, count: si.count, ...(name ? { name } : {}) } };
+  }
+  /**
    * The contract's `state` message for the current moment (published by publishState; handy for tests and views).
    * @returns {object}
    */
@@ -4294,7 +4309,8 @@ export function createController(o) {
       recording: !!status.recording,
       windowVisible: isWindowVisible(),
       memoryMB: memoryMB(),
-      ...(sceneInfo().count ? { scene: { n: sceneInfo().n, count: sceneInfo().count } } : {}), // v11-scenes
+      ...sceneBusField(), // v11-scenes (+ D45 name)
+      locked: locked(), // remote lane D45: the browser remote's Lock gate and its page
     };
   }
   /**
@@ -4327,6 +4343,13 @@ export function createController(o) {
       return false;
     }
     if (secondary) return false;
+    // remote lane (D45): the browser remote (cmd.via 'remote', set by the native relay) may only step songs and
+    // snapshots, toggle the drone and panic; under Perform Lock only panic. The relay refuses the same from its last
+    // state, but that may be up to one throttle window old: this is the check that counts.
+    if (cmd.via === 'remote' && (!REMOTE_COMMANDS.includes(cmd.type) || (locked() && cmd.type !== 'panic'))) {
+      emit('bus-refused', { type: cmd.type, via: cmd.via, reason: REMOTE_COMMANDS.includes(cmd.type) ? 'locked' : 'not-allowed' });
+      return false;
+    }
     // lowres2: a popover / tray command is input (wakes sleeping audio). lowres2-critic R2: except `hello` (the
     // popover opening / asking for state): it is not a player's input, so it neither wakes the audio nor restarts the
     // idle clock, and the frozen drone stays frozen while the popover is merely open

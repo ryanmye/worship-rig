@@ -25,6 +25,10 @@ export const COMMAND_TYPES = Object.freeze([
  * any input except a popover `hello` wakes it, and so does leaving low-resource. v stays 1.
  */
 export const AUDIO_STATES = Object.freeze(['running', 'stalled', 'suspended', 'asleep']);
+/** remote lane (D45): the values a command's optional `via` may take (who relayed it). */
+export const REMOTE_VIA = Object.freeze(['remote']);
+/** D25: a snapshot name's cap in code points (shared/scenes.js SCENE_NAME_MAX; repeated here: bus.js imports nothing). */
+export const SCENE_NAME_MAX = 40;
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -39,6 +43,7 @@ const isCurrent = (c) => c === null || (isObj(c) && isId(c.id) && isStr(c.name) 
 /**
  * Check a `state` message against contract v1. `current` may be null (no song), `masterDb` null (master at 0 =
  * −∞ dB, which JSON can't carry), `memoryMB` null (unknown), `midi.name` null (nothing connected).
+ * Optional (remote lane D45, still v1): `scene.name` (≤ 40 code points) and `locked` (Perform Lock).
  * Optional (mini-theme, still v1): `theme`, the applied theme id (a non-empty string; the popover resolves an unknown
  * id to the default the way the app does). Absent = the publisher doesn't send it; the popover then follows the
  * localStorage mirror alone.
@@ -66,6 +71,11 @@ export function stateError(m) {
   // null = the song's own levels)
   if (m.scene !== undefined && !(isObj(m.scene) && Number.isInteger(m.scene.count) && m.scene.count > 0
     && (m.scene.n === null || (isIndex(m.scene.n) && m.scene.n < m.scene.count)))) return 'scene';
+  // remote lane (D45, optional, still v1): the playing snapshot's name (D25: ≤ SCENE_NAME_MAX code points; absent =
+  // "Scene n") and Perform Lock, for the browser remote's page and its Lock gate
+  if (m.scene !== undefined && m.scene.name !== undefined
+    && !(isStr(m.scene.name) && [...m.scene.name].length <= SCENE_NAME_MAX)) return 'scene.name';
+  if (m.locked !== undefined && !isBool(m.locked)) return 'locked';
   return null;
 }
 
@@ -79,6 +89,8 @@ export function commandError(m) {
   if (!isObj(m)) return 'not an object';
   if (m.v !== BUS_VERSION) return `v must be ${BUS_VERSION}`;
   if (!COMMAND_TYPES.includes(m.type)) return `unknown type ${JSON.stringify(m.type)}`;
+  // remote lane (D45): the relay marks a browser remote's commands; the controller refuses them under Lock (but panic)
+  if (m.via !== undefined && !REMOTE_VIA.includes(m.via)) return 'via';
   switch (m.type) {
     case 'selectMode':
       return isStr(m.id) && m.id !== '' ? null : 'selectMode.id';
