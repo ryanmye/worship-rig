@@ -140,11 +140,11 @@ Notes:
   says:
   - the ASIO name and logo are optional under GPLv3, but if used they must follow Steinberg's usage guidelines;
   - "ASIO" may not appear in the product name.
-- **Compatibility with GPL-3.0-only (superseded by D38, kept for the record):** the sources say "GPLv3" or "GPLv3+", inconsistently. Both "GPL-3.0-only" and
-  "GPL-3.0-or-later" code can be combined into a GPL-3.0-only program, so either reading works. **To verify (tier 1,
-  "a licence doubt"):** read LICENSE.txt in the official SDK zip, check that it is the full GPLv3 with no additional
-  restrictions, and record it in `LICENSES.md`. Some sources still repeat the older "a proprietary SDK licence
-  agreement has to be signed", so do not rely on secondary sources.
+- **Compatibility with GPL-3.0-only (superseded by D38, kept for the record):** the sources say "GPLv3" or "GPLv3+",
+  inconsistently. Both "GPL-3.0-only" and "GPL-3.0-or-later" code can be combined into a GPL-3.0-only program, so either
+  reading works. **To verify (tier 1, "a licence doubt"):** read LICENSE.txt in the official SDK zip, check that it is
+  the full GPLv3 with no additional restrictions, and record it in `LICENSES.md`. Some sources still repeat the older "a
+  proprietary SDK licence agreement has to be signed", so do not rely on secondary sources.
 - **Implementation:** use the SDK's host code (`asio.cpp`, `asiodrivers.cpp`, COM driver loading) directly, about
   600–900 lines of host glue **[E]**. RtAudio or PortAudio also wrap ASIO **[U]**. JUCE does not fit (AGPL or
   commercial) **[U]**.
@@ -244,9 +244,10 @@ Notes:
 
 - **SmartScreen:** no route gives instant trust. Reputation builds over releases signed with a consistent identity
   **[V]**.
-- **Licence and the Store [U]:** 2.0 is PolyForm Noncommercial (D38) and Ryan is its only copyright holder (the
-  vendored core code is permissive), so Store distribution is his call (D28 chose the website anyway). The CC BY-SA samples (Musyng Kite) keep their attribution in About and
-  `LICENSES.md`. Check the current Store policy text before submitting.
+- **Licence and the Store [U]:** 2.0 is PolyForm Noncommercial (D38) and Ryan is its only copyright holder (the vendored
+  core code is permissive), so Store distribution is his call (D28 chose the website anyway). The CC BY-SA samples
+  (Musyng Kite) keep their attribution in About and `LICENSES.md`. Check the current Store policy text before
+  submitting.
 
 ### 4.3 Auto-update
 
@@ -420,4 +421,5 @@ shell's size (about 3k lines) and the devhost. They are not measured.
   read on the second try; the distribution page was not read.
 - The `learn.microsoft.com` low-latency page was read through its `en-sg` mirror.
 - Not checked at all: the Windows MIDI Services SDK GA version as of 2026-11, the exact ASIO LICENSE.txt in the
-  official SDK zip (moot for 2.0 after D38: no ASIO), and the runner image's LLVM version.
+  official SDK zip (its GPLv3 option is moot after D38; ASIO later would mean Steinberg's proprietary licence), and
+  the runner image's LLVM version.
