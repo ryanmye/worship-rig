@@ -5,7 +5,7 @@ vendored third-party code. The licence of the project's own code is separate:
 
 - **Worship Rig 2.0 and later** (`v2-native`): PolyForm Noncommercial License 1.0.0, in `LICENSE` (SPDX
   `PolyForm-Noncommercial-1.0.0`; DECISIONS D38). Required Notice: Copyright Ryan Ye (https://github.com/ryanmye).
-- **Worship Rig 1.x** (releases up to 1.1.1, `main`): GPL-3.0-only, unchanged (`LICENSE-1.x.md`).
+- **Worship Rig 1.x** (releases up to and including v1.1.1): GPL-3.0-only, unchanged (`LICENSE-1.x.md`).
 
 The PolyForm licence applies to the project's own code only. It does not relicense anything listed below: the
 samples, fonts and third-party code keep their own licences, which allow redistribution inside a noncommercial app

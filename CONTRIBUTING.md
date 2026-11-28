@@ -6,7 +6,7 @@ Thanks for wanting to help. Bug reports, sound and song suggestions and pull req
 ## Licence of contributions
 
 Worship Rig 2.0 and later is licensed under the **PolyForm Noncommercial License 1.0.0** (`LICENSE`). The 1.x
-releases (up to 1.1.1, `main`) stay under GPL-3.0-only (`LICENSE-1.x.md`).
+releases (up to and including v1.1.1) stay under GPL-3.0-only (`LICENSE-1.x.md`).
 
 By sending a contribution (a pull request, a patch, or code, text, images or sounds offered in an issue), you agree
 that:

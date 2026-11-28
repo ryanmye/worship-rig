@@ -591,7 +591,7 @@ For the 2.0 app, the hands-on list is in [native/docs/MAC_CHECK.md](native/docs/
 From 2.0 on, Worship Rig is free and source-available for noncommercial use. Its own code is licensed under the
 **PolyForm Noncommercial License 1.0.0** (`LICENSE`; SPDX `PolyForm-Noncommercial-1.0.0`): anyone may use, change and
 share it for any noncommercial purpose, including personal use and use by churches, charities and schools. Commercial
-use is not allowed. The 1.x releases (up to 1.1.1, the `main` branch) stay under the **GNU GPL v3** (`GPL-3.0-only`);
+use is not allowed. The 1.x releases (up to and including v1.1.1) stay under the **GNU GPL v3** (`GPL-3.0-only`);
 see `LICENSE-1.x.md`. Contributions: `CONTRIBUTING.md`. The bundled sounds and fonts keep their own licences, listed
 below and in `LICENSES.md`.
 
