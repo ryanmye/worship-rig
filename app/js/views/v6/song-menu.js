@@ -155,7 +155,10 @@ export function songMenu(v) {
           if (r && r.ok) v.toast(r.existing ? `“${s.name}” is already in your library; added to ${nm}.`
             : `Kept “${s.name}” and added it to ${nm}.`);
           else if (r && r.error === 'perform-locked') v.toast(LOCK_HINT, 'warn');
-          else if (r && r.error !== 'no-trial') v.toast(r.error || 'The song could not be added.', 'error');
+          // CAP skeptic F2: a 'library-full' refusal (notified) is toasted already, as in banner.js
+          else if (r && r.error !== 'no-trial' && !r.notified) {
+            v.toast(r.error || 'The song could not be added.', 'error');
+          }
         } else if (store.addToSetlist(slId, s.id)) v.toast(`Added “${s.name}” to ${nm}.`);
         else v.toast(`Could not add “${s.name}” to ${nm}.`, 'error');
       },

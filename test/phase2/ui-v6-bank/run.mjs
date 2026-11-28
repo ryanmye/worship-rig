@@ -725,6 +725,63 @@ try {
   // ---- UI v6 polish batch 2 (polish2.tests.mjs: UI6-polish1 O2, UI6-U8a O1; the last one empties the library)
   await polish2BankTests({ T, page, ev, until, tid, settled, assert, closeBank, QUIET });
 
+  // CAP (UI6-cship O1) skeptic F2: addPackSong's restore-cap refusal is a 'library-full' notice the controller
+  // toasts, and comes back `notified`: no Keep path may toast the same text again (merged into one toast "×2"). Banner
+  // Keep and banner Add to setlist skipped it; the song menu's Add to setlist (views/v6/song-menu.js) did not.
+  await T('CAP: a Keep refused at the restore cap is said once (banner Keep, banner Add to setlist, song menu)',
+    async () => {
+      await context.close();
+      await newPage();
+      await boot('?ui6=1');
+      // a library just under LIBRARY_RESTORE_MAX_CHARS (an unknown nested field: kept as it is), so a Keep is refused
+      const size = await ev(() => {
+        const { store } = window.__rig;
+        const id = store.get().songOrder[0];
+        store.set(`songs.${id}.capFill.x`, 'x'.repeat(2500000 - JSON.stringify(store.get()).length - 400));
+        return JSON.stringify(store.get()).length;
+      });
+      assert.ok(size > 2499000 && size <= 2500000, `${size}`);
+      const toasts = () => ev(() => [...document.querySelectorAll('#toasts .toast')].map((e) => ({
+        msg: e.querySelector('.toast-msg').textContent, n: e.querySelector('.toast-count').textContent })));
+      const refusedOnce = async (name) => {
+        await until((nm) => [...document.querySelectorAll('#toasts .toast-msg')].some((e) =>
+          e.textContent.startsWith(`“${nm}” was not added`)), name);
+        await page.waitForTimeout(300); // a second toast of the same text would have come by now
+        const t = (await toasts()).filter((x) => x.msg.startsWith(`“${name}” was not added`));
+        assert.deepEqual(t.map((x) => x.n), [''], `${name}: one toast, not merged (×2): ${JSON.stringify(t)}`);
+        assert.match(t[0].msg, /a backup over 2\.5 MB cannot be restored/);
+        assert.equal(await ev(() => !!window.__rig.controller.trial()), true, 'still trying: nothing kept');
+      };
+      const tryIt = async (pid) => {
+        await ev((p) => window.__rig.controller.tryBankSong(p), pid);
+        await until(() => window.__rig.controller.trial()?.playing === true);
+      };
+      const back = async () => {
+        await page.click(tid('v6-try-back'));
+        await until(() => !window.__rig.controller.trial());
+        await settled();
+      };
+      const sl = await ev(() => window.__rig.store.currentSetlist().id);
+      await tryIt(LANTERN);
+      await page.click(tid('v6-try-keep'));
+      await refusedOnce('Lantern Hymn');
+      await back();
+      await tryIt(QUIET);
+      await page.click(tid('v6-try-addset'));
+      await until(() => !!document.querySelector('[data-testid="v6-bank-setpop"]'));
+      await page.click(tid(`v6-bank-setlist-${sl}`));
+      await refusedOnce('Quiet Room');
+      await back();
+      await tryIt(HARBOUR);
+      await page.click(tid('v6-songmenu-btn'));
+      await until(() => !!document.querySelector('[data-testid="v6-songmenu"]'));
+      await page.click(tid('v6-sm-set'));
+      await until(() => !!document.querySelector('[data-testid="v6-bank-setpop"]'));
+      await page.click(tid(`v6-bank-setlist-${sl}`));
+      await refusedOnce('Harbour Light');
+      await back();
+    });
+
   await T('flag off (a fresh profile, packs present): today’s Settings Song bank list; nothing of v6 fetched',
     async () => {
       await context.close();
