@@ -81,3 +81,22 @@ build-core.sh archives rig_hostkit into the slice; self-test `packs` passes; a r
 pack shows up (auto song joins the library, Song bank lists bank songs, Add to library); iPad Files shows
 Worship Rig › Samples; Settings › My Samples on native with userSamples: true reads sensibly.
 
+
+## n1-skeptic (review in progress)
+
+Brief: adversarial review of lane N1 (parity, safety, health flag, Swift by reading, oracle untouched, gates rerun).
+Report: native/docs/reviews/n1-skeptic.md.
+
+- [x] read RESUMABLE, LANE, CLAUDE.md, NATIVE-GAPS N1, patch-packs.md, D9 / D33 O4
+- [x] code read: patches.cpp, js_json, js_text, sha1, hostkit_c, CLI, devhost, Swift diff
+- [x] parity: new 'edge' tree (corpus.mjs buildEdgeTree): identical to server.js
+- [ ] fixes (F-items below)
+- [ ] gates: ctest g++ / clang -Werror / ASan, goldens cmp, devhost + songbank, gates.mjs list
+- [ ] report
+
+Findings so far:
+- F1 patches.h header comment says V8 SyntaxError texts are not reproduced: stale (they are, and tested).
+- F2 store.topUpPacks / addPackSong refuse past LIBRARY_MAX_CHARS (2 M): D9 (saves warn, not refused) and the D33
+  O4 note (adds refused only past the 2.5 M restore cap) say otherwise. Pre-dates N1, but the brief requires it.
+- O1 pack.json is read through a link out of the root (server.js does the same): its `name` and a SyntaxError snippet
+  reach the page. Local, low.

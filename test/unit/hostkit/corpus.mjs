@@ -6,6 +6,7 @@
 //   buildTree(dir, variant)  a My Samples tree of patch packs; returns its roots
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 
 /** mulberry32 */
 export function rng(seed) {
@@ -211,6 +212,7 @@ function write(file, data) {
  */
 export function buildTree(dir, variant = 'main') {
   fs.mkdirSync(dir, { recursive: true });
+  if (variant === 'edge') return buildEdgeTree(dir);
   if (variant === 'caps') {
     const a = path.join(dir, 'Caps Root');
     const pad = ' '.repeat(1000 * 1000);  // a ~1 MB file under the 1 MiB cap
@@ -318,4 +320,100 @@ export function buildTree(dir, variant = 'main') {
   write(path.join(b, 'Bank Pack', 'manifest.json'), { instruments: [] });  // a duplicate without songs: no message
   write(path.join(dir, 'a file root'), 'x');
   return [a, b, path.join(dir, 'missing root'), path.join(dir, 'a file root'), `${a}/`];
+}
+
+/**
+ * n1-skeptic: the classes 'main' and 'caps' leave out. A root that is a link; names that are not UTF-8 (Linux) or
+ * carry quotes, backslashes, control characters or new lines; the 1 MiB boundary (exactly 1048576 bytes passes);
+ * cuts inside a surrogate pair (folder message, pack name at 120); a file name whose UTF-16 length, not its byte
+ * length, crosses 245; songs/ as a file and as a link; a song linked from elsewhere in its pack, to a folder, through
+ * a file (ENOTDIR); 800 KB of nesting; repeated id / bank keys; __proto__ envelopes; NFC / NFD twins; mtimes before
+ * 1970 with half milliseconds (Math.round); and the 500-folder cap (USER_PACKS_MAX), which ends the listing.
+ * @returns {string[]} the roots
+ */
+function buildEdgeTree(dir) {
+  const real = path.join(dir, 'real root');
+  const link = path.join(dir, 'root link');
+  const r2 = path.join(dir, 'root two');
+  fs.mkdirSync(real, { recursive: true });
+  fs.symlinkSync(real, link);
+  const pk = (slug, f, data) => write(path.join(real, slug, 'songs', f), data);
+  const ok = (name, extra) => envelope(song(name), extra);
+
+  // names (Linux: any bytes but '/' and NUL; macOS refuses non-UTF-8, so those are best effort)
+  const raw = (parts) => Buffer.concat(parts.map((p) => (Buffer.isBuffer(p) ? p : Buffer.from(p))));
+  try {
+    fs.mkdirSync(raw([real, '/bad ', Buffer.from([0xff, 0xfe]), ' pack/songs']), { recursive: true });
+    fs.writeFileSync(raw([real, '/bad ', Buffer.from([0xff, 0xfe]), ' pack/songs/a.json']), JSON.stringify(ok('BadDir')));
+    fs.mkdirSync(path.join(real, 'Names', 'songs'), { recursive: true });
+    fs.writeFileSync(raw([real, '/Names/songs/caf', Buffer.from([0xe9]), '.json']), JSON.stringify(ok('Latin1')));
+  } catch { /* file system refuses the bytes */ }
+  for (const f of ['quo"te.json', 'back\\slash.json', 'ctl\u0001.json', 'new\nline.json', 'tab\t.json']) {
+    pk('Names', f, '{"kind":"song", oops');
+  }
+  pk('Names', `${'x'.repeat(239)}🎹.json`, ok('246 units'));  // 248 bytes, 246 UTF-16 units: over 245
+  pk('Names', `${'y'.repeat(238)}🎹.json`, ok('245 units'));
+  pk(`${'L'.repeat(39)}🎹${'x'.repeat(170)}`, 'a.json', ok('cut'));  // slice(0, 40) ends on a lone high surrogate
+  write(path.join(real, 'Named', 'pack.json'), { mode: 'bank', name: `﻿　${'n'.repeat(119)}🎹 tail` });
+  pk('Named', 'a.json', ok('Named'));
+  write(path.join(real, 'Named 2', 'pack.json'), { name: '\u0085 ᠎ nel and mvs  ' });
+  pk('Named 2', 'a.json', ok('Named 2'));
+  pk('Étude NFC', 'a.json', ok('NFC'));
+  pk('Étude NFC', 'a.json', ok('NFD'));
+  pk('Pack 007', 'a.json', ok('007'));
+  pk('Pack 7', 'a.json', ok('7'));
+  pk('Pack 7a', 'a.json', ok('7a'));
+
+  // sizes: exactly 1 MiB passes, one byte more does not
+  const exact = (n) => {
+    const head = JSON.stringify(ok(`Size ${n}`));
+    return head + ' '.repeat(n - Buffer.byteLength(head));
+  };
+  pk('Sizes', 'a-1048576.json', exact(1048576));
+  pk('Sizes', 'b-1048577.json', exact(1048577));
+  pk('Sizes', 'c-deep.json', `${'['.repeat(400000)}${']'.repeat(400000)}`);
+  pk('Sizes', 'd-deep-unterminated.json', '['.repeat(100000));
+  pk('Sizes', 'e-deep-then-bad.json', `${'['.repeat(70)}${']'.repeat(69)}}`);
+
+  // layout
+  write(path.join(real, 'Songs File', 'songs'), 'not a folder');
+  pk('Songs Link', '../../Songs Link/real-songs/.keep', '');
+  fs.rmSync(path.join(real, 'Songs Link', 'songs'), { recursive: true, force: true });
+  write(path.join(real, 'Songs Link', 'real-songs', 'a.json'), ok('Via link'));
+  fs.symlinkSync('real-songs', path.join(real, 'Songs Link', 'songs'));
+  write(path.join(real, 'Links', 'elsewhere.json'), ok('Pack level'));
+  pk('Links', 'keep.json', ok('Keep'));
+  fs.symlinkSync('../elsewhere.json', path.join(real, 'Links', 'songs', 'in-pack.json'));
+  fs.mkdirSync(path.join(real, 'Links', 'a-dir'), { recursive: true });
+  fs.symlinkSync('../a-dir', path.join(real, 'Links', 'songs', 'to-dir.json'));
+  fs.symlinkSync('keep.json/inner', path.join(real, 'Links', 'songs', 'notdir.json'));
+
+  // entries
+  pk('Entries', 'dup-keys.json', '{"kind":"song","schema":2,"song":{"id":1,"name":"Dup","id":2,"bank":{"title":"a"},'
+    + '"patch":{"slots":[{}]},"bank":5,"name":"Dup2"}}');
+  pk('Entries', 'proto-env.json', '{"__proto__":{"kind":"song"},"song":{"patch":{}}}');
+  pk('Entries', 'proto-song.json', '{"kind":"song","song":{"__proto__":{"patch":1},"patch":{"__proto__":null}}}');
+  pk('Entries', 'bank-array.json', ok('Bank array', { bank: [1] }));
+  pk('Entries', 'bank-null-own.json', { kind: 'song', bank: null, song: { name: 'Own', patch: {}, bank: { title: 'Own' } } });
+  pk('Entries', 'bank-own.json', { kind: 'song', song: { name: 'Own2', patch: {}, bank: { title: 'Own2', 2: 'b', 1: 'a' } } });
+  pk('Entries', 'schema-neg0.json', '{"kind":"song","schema":-0,"song":{"patch":{},"t":-0.0,"u":5e-324,"v":1e21}}');
+  pk('Entries', 'kind-song-songs.json', { kind: 'song', songs: [], song: { patch: {} } });
+  pk('Entries', 'nul.json', '{"kind":"song","song":{"name":"a\\u0000b","patch":{}}}');
+  for (const [f, t] of [['old-a.json', -4.9995], ['old-b.json', -0.0004], ['future.json', 4102444800.0005]]) {
+    pk('Entries', f, ok(f));
+    try {  // fs.utimes refuses negative times; touch(1) takes them
+      execFileSync('touch', ['-m', '-d', `@${t}`, path.join(real, 'Entries', 'songs', f)], { stdio: 'ignore' });
+    } catch { /* no touch, or a file system that refuses the time */ }
+  }
+
+  // root two: 'Names' collides (a pack with songs: reported), a file in root one named like a pack here is no clash
+  write(path.join(real, 'Clash'), 'a file');
+  write(path.join(r2, 'Clash', 'songs', 'a.json'), ok('Clash'));
+  write(path.join(r2, 'Names', 'songs', 'a.json'), ok('Names again'));
+  // USER_PACKS_MAX (500) folders: the rest of the listing is cut, the root after it too
+  for (let i = 0; i < 505; i++) fs.mkdirSync(path.join(r2, `p${String(i).padStart(3, '0')}`), { recursive: true });
+  write(path.join(r2, 'zz after the cap', 'songs', 'a.json'), ok('Never'));
+  const r3 = path.join(dir, 'root three');
+  write(path.join(r3, 'Third', 'songs', 'a.json'), ok('Third'));
+  return [link, real, r2, r3];
 }

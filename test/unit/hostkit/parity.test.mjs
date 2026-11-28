@@ -135,7 +135,7 @@ function sameBytes(got, want, what) {
   assert.fail(`${what}: differs at ${k}:\n  hostkit ${got.slice(Math.max(0, k - 80), k + 80)}\n  server  ${want.slice(Math.max(0, k - 80), k + 80)}`);
 }
 
-for (const variant of ['main', 'caps']) {
+for (const variant of ['main', 'caps', 'edge']) {
   test(`scanUserPatches on a generated tree (${variant}): byte for byte`, { skip }, async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), `rig hostkit Ä ${variant}-`));
     try {
