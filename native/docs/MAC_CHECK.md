@@ -425,6 +425,12 @@ numbers). The player-facing notes are `docs/release-notes-2.0.md` (a draft with 
   on the Mac (the iPad shows its own picker). File › Import Library Backup… (NSOpenPanel) is not affected. Check on
   the Mac (step 4 item 5); fix with a download delegate (save panel on the Mac, the Files picker on the iPad) and an
   open panel.
+  **Built on lane-n3 (2026-11-27, not run on a Mac yet):** `rig.saveText` (both download() helpers try it first) →
+  `RigFiles` (NSSavePanel / `UIDocumentPickerViewController(forExporting:)`), a page listener that takes over every
+  other `<a download>` on `blob:` / `data:`, `.download` + WKDownload for what it cannot see, main-frame `blob:` /
+  `data:` loads cancelled, and NSOpenPanel through `runOpenPanelWith`. The self-test's `files` step checks the save
+  paths and that nothing navigates during a recording. Tick this box after the CI self-test passes **and** step 4
+  item 5 and step 5's B2 item pass.
 - [ ] **B3 No native release build.** `.github/workflows/release.yml` builds the **Electron** app on any `v*` tag
   (and, on `main`, on a release published from the web UI). Today a `v2.0.0` tag stops at its "Tag matches
   package.json version" step (package.json says 1.1.0 here, 1.1.1 on main), so nothing is published; but once step 7
@@ -557,8 +563,20 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
 - [ ] 3. **1.1.1 device settings** come over by themselves from this Mac's backups (touch curves, click, audio output).
 - [ ] 4. **Song changes while holding notes** (Tier 2 A5) in the app, with **cue, then Go**: tap a chip (cued), Go,
   a footswitch on Next Song plays the cue, Prev clears it; a cold song shows "loading" until ready.
-- [ ] 5. **Export and import** (B2): Settings › Export library writes a file; Settings › Import… opens a file panel
-  and imports it back; the chart's Import file opens one too.
+- [ ] 5. **Export and import** (B2, lane N3):
+  - Settings › Export library: a **save panel** (a sheet on the window) with `Worship Rig library <date>.json`;
+    Save writes it (open it in TextEdit: JSON). Cancel writes nothing and the app stays as it was. Save over an
+    existing file: macOS asks Replace, then the file is the new one.
+  - Edit › Library file › Export library and Export song, and the new layout's song menu › Export this song…: the
+    same panel, names `<song>.rig-song.json`.
+  - Settings › Import… opens a **file panel** (every file is offered: WebKit gives no type filter), pick the song
+    file from above: "Imported 1 songs". Pick a library file: it imports (or offers its device settings, D11).
+    Edit › Import… the same. The chart's Import file (Chord chart › Import, a ChordPro `.cho` / `.txt`) opens one too
+    and imports.
+  - **During a recording**: REC, then Settings › Export library › Save, then Edit's Export song › Save, then stop
+    REC: the recording is one file in Music › Worship Rig that plays to the end (an export must never stop it), and
+    the app never flashed or reloaded (held notes keep sounding through the panel).
+  - A second Export while the panel is open does nothing (one panel at a time).
 - [ ] 6. **Recording**: REC, 30 s, stop; the WAV is in Music › Worship Rig and plays.
 - [ ] 7. **Buffer size 64 / 128** and **Voices per sound 128** with a big pedalled chord: no clicks. Optional: time a
   large layered chord (data for raising desktop Auto later; Ryan kept it at 128, D5 follow-up).
@@ -613,6 +631,11 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
 - [ ] Launch, the page loads, a song plays (B1 decides MIDI over USB-C).
 - [ ] AirDrop a 1.x backup › "Import this library?" › Import; Files › On My iPad › Worship Rig shows Backups and
   Recordings.
+- [ ] **B2 on the iPad (lane N3)**: Settings › Export library opens the **Files export picker** (Move / Save to Files,
+  the name `Worship Rig library <date>.json`); save it to On My iPad › Worship Rig; Cancel closes it with nothing
+  saved. Edit's Export song and the song menu's Export this song… the same. Settings › Import… shows the iPad's own
+  picker; the exported song comes back ("Imported 1 songs"). The chart's Import file picks a ChordPro file from
+  Files. During a recording, an export does not stop it (the take in Files › Recordings plays to the end).
 - [ ] The README's verification list items 6–7 (memory warning, AVAudioSession: silent switch, screen lock, a call,
   headphones in and out).
 - [ ] Landscape in the new layout (U9 items 39–40). The app doesn't turn to portrait: Info-iPad allows landscape
@@ -746,6 +769,9 @@ Checks, in order (`required: false` ones are reported, not gated):
 | `audio` | the page's `audio start` reached the shell: ≥ 12000 frames on the null output within 5 s, 0 render errors, a `state` event `running` |
 | `note` (not required) | `play {e:'input'}` + note 60 vel 100 through `rig_post` on the song the page committed: peak > -100 dBFS within 0.6 s |
 | `packs` (lane N1) | no `/api/user-patches` request before any pack exists; then the probe builds four files from the current song's export (an auto pack `N1 Auto Ä`, a bank pack `N1 Bank` with `pack.json` and two songs: spaces and non-ASCII on purpose), the shell writes them under `<temp>/Samples` (the self-test's My Samples root), and `controller.rescanPatchPacks()`: `/api/health` says `userPatches: true`, the auto song is in the library, the Song bank has 2 songs, Add to library works, no pack errors (`rig_hostkit` through `RigSchemeHandler`) |
+| `files` (lane N3, B2) | with a recording started by `controller.record()`: `rig.saveText` and an in-page `<a download>` blob click each write the exact UTF-8 bytes (`é ü — 💡`) into `<temp>/Saves` (`RigFiles.saveDir`: no panel), a plain `location.href = blob:` is cancelled (RigNavigation), and afterwards there was no main-frame commit, `webView.url` is unchanged and the page is the same page |
+| `files-recording` (required when the recording started) | the recording is still running after the exports (n0-skeptic O1: a commit would have sent `rec stop`) |
+| `files-download` (not required) | a detached `<a download>` (its click never reaches the page's listener) arrives as a WKDownload in `<temp>/Saves` with the exact bytes; a warn here means WebKit did not turn that click into a download (nothing navigates either way) |
 | `migration` (with `RIG_ELECTRON_BACKUPS`) | `RigLibrary.offerFirstLaunchImport` (newest backup there that parses: the fixture's newer truncated file is skipped, review E5 item 3; pristine library, auto Yes) staged the file, `controller.onMenu('importLatestBackup')` imported it, and a song named the marker is in the library with schema 2 within 10 s |
 | `midi` (not required) | `MIDIClientCreateWithBlock` returned 0 |
 | `webcontent` | no WebContent process termination |
@@ -793,6 +819,11 @@ What it cannot cover (stays on the Tier 2 list):
 - The SwiftUI scene path itself (`WindowGroup`, `RigWebView`, `.onOpenURL`, the menu commands): the self-test builds
   its own window around the same `RigHost`.
 - The iPad target (the mode is macOS only).
+
+Lane N3 (2026-11-27): the `files` step's JS (`filesProbe`) runs in `test/unit/selftest/selftest-scripts.test.mjs`
+over the real `app/js/native-shell` files; the Swift (RigFiles, the RigNavigation policy, WKDownload) is unbuilt
+until mac-check. What the self-test cannot see: the save panel, the open panel, the iPad's Files picker (step 4
+item 5, step 5).
 
 Lane N1 (2026-11-27): the `packs` step's JS (`packsProbe`) runs in `test/unit/selftest/selftest-scripts.test.mjs`
 against the real store and server.js's scanner; the Swift around it (RigPaths.userSampleRoots, the RigSchemeHandler

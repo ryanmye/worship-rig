@@ -33,7 +33,7 @@ final class RigFiles: NSObject, RigShellFeature, WKDownloadDelegate {
     }
     private var busy = false
     private let io = DispatchQueue(label: "rig.files.io", qos: .userInitiated)
-    /// WKDownload → its temp file (keyed by identity; WKDownload is not Hashable in every SDK).
+    /// WKDownload → its temp file (keyed by object identity; the delegate calls hand back the same object).
     private var downloads: [ObjectIdentifier: URL] = [:]
     #if os(iOS)
     private var exporter: ExportDelegate? // the picker's delegate is weak: keep it until it answers

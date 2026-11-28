@@ -10285,3 +10285,60 @@ NATIVE-GAPS §2 "N0", §0 findings 3 and 4; LaneR O1; NMA review O3, O5.
   `RigShellRouter`, `RigShellScripts`, `RigInfo`), RigHost.swift, RigLibrary.swift, RigNavigation.swift,
   RigSelfTest.swift. tree-sitter-swift 0.7.4 parses all twelve Shared/*.swift files with 0 ERROR nodes (before and
   after). Mac / iPad checks: MAC_CHECK.md step 4 item 16, step 5, self-test table.
+
+## N3: file import and export in the native Mac / iPad app (release blocker B2; NATIVE-GAPS row 1b, finding 8)
+
+NATIVE-GAPS §2 "N3", finding 8; MAC_CHECK "B2"; LaneR F2; n0-skeptic O1.
+
+- **`rig.saveText(name, text)`** (native only, `app/js/native-shell/30-files.js`) → `rigShell {m:'saveFile', name,
+  text}` → `{saved:true, name, path?}` | `{canceled:true}` | `{error}` (`busy` while another panel is open, `file too
+  large` above 64 MiB, `nothing to save`). Swift `RigFiles` (new RigFiles.swift, a RigShellFeature): the Mac shows
+  NSSavePanel as a sheet with the suggested name, then writes atomically on a utility queue (`path` = the chosen
+  file; a write error also shows an alert); the iPad writes a temp file and presents
+  `UIDocumentPickerViewController(forExporting:asCopy:true)` (Files, AirDrop via the share sheet; no `path`). The
+  name is sanitised in Swift (`/ \ :` and control characters → `-`, no leading dot, ≤ 200 characters, fallback
+  "Worship Rig export.json"). `saveFile` also takes `{base64}` instead of `text` (binary, used by the listener below).
+  `RigFiles.saveDir` (`RIG_SAVE_DIR`, the self-test) saves there without a panel.
+- **Both `download()` helpers try it first**: views/settings.js (Settings › Export library) and views/edit/lib.js
+  (Edit's Export library / Export song, the v6 song menu's Export this song…) return `rig.saveText(...)` when
+  `rig.shell === 'native'` and the member exists; otherwise the `<a download>` blob path, unchanged (Chrome:
+  `globalThis.rig` undefined; Electron: no `shell`). The callers' toasts ("Library exported", "Exported …") still
+  show at once, as in Chrome, also if the panel is then cancelled.
+- **No export can load a page any more** (finding 8, n0-skeptic O1: a main-frame commit replaces the UI and, since
+  N0, posts `play panic` + `rec stop`, which ended a recording):
+  - 30-files.js listens to `click` on `window` in the capture phase: a click on an `<a download>` (the target or an
+    ancestor) whose href is `blob:` or `data:` has its default prevented and its content read at once (`fetch`) and
+    saved through `saveFile`: text types (`text/*`, JSON, JS, XML, `+json` / `+xml`) as text, anything else as
+    base64. A read or save failure is a `console.warn`, never `console.error`. Links without `download`, `http(s)` /
+    `rig:` downloads and clicks already prevented are left alone.
+  - RigNavigation: an `<a download>` WebKit still sees on `rig:` / `blob:` / `data:` (`shouldPerformDownload`, e.g. a
+    detached anchor whose click never reaches `window`) is answered `.download`; `didBecome download` hands the
+    WKDownload to RigFiles, which writes it to `<tmp>/rig-files/<uuid>/<name>` at once (a revoked blob cannot race the
+    panel), then the save panel / Files picker moves or copies it. A main-frame (or new-window) `blob:` / `data:`
+    navigation that is not a download is **cancelled** (was `.allow`); subframes may still load them.
+- **Import**: `<input type=file>` (Settings › Import…, Edit's Import…, the chart's Import file, pad files) gets an
+  NSOpenPanel on macOS through `WKUIDelegate.webView(_:runOpenPanelWith:initiatedByFrame:completionHandler:)` on
+  RigNavigationDelegate (LaneR F2: no panel at all before), as a sheet, with the page's multiple / directory flags.
+  WebKit passes no accept list, so the panel offers every file and the page checks the file as in Chrome. The iPad
+  shows WebKit's own picker. No JS change. Pad files still give `blob:` URLs the core cannot open (lane N4).
+- **Recordings** never use a download in the native app: recorder.js returns NativeRecorder for a BridgeEngine and
+  the core writes the WAV (SHELL.md G10). `downloadBlob` (OPFS / memory sinks) is Chrome-only; the listener covers it
+  anyway.
+- **Self-test step `files`** (required; RigSelfTest.swift `filesProbe`, `stepFiles`, after `packs`): with a
+  recording started through `controller.record()`, `rig.saveText` and an in-page `<a download>` blob click each
+  write the exact UTF-8 bytes (é ü — 💡) into `<temp>/Saves`, a plain `location.href = blob:` is cancelled, and
+  there is no main-frame commit (new hook `pageCommitted`), the same URL and the same page afterwards.
+  `files-recording` (required when the recording started): it is still running. `files-download` (not required): a
+  detached `<a download>` arrives as a WKDownload with the exact bytes.
+- Tests (Linux): unit `test/unit/native-shell/files.test.mjs` (10: saveText shape and replies, one capture listener,
+  blob / data / child-of-anchor clicks, base64 byte for byte, what is left alone, warn-only failures, not installed
+  outside the native shell, the Swift method / cap); `polyfill.test.mjs` method list + `saveFile`;
+  `test/unit/selftest` +1 (filesProbe in node over the real shell files); `native-shell` suite +1 test (B2: with a
+  recording running on MockNative, Settings › Export library, Edit's Export library / Export song, the v6 song
+  menu's Export and two raw `<a download>` clicks (a WAV blob, a data: URL) all reach `saveFile` with the right
+  name and text / bytes; no Playwright download, no main-frame load, no `rec stop` sent until the test stops the
+  take; Settings › Import… reads a picked file) and the Chrome test now checks Export library is still a download
+  with the store's JSON. A mutation run with 30-files.js disabled fails 6 of the 7 B2 subtests.
+- Swift (unbuilt here; CI mac-check compiles it): RigFiles.swift (new), RigNavigation.swift, RigHost.swift
+  (`files`, registered on the router), RigSelfTest.swift. tree-sitter-swift 0.7.4: 0 ERROR nodes in all thirteen
+  Shared/*.swift files. Mac / iPad checks: MAC_CHECK.md step 4 item 5, step 5, the self-test table.

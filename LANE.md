@@ -12,23 +12,23 @@ Worktree /home/claude/wt-n3, branch lane-n3, from origin/v2-native cd377cf. Neve
 ## Checklist
 
 - [x] Read RESUMABLE.md, CLAUDE.md, NATIVE-GAPS N3 + finding 8, MAC_CHECK B2, SHELL.md, n0-skeptic O1
-- [ ] JS: app/js/native-shell/30-files.js (`rig.saveText`, the `<a download>` blob:/data: click intercept)
-- [ ] App: settings.js + edit/lib.js `download()` try `rig.saveText` first (native only)
-- [ ] Swift: RigFiles.swift (saveFile: NSSavePanel / UIDocumentPicker forExporting; WKDownload fallback; NSOpenPanel)
-- [ ] Swift: RigNavigation (cancel main-frame blob:/data:, `.download` for shouldPerformDownload, didBecome download,
+- [x] JS: app/js/native-shell/30-files.js (`rig.saveText`, the `<a download>` blob:/data: click intercept)
+- [x] App: settings.js + edit/lib.js `download()` try `rig.saveText` first (native only)
+- [x] Swift: RigFiles.swift (saveFile: NSSavePanel / UIDocumentPicker forExporting; WKDownload fallback; NSOpenPanel)
+- [x] Swift: RigNavigation (cancel main-frame blob:/data:, `.download` for shouldPerformDownload, didBecome download,
       runOpenPanelWith), RigHost registers RigFiles
-- [ ] Self-test `files` step (RIG_SAVE_DIR / saveDir, exact bytes, URL unchanged, no commit, recording survives)
-- [ ] node unit tests (30-files.js in vm; polyfill method list; selftest filesProbe)
-- [ ] Playwright native-shell: exports via saveText, no download / navigation, recording survives; Import… round trip;
+- [x] Self-test `files` step (RIG_SAVE_DIR / saveDir, exact bytes, URL unchanged, no commit, recording survives)
+- [x] node unit tests (30-files.js in vm; polyfill method list; selftest filesProbe)
+- [x] Playwright native-shell: exports via saveText, no download / navigation, recording survives; Import… round trip;
       Chrome unchanged (download event, exact bytes)
-- [ ] Docs: CONTRACT_CHANGES "N3", MAC_CHECK step 4/5 items, SHELL.md, NATIVE-GAPS status
+- [x] Docs: CONTRACT_CHANGES "N3", MAC_CHECK step 4/5 items, SHELL.md, NATIVE-GAPS status
 - [ ] Gates (UI6_PURITY_BASE=origin/v2-native): shell-unit, unit, native-midi, native-shell, settings, migration-1x,
       ui-core, ui-v6, ui-v6-edit, chart
 - [ ] Final report below, tip SHA
 
 ## Next step
 
-JS 30-files.js.
+Gates (background, one at a time): `UI6_PURITY_BASE=origin/v2-native node tools/cloud/gates.mjs shell-unit,unit,native-midi,native-shell,settings,migration-1x,ui-core,ui-v6,ui-v6-edit,chart`, log in .probe/gates.out.
 
 ## Findings / notes
 

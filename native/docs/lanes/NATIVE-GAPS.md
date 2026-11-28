@@ -330,6 +330,10 @@ Total [E]: N1 2.0 + N0 1.5 + N10 1.0 + N2 2.0 + N3 1.5 + N5 1.5 + N4 1.5 + N8 1.
   - Ryan step 4 item 5 as written (export, Import… panel, chart Import file).
   - iPad: export to Files, import from Files, chart import.
 - **Acceptance:** LaneR F2 and B2 closed; the app's page never navigates away on an export.
+- **Status (lane-n3, 2026-11-27):** built as planned, except that the fallback also has a page-side listener (any
+  `<a download>` on `blob:` / `data:` is taken over before WebKit sees it, so even the WKDownload path is rarely
+  needed) and the file is `app/js/native-shell/30-files.js` (N0 put the shell files in app/). Swift unbuilt until CI
+  mac-check; CONTRACT_CHANGES "N3", MAC_CHECK step 4 item 5, step 5.
 
 ### N5: menus, window lifecycle, keep-awake (1.5 d)
 

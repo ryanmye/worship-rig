@@ -106,6 +106,9 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
   `RigShellScripts`), answered by `RigShellRouter` (one `RigShellFeature` per feature). A new member = a new file + a
   feature registered in RigHost.
 - Recording stream: `rec` event plus a native recorder adapter.
+- (done, lane N3) file export / import (B2): `rig.saveText` (`native-shell/30-files.js` → `RigFiles`: NSSavePanel,
+  the iPad's Files export picker), a page listener for every other `<a download>` on `blob:` / `data:`, WKDownload
+  for what it cannot see, NSOpenPanel for `<input type=file>`. CONTRACT_CHANGES "N3".
 - choosePadFolder, listPads.
 - backupNow, latestBackup, importLatestBackup menu id.
 - getInfo (done, lane N0: `RigInfo`), openFolder, openUserSamplesFolder, revealFile.
@@ -122,8 +125,13 @@ recordTap, reloadManifests, sleepBlockers, volumeCC (need MIDI, pads, recorder, 
 ### Web view recovery and external links (finding 27)
 
 `RigNavigationDelegate` (Sources/Shared/RigNavigation.swift) is the web view's `navigationDelegate`.
-- `decidePolicyFor`: `rig`, `about`, `blob`, `data` allowed; `http`, `https`, `mailto` open in the system browser
-  (NSWorkspace / UIApplication) and are cancelled; anything else is cancelled and logged.
+- `decidePolicyFor`: `rig`, `about` allowed; `blob`, `data` allowed in subframes only (lane N3: a main-frame or
+  new-window load of one is cancelled, since it would replace the UI and its commit stops a recording); an
+  `<a download>` on `rig` / `blob` / `data` (`shouldPerformDownload`) answers `.download` and becomes a WKDownload
+  (RigFiles); `http`, `https`, `mailto` open in the system browser (NSWorkspace / UIApplication) and are cancelled;
+  anything else is cancelled and logged.
+- `runOpenPanelWith` (macOS, lane N3): `<input type=file>` gets NSOpenPanel (RigFiles); the iPad uses WebKit's own
+  picker.
 - `webViewWebContentProcessDidTerminate` -> `RigHost.webContentDidTerminate`: drop the event pump queue (it is
   addressed to the dead page), post `[{play panic}, {rec stop}]` to the core (the dead page can no longer release its
   held notes or stop its recording), then `webView.load(rig://app/index.html)` (`reload()` is unreliable with a nil
