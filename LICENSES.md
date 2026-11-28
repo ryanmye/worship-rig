@@ -1,4 +1,18 @@
-# Sample licenses
+# Licences
+
+This file covers everything in Worship Rig that is not the project's own code: the bundled samples, fonts and
+vendored third-party code. The licence of the project's own code is separate:
+
+- **Worship Rig 2.0 and later** (`v2-native`): PolyForm Noncommercial License 1.0.0, in `LICENSE` (SPDX
+  `PolyForm-Noncommercial-1.0.0`; DECISIONS D38). Required Notice: Copyright Ryan Ye (https://github.com/ryanmye).
+- **Worship Rig 1.x** (releases up to 1.1.1, `main`): GPL-3.0-only, unchanged (`LICENSE-1.x.md`).
+
+The PolyForm licence applies to the project's own code only. It does not relicense anything listed below: the
+samples, fonts and third-party code keep their own licences, which allow redistribution inside a noncommercial app
+(one open question, `js_tanh.cpp`, is under "Third-party code"), and their attribution and share-alike terms still
+apply in full.
+
+## Sample licenses
 
 Worship Rig bundles three third-party sample libraries under `app/samples/`. All three are
 redistributable under the licenses below; each section names the license, gives its URL (the
@@ -161,6 +175,35 @@ are only bundled with the app and are never sold on their own.
 License: SIL Open Font License, Version 1.1 (https://openfontlicense.org). Total: 7 woff2 files, 274 KB
 (280,248 bytes), plus 7 OFL texts (30 KB). They were deduplicated from the per-theme `fonts/` folders: files with the
 same name had the same SHA-256.
+
+---
+
+## Third-party code
+
+The 2.0 engine (`native/core`) vendors the code below, each with its licence text next to it; `native/core/third_party/
+README.md` and `native/core/src/num/README.md` record upstream, version and changes. All of it is permissive, so it
+can be shipped inside a PolyForm Noncommercial app, provided the notices travel with it.
+
+| Code | Where | Licence | Licence text |
+|---|---|---|---|
+| Chromium Web Audio ports (Biquad, DynamicsCompressor, PeriodicWave, SincResampler, Up/DownSampler, AudioParamTimeline) | `native/core/src/**` (each file names its source) | BSD-3-Clause | `native/core/third_party/chromium/LICENSE` |
+| V8 12.4 `ieee754.cc` (fdlibm) and V8 15.7 sinh/cosh | `native/core/third_party/v8_ieee754/`, `native/core/src/num/` | BSD-3-Clause + Sun fdlibm notice | `native/core/third_party/v8_ieee754/LICENSE` |
+| LLVM libc math subset | `native/core/src/num/llvm_libc/` | Apache-2.0 WITH LLVM-exception | `native/core/src/num/llvm_libc/LICENSE.TXT` |
+| Arm optimized-routines pow (= glibc `__pow_fma`) | `native/core/src/num/js_pow*.{cpp,inc}` | MIT (or Apache-2.0 WITH LLVM-exception) | `native/core/src/num/LICENSE.arm-optimized-routines` |
+| glibc `__tanh_fma` / `__expm1_fma` (fdlibm) | `native/core/src/num/js_tanh.cpp` | Sun fdlibm notice; see the note below | in the file |
+| pffft (marton78 fork) | `native/core/third_party/pffft/` | BSD-like (FFTPACK / UCAR) | `native/core/third_party/pffft/LICENSE.txt` |
+| dr_mp3, dr_wav (dr_libs) | `native/core/third_party/dr_libs/` | public domain (Unlicense) or MIT-0 | end of each header |
+| yyjson | `native/core/third_party/yyjson/` | MIT | `native/core/third_party/yyjson/LICENSE` |
+| doctest (tests only, not shipped) | `native/core/third_party/doctest/` | MIT | `native/core/third_party/doctest/LICENSE.txt` |
+| miniaudio (Linux/Mac dev host only, not shipped) | `native/devhost/third_party/miniaudio/` | public domain (Unlicense) or MIT-0 | `native/devhost/third_party/miniaudio/LICENSE` |
+
+**Note on `js_tanh.cpp`:** glibc 2.39's `s_expm1.c` is fdlibm code under the Sun notice, with a one-line note
+"Modified by Naohiko Shimizu/Tokai University, Japan 1997/08/25" (the split `R1`/`R2`/`R3` polynomial evaluation),
+which the port reproduces because the bits depend on it. The file carries no other licence statement, and glibc's own
+`LICENSES` file lists the Sun fdlibm files under the Sun notice. An earlier review (WAVE0B_REVIEW) counted the 1997
+change as glibc LGPL-2.1-or-later code; under GPL-3.0-only that made no difference. Which reading holds is an open
+question for the maintainer (lane LIC, D38). If it is LGPL, the fix is small: re-derive those few lines or keep
+`js_tanh.cpp` under LGPL terms on its own.
 
 ---
 

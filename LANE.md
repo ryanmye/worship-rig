@@ -20,7 +20,7 @@ unit,shell-unit` at the end. Don't push.
 - [ ] 6. Gates unit,shell-unit; final report here
 
 ## Next step
-3. (README, package.json, lockfile, CONTRIBUTING.md done) site, release notes, LICENSES.md
+3. (README, package.json, lockfile, CONTRIBUTING.md, site, release notes, LICENSES.md done) app strings, Info.plist; then 4
 
 ## Findings / open questions
 - LICENSE text source: WebFetch of the official page only returns a summary (it won't reproduce text verbatim) and the

@@ -281,6 +281,17 @@ Applications.
 **Done**, then **System Settings › Privacy & Security › Open Anyway**; on macOS 14, right-click the app › **Open**.
 See the README ("Running on your Mac → First open on another Mac") for the full steps.
 
+### Licence
+
+Worship Rig 2.0 has a new licence: the **PolyForm Noncommercial License 1.0.0**
+(https://polyformproject.org/licenses/noncommercial/1.0.0, the `LICENSE` file). For players nothing changes: it is
+still free, and you may use it, change it and share it for any noncommercial purpose, at home, in a church, a
+charity or a school. What it doesn't allow is commercial use, such as selling the app or building it into a paid
+product. The code stays source-available on GitHub. Releases up to 1.1.1 stay under the GNU GPL v3, as before
+(`LICENSE-1.x.md`). The sounds and fonts keep their own licences (`LICENSES.md`).
+
+Required Notice: Copyright Ryan Ye (https://github.com/ryanmye)
+
 ### Known gaps
 
 **Not in the Mac and iPad app yet** (they work in the Chrome version; the 1.x Mac app had them):
