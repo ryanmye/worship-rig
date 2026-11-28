@@ -684,3 +684,14 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   fit puts full level at the median hard note).
 - Ryan to try first: FP-10 Key Touch Light, and Dynamic range at max. Unverified on his FP-10.
 
+## D44: 1.1.2, a quick 1.x touch fix pushed to main by the cloud (Ryan, 2026-11-28)
+- Ryan: "there should be some changes that we can make for a quick 1.1.2 for touch", then "automatically push to main
+  and give me link to one click release".
+- Contents:
+  - Fit to my touch reaches full at the 90th-percentile hard note, not the median.
+  - Range goes up to 6×: pianos widen downwards only, to 60 dB, with the top unchanged; single-layer sounds stop at 3×.
+- Range ≤ 3 and existing curves sound unchanged.
+- The rule exception (Tier 1, Ryan's own words): for this release the cloud may fast-forward `main`. It still never
+  tags or releases; Ryan publishes v1.1.2 from GitHub's release page, which creates the tag and builds the files.
+- 2.0 lane TOUCH (D43) uses the same Range formula, so a 1.1.2 backup sounds the same in 2.0.
+
