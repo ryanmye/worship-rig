@@ -32,3 +32,16 @@ is personal content. It lives in Ryan's My Samples folder and never goes into gi
 
 - Nothing needs building yet. When the session is near: a short checklist in MAC_CHECK and, if Ryan wants step 3,
   a spike on recording an AU's output on macOS (AVAudioEngine offline render, if Sunday Keys ships an AU [U]).
+
+## 4. One-button "Import Sunday Keys sounds" tool (Ryan, 2026-11-28; D41)
+
+- A separate tool for Ryan's own use, not part of Worship Rig: it is not in this public repository, not in any build,
+  release or pack. Its code lives outside the repo (a private repo or Ryan's Mac only); this file only records the plan.
+- One button: find the Sunday Keys sounds his licence installed, turn each into a My Samples instrument (folder +
+  manifest, the same format the GarageBand importer writes), and Rescan.
+- Order of attempts, decided in the Mac session: (a) read the sample files the MainStage / Ableton formats install,
+  if they are ordinary sampler files (EXS / Sampler / Simpler multisamples) [U: not checked]: the existing importer
+  (tools/exs) may do most of it; (b) otherwise resample: play each note at a few velocities through Sunday Keys and
+  record it (section 3). Still only what Sunday Keys offers openly: no unlocking or decrypting.
+- Output stays in My Samples (never git, builds or uploads), as in the rule at the top.
+

@@ -126,6 +126,15 @@ Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Plannin
         `GET /api/songs/:id` for title/artist/key/tempo; `/api/arrangements/:id/chordpro` for the arranged chart.
         Rig makes (or links) a song per item and a setlist in that order, with key and tempo, and the chart once the
         chord-chart import exists. Imported charts are licensed content: local only, never in git or uploads.
+- [ ] **Multiple audio outputs (Sunday Keys gap, Ryan 2026-11-28).** Route each slot / the drone / the click to its
+      own output pair on a multi-output interface (pads to their own desk channel). Native core + Windows host; the
+      Chrome version keeps one device. **M, cloud + Ryan hands-on**
+- [ ] **Arpeggiator and Easy Chord (Sunday Keys gap).** MIDI effects per slot: an arpeggiator synced to the song tempo
+      / click, and Easy Chord (one key plays a chord in the song's key). Engine-side, so after the 2.0 tag (D13).
+      **M, cloud**
+- [ ] **Plugin hosting (Sunday Keys gap).** Host Audio Unit v2/v3 instruments on the Mac and AUv3 on the iPad as a slot
+      type (VST3 on Windows later). Biggest of the three: the native core mixes them with its own voices. **L, cloud +
+      Ryan hands-on**
 - [ ] More 2.x items: Ryan is still thinking. Add them here as they come.
 
 ## A. Features Ryan asked for or floated, not yet built — ALL v1.1+ (Ryan 2026-09-30: "don't make the app too complex"; nothing in A gates v1)

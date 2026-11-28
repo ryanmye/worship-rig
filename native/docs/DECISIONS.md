@@ -654,3 +654,11 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   browser remote first, then the iPhone remote, then Windows (CI + W1–W11 → WebView2 shell). The Mac/iPad 2.0 lanes
   still come first; the 2.0.x releases go in the same order.
 - 2.1 stays the SetFlow work (D39), after those. FX steps 2–4 (D13) still wait for the 2.0 tag.
+
+## D41: Sunday Keys gaps go on the 2.x list; a personal one-button Sunday Keys import tool (Ryan, 2026-11-28)
+- BACKLOG 2.x gets the three gaps from the Sunday Keys comparison: multiple audio outputs, an arpeggiator + Easy Chord,
+  and plugin hosting (AU/AUv3; VST3 later). Not 2.0; Arp/Easy Chord touch the engine, so after the 2.0 tag (D13).
+- "A separate import sunday keys sounds plugin in one button for our personal use": built as a separate tool, kept out
+  of this repository and every build (mine, tier 2: the safest reading of "personal use"), writing into My Samples.
+  Plan in native/docs/lanes/SUNDAY-KEYS.md §4; first step is checking the installed formats in the Mac session.
+
