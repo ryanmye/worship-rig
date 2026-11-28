@@ -323,7 +323,10 @@ test('filesProbe (lane N3): records, saves through saveText, clicks an in-page a
   const saves = [];
   const clicks = [];
   const { win } = loadShell({
-    handlers: { saveFile: (b) => { saves.push(b); return { saved: true, name: b.name, path: `/tmp/Saves/${b.name}` }; } },
+    handlers: { saveFile: (b) => {
+      saves.push(b);
+      return { saved: true, name: b.name, path: `/tmp/Saves/${b.name}` };
+    } },
     pre: (w) => {
       w.addEventListener = () => {};
       w.URL = URL;

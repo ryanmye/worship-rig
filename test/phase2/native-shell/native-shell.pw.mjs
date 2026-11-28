@@ -6,6 +6,9 @@
 // the Menu-bar section and the mini-panel button: LaneR O1), no Mac category until a Mac-only feature exists, Back
 // up now through the shell, the v6 summaries; iPad wording; the shell's files are never requested; zero
 // console.error, no HTTP >= 400. Chrome (no window.rig) keeps its copy.
+// Lane N3 (B2, n0-skeptic O1): every export goes through rig.saveText (or the <a download> listener), never a
+// download or a page load, and a recording running meanwhile is not stopped; Import… reads a picked file; Chrome
+// still downloads.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -43,7 +46,7 @@ after(async () => {
 
 /** The fake rigShell handler (page side): records calls; getInfo / backupNow / latestBackup as RigInfo / RigLibrary. */
 function fakeShell(info) {
-  window.__shell = { calls: [], backups: [] };
+  window.__shell = { calls: [], backups: [], saves: [] };
   const handlers = {
     getInfo: () => info,
     backupNow: (b) => {
@@ -51,6 +54,11 @@ function fakeShell(info) {
       return { path: `${info.backupsDir}/rig-20261127-120000.json` };
     },
     latestBackup: () => ({ error: 'no backup found' }),
+    // lane N3: RigFiles (the Mac's save panel; here the user always picks the suggested name)
+    saveFile: (b) => {
+      window.__shell.saves.push(b);
+      return { saved: true, name: b.name, path: `/Users/ryan/Desktop/${b.name}` };
+    },
   };
   window.webkit = { messageHandlers: { rigShell: { postMessage: (b) => {
     window.__shell.calls.push(b.m);
@@ -109,6 +117,12 @@ async function cat(a, id) {
 }
 const panelText = (a, id) => a.ev((c) => document.querySelector(`#view-settings [role=tabpanel][data-cat="${c}"]`)
   .textContent.replace(/\s+/g, ' '), id);
+/** An export's JSON without its `exportedAt` stamp (two exports a few ms apart differ only there). */
+const unstamped = (text) => {
+  const o = JSON.parse(text);
+  delete o.exportedAt;
+  return o;
+};
 const tabIds = (a) => a.ev(() => [...document.querySelectorAll('#view-settings [role=tab][data-cat]')]
   .map((t) => t.dataset.cat));
 
@@ -242,8 +256,134 @@ test('Chrome (no window.rig) keeps its copy: Mode Chrome, the mini panel, the Op
       assert.deepEqual(mb, { h: 'Menu bar', mini: true, mode: true, login: true });
       await cat(a, 'about');
       assert.ok((await panelText(a, 'about')).includes('Chrome'));
+      // lane N3: Export library is still a browser download in Chrome, the store's text byte for byte
+      await cat(a, 'library');
+      const want = await a.ev(() => window.__rig.store.exportJSON());
+      const [dl] = await Promise.all([a.page.waitForEvent('download', { timeout: 15000 }),
+        a.page.click('#view-settings .st-export')]);
+      assert.match(dl.suggestedFilename(), /^Worship Rig library \d{4}-\d{2}-\d{2}\.json$/);
+      assert.deepEqual(unstamped(fs.readFileSync(await dl.path(), 'utf8')), unstamped(want));
       assert.deepEqual(a.errors, []);
     } finally {
       await a.context.close();
     }
   });
+
+test('B2 (lane N3): exports during a recording go through rig.saveText: no download, no page load, the take runs on; '
+  + 'Import… reads the picked file', { timeout: 240000 }, async (t) => {
+  const a = await openApp({ platform: 'macos' });
+  const downloads = [];
+  const loads = [];
+  a.page.on('download', (d) => downloads.push(d.suggestedFilename()));
+  a.page.on('framenavigated', (f) => {
+    if (f === a.page.mainFrame()) loads.push(f.url());
+  });
+  const saves = () => a.ev(() => window.__shell.saves.map((b) => ({ name: b.name, text: b.text, base64: b.base64 })));
+  const recOps = () => a.ev(() => window.__bridgeMock.received.filter((m) => m.op === 'rec').map((m) => m.action));
+  try {
+    const url0 = a.page.url();
+    await a.ev(() => { window.__n3Marker = 'this page'; });
+
+    await t.test('a recording runs (NativeRecorder over MockNative)', async () => {
+      await a.ev(() => window.__rig.controller.record());
+      await a.until(() => window.__rigShell.recording() === true);
+      assert.deepEqual(await recOps(), ['start']);
+    });
+
+    await t.test('Settings › Export library → saveFile with the library text', async () => {
+      await openSettings(a);
+      await cat(a, 'library');
+      const want = await a.ev(() => window.__rig.store.exportJSON());
+      await a.page.click('#view-settings .st-export');
+      await a.until(() => window.__shell.saves.length === 1);
+      const [s0] = await saves();
+      assert.match(s0.name, /^Worship Rig library \d{4}-\d{2}-\d{2}\.json$/);
+      assert.deepEqual(unstamped(s0.text), unstamped(want));
+      await a.page.locator('#view-settings .st-close').first().click();
+      await a.until(() => !document.querySelector('#view-settings.open'));
+    });
+
+    await t.test('Edit › Library file: Export library and Export song', async () => {
+      await a.ev(() => window.__rig.ctx.setView('edit'));
+      await a.until(() => !!document.querySelector('[data-file="export-song"]'));
+      const song = await a.ev(() => {
+        const s = window.__rig.store.currentSong();
+        return { name: s.name, text: window.__rig.store.exportSong(s.id) };
+      });
+      await a.ev(() => document.querySelector('[data-file="export"]').click());
+      await a.ev(() => document.querySelector('[data-file="export-song"]').click());
+      await a.until(() => window.__shell.saves.length === 3);
+      await a.ev(() => window.__rig.ctx.setView('perform'));
+      const [, lib, one] = await saves();
+      assert.match(lib.name, /^Worship Rig library .*\.json$/);
+      assert.equal(JSON.parse(lib.text).schema, 2);
+      assert.match(one.name, /\.rig-song\.json$/);
+      assert.deepEqual(unstamped(one.text), unstamped(song.text));
+    });
+
+    await t.test('the v6 song menu: Export this song…', async () => {
+      await a.ev(() => window.__rig.store.set('settings.uiV6', true));
+      await a.until(() => !!document.querySelector('[data-testid="v6-songmenu-btn"]'));
+      await a.page.click('[data-testid="v6-songmenu-btn"]');
+      await a.until(() => !!document.querySelector('[data-testid="v6-songmenu"]'));
+      await a.page.click('[data-testid="v6-sm-export"]');
+      await a.until(() => window.__shell.saves.length === 4);
+      const s3 = (await saves())[3];
+      assert.match(s3.name, /\.rig-song\.json$/);
+      assert.equal(JSON.parse(s3.text).kind, 'song');
+      await a.until(() => [...document.querySelectorAll('.toast')].some((x) => /Exported/.test(x.textContent)));
+    });
+
+    await t.test('any other <a download> on blob: / data: (as recorder.js downloadBlob) is taken over', async () => {
+      await a.ev(() => {
+        const click = (href, name) => {
+          const x = document.createElement('a');
+          x.href = href;
+          x.download = name;
+          document.body.append(x);
+          x.click();
+          x.remove();
+        };
+        click(URL.createObjectURL(new Blob([new Uint8Array([82, 73, 70, 70, 0, 255])], { type: 'audio/wav' })),
+          'Rig take.wav');
+        click('data:application/json,%7B%22a%22%3A1%7D', 'tiny.json');
+      });
+      await a.until(() => window.__shell.saves.length === 6);
+      // each read is async (text vs arrayBuffer): the order of the two saves is not the order of the clicks
+      const [wav, tiny] = (await saves()).slice(4).sort((x, y) => (x.name < y.name ? -1 : 1));
+      assert.deepEqual(wav, { name: 'Rig take.wav', text: undefined, base64: 'UklGRgD/' });
+      assert.deepEqual(tiny, { name: 'tiny.json', text: '{"a":1}', base64: undefined });
+    });
+
+    await t.test('nothing downloaded, the page never left, the recording was never stopped', async () => {
+      await new Promise((r) => setTimeout(r, 500)); // a late download / navigation would show by now
+      assert.deepEqual(downloads, []);
+      assert.deepEqual(loads.filter((u) => !u.startsWith(url0.split('?')[0])), [], 'no main-frame load elsewhere');
+      assert.equal(await a.ev(() => window.__n3Marker), 'this page');
+      assert.equal(await a.ev(() => window.__rigShell.recording()), true);
+      assert.deepEqual(await recOps(), ['start'], 'no rec stop reached the engine');
+      await a.ev(() => window.__rig.controller.record());
+      await a.until(() => window.__rigShell.recording() === false);
+      assert.deepEqual(await recOps(), ['start', 'stop'], 'the check sees a stop when there is one');
+    });
+
+    await t.test('Settings › Import… reads the picked file (the song exported above comes back as a copy)',
+      async () => {
+        await a.ev(() => window.__rig.store.set('settings.uiV6', false));
+        const one = (await saves())[2];
+        const n0 = await a.ev(() => window.__rig.store.get().songOrder.length);
+        await openSettings(a);
+        await cat(a, 'library');
+        const [chooser] = await Promise.all([a.page.waitForEvent('filechooser', { timeout: 15000 }),
+          a.page.click('#view-settings .st-import')]);
+        await chooser.setFiles({ name: one.name, mimeType: 'application/json', buffer: Buffer.from(one.text) });
+        await a.until((n) => window.__rig.store.get().songOrder.length === n + 1, n0);
+        await a.until(() => [...document.querySelectorAll('.toast')]
+          .some((x) => /Imported 1 song/.test(x.textContent)));
+      });
+
+    assert.deepEqual(a.errors, []);
+  } finally {
+    await a.context.close();
+  }
+});

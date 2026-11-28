@@ -48,7 +48,8 @@ function el(tag, attrs = {}, href) {
 }
 
 test('saveText: one saveFile call with the name and the text; the reply comes back as is', async () => {
-  const { win, handler } = filesWindow({ saveFile: (b) => ({ saved: true, name: b.name, path: `/Users/r/${b.name}` }) });
+  const saveFile = (b) => ({ saved: true, name: b.name, path: `/Users/r/${b.name}` });
+  const { win, handler } = filesWindow({ saveFile });
   assert.equal(typeof win.rig.saveText, 'function');
   const r = await win.rig.saveText('Worship Rig library 2026-11-27.json', '{"schema":2}');
   assert.deepEqual(plain(r), { saved: true, name: 'Worship Rig library 2026-11-27.json',
@@ -100,7 +101,8 @@ test('a click on a child of the anchor; a data: URL; text/* types go as text', a
   assert.deepEqual(plain(s.handler.calls), [{ name: 'notes.txt', text: 'hi there', m: 'saveFile' }]);
 });
 
-test('binary (a WAV, an untyped blob) goes as base64, byte for byte; an empty download attribute names it', async () => {
+test('binary (a WAV, an untyped blob) goes as base64, byte for byte; an empty download attribute names it',
+  async () => {
   const bytes = Uint8Array.from({ length: 70000 }, (_, i) => (i * 37) & 255);
   const s = filesWindow({ blobs: {
     'blob:rig://app/w': new Blob([bytes], { type: 'audio/wav' }),
