@@ -10179,3 +10179,27 @@ bank was empty in the Mac / iPad app. app/js needed no change (controller.rescan
   - Playwright on rig-devhost (`songbank-devhost.test.mjs`, the real UI v6 on the native core): no pack = no
     request and the entry disabled; packs + Rescan = the auto song once, 2 bank songs; Try it, Keep, Settings'
     folder line: 4.8 s, 0 console errors, 0 HTTP ≥ 400.
+
+## n1-skeptic: pack caps follow D9 / D33 O4; iPad folder name; parity 'edge' tree (review of lane N1)
+
+- **Size cap (F2).** `store.topUpPacks` and `store.addPackSong` refused a pack song that took the library past
+  `LIBRARY_MAX_CHARS` (2,000,000). D9 says a save past 2 M warns and goes through; the D33 O4 note says an add is
+  refused only past `LIBRARY_RESTORE_MAX_CHARS` (2,500,000), so the library's own backup stays restorable. Both now
+  refuse only past the restore cap (same messages: "the library is full; not added / not updated", "The library is
+  full: delete some songs first."); between 2 M and 2.5 M the song goes in and the save's `library-size` notice
+  warns, as for any save. Tests: patch-packs.test.mjs (a 2.5 M song still refused; a 2 M + 1000 song added by both).
+  docs/patch-packs.md "Limits" says so.
+- **iPad (O3).** `/api/user-samples` `dir` / `path` on the iPad is "On My iPad › Worship Rig › Samples" (the Files
+  name, `RigPaths.userSamplesShownName`) instead of the container path; `roots` keeps the real path. The Mac and any
+  `RIG_USER_SAMPLES` / self-test root are unchanged.
+- **Parity, more classes** (`test/unit/hostkit/corpus.mjs` `buildEdgeTree`, run by parity.test.mjs as variant
+  'edge'): a root that is a link (every pack then reported again from the real root), folder and file names that are
+  not UTF-8 or carry `"`, `\`, U+0001, tab, new line; exactly 1048576 bytes (read) and 1048577 (skipped); 400,000
+  levels of nesting (nested too deeply), 100,000 unterminated, too deep then a syntax error (the syntax error wins);
+  `.slice(0, 40)` and the pack name's `.slice(0, 120)` cut inside a surrogate pair; a 246- vs 245-unit file name
+  (248 / 247 bytes); `songs` as a file and as a link; a song linked from the pack folder, to a folder, through a file
+  (ENOTDIR); repeated `id` / `bank` keys; `__proto__` envelopes; NFC / NFD twin folders; mtimes of −4999.5 ms and
+  −0.4 ms (Math.round → −4999 and 0) and 2100-01-01 + 0.5 ms; the 500-folder cap ending the listing (a later root
+  too). 24 songs, 13 packs, 28 errors: identical to server.js, byte for byte.
+- Self-test `packs` (Swift): the pass condition is split into one Bool per term (type-checker time; no behaviour
+  change). patches.h's header comment no longer claims V8's SyntaxError texts are not reproduced (F1).
