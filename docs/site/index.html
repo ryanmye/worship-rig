@@ -24,7 +24,7 @@
 <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="preload" href="fonts/Alegreya-wght.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="style.css?v=v200-r1">
+<link rel="stylesheet" href="style.css?v=v200-r2">
 </head>
 <body>
 
@@ -43,7 +43,7 @@
       <a class="alt" href="https://ryanmye.github.io/">More from Ryan Ye</a>
     </div>
     <p class="cta-note">Apple Silicon, macOS 14.5 or later · Intel or older macOS: <a href="https://github.com/ryanmye/worship-rig/releases/tag/v1.1.1">1.1.1</a> · <a href="https://github.com/ryanmye/worship-rig/releases/latest">all downloads</a>.
-      Ad-hoc signed: see the first-launch steps below.</p>
+      Not notarized by Apple: the first time, follow <a href="#first-launch">these steps to open it</a>.</p>
   </div>
 
   <div class="hero-shot">
@@ -304,7 +304,7 @@
       <a class="alt" href="https://ryanmye.github.io/">More from Ryan Ye</a>
     </div>
     <p class="cta-note">Apple Silicon, macOS 14.5 or later · Intel or older macOS: <a href="https://github.com/ryanmye/worship-rig/releases/tag/v1.1.1">1.1.1</a> · <a href="https://github.com/ryanmye/worship-rig/releases/latest">all downloads</a>.
-      Ad-hoc signed: see the first-launch steps below.</p>
+      Not notarized by Apple: the first time, follow <a href="#first-launch">these steps to open it</a>.</p>
 
     <!-- Release (MAC_CHECK "2.0 release checklist"): put the measured sizes here, e.g. "About N MB download, about N MB
          installed, measured on the v2.0.0 release build". The 1.1.0 line said 192 MB / 197 MB / 368 MB. -->
@@ -336,13 +336,47 @@
           <li><strong>Coming from 1.x?</strong> Open the old Worship Rig once and quit it, so its latest backup is on
             disk. 2.0 offers to import it on its first launch
             (<a href="https://github.com/ryanmye/worship-rig/blob/main/docs/release-notes-2.0.md#bringing-your-1x-library-over">steps</a>).</li>
-          <li>Open the <code>.dmg</code> and drag <strong>Worship Rig</strong> to <strong>Applications</strong>.
-            Apple Silicon (<code>arm64</code>) with macOS 14.5 or later. For an Intel Mac or an older macOS, use
-            <a href="https://github.com/ryanmye/worship-rig/releases/tag/v1.1.1">1.1.1</a>.</li>
-          <li><strong>First launch.</strong> The app isn't notarized, so macOS says it "could not verify" it (on
-            macOS 15 and later right-click › Open no longer gets past this). Click <strong>Done</strong>, then
-            <strong>System Settings › Privacy &amp; Security</strong> › <strong>Open Anyway</strong>. Or once in Terminal:
-            <code>xattr -dr com.apple.quarantine "/Applications/Worship Rig.app"</code></li>
+          <li><strong>Download.</strong> Click <strong>Download for Mac</strong> at the top of this page. The file
+            <code>Worship-Rig-arm64.dmg</code> lands in your <strong>Downloads</strong> folder (in Safari, click the
+            download arrow in the toolbar to see it). Apple Silicon (<code>arm64</code>) with macOS 14.5 or later; for
+            an Intel Mac or an older macOS, use <a href="https://github.com/ryanmye/worship-rig/releases/tag/v1.1.1">1.1.1</a>.</li>
+          <li><strong>Install.</strong> Double-click the <code>.dmg</code>. In the window that opens, drag
+            <strong>Worship Rig</strong> onto the <strong>Applications</strong> folder. Then eject the disk (the eject
+            button next to it in Finder's sidebar). Always open the app from <strong>Applications</strong>, not from
+            the disk window or Downloads.</li>
+          <li id="first-launch"><strong>First launch: Open Anyway.</strong> The app is free and isn't notarized by
+            Apple, so macOS stops it the first time. On macOS 15 and later, right-click › Open no longer gets past this.
+            <ol>
+              <li>Open <strong>Worship Rig</strong> from Applications. macOS says it could not verify the app.
+                Click <strong>Done</strong> (not Move to Trash).</li>
+              <li>Open <strong>System Settings</strong> (Apple menu) › <strong>Privacy &amp; Security</strong>. Scroll
+                down to <strong>Security</strong>: there is a line saying Worship Rig was blocked, with an
+                <strong>Open Anyway</strong> button. Click it.</li>
+              <li>Click <strong>Open Anyway</strong> again in the box that appears, and enter your Mac's login
+                password. Worship Rig opens. You only do this once; after that it opens normally.</li>
+            </ol>
+            <details class="fix">
+              <summary><strong>No Open Anyway button?</strong></summary>
+              <ul>
+                <li><strong>Try to open the app first.</strong> The button only appears after macOS has blocked the app,
+                  and only for about an hour. Open Worship Rig from Applications again, click Done, then go straight
+                  back to Privacy &amp; Security.</li>
+                <li><strong>Check "Allow applications from".</strong> In the same Security section, if it says
+                  <strong>App Store</strong>, change it to <strong>App Store &amp; Known Developers</strong>. With
+                  "App Store" only, macOS won't offer Open Anyway at all.</li>
+                <li><strong>Close and reopen System Settings.</strong> If it was already open on Privacy &amp; Security,
+                  it may not have refreshed.</li>
+                <li><strong>Still nothing, or "Worship Rig is damaged" / "does not have permission to open (null)":</strong>
+                  use Terminal once. Open <strong>Terminal</strong> (Applications › Utilities), paste this line and
+                  press Return:
+                  <pre><code>xattr -dr com.apple.quarantine "/Applications/Worship Rig.app"</code></pre>
+                  It removes the "downloaded from the internet" flag from this one app, so macOS stops blocking it.
+                  Then open Worship Rig normally. If Terminal says "No such file", the app isn't in Applications yet:
+                  go back to the Install step.</li>
+                <li>Apple's own steps: <a href="https://support.apple.com/guide/mac-help/mh40617/mac">Open an app by
+                  overriding security settings</a>.</li>
+              </ul>
+            </details></li>
           <li><strong>MIDI.</strong> macOS usually doesn't ask about a USB keyboard; if it does, allow it. If the MIDI
             light stays off, pick the keyboard in <strong>Settings › Keyboards &amp; MIDI</strong>. No keyboard? The
             computer keys play notes too.</li>
