@@ -117,6 +117,15 @@ Not in v1.1: EQ simple mode, shimmer/choir, chord charts, stage display, Plannin
       setlist's next song. Talks to SetFlow's WebSocket only; no SetFlow code is copied (the repo has no licence).
       Tolerates unknown fields and keeps playing if SetFlow drops. Native app: local-network permission. Later, on its
       own: SetFlow ChordPro → the 2.0 chord chart (shares the WorshipTools/ChordPro parsing above). **M, cloud**
+      Also (Ryan, 2026-11-28):
+      - **Rig as the controller.** Rig's pedal / pads / buttons send NEXT, PREVIOUS, REPEAT, VAMP, JUMP <section>, END
+        to SetFlow (`POST /api/session/commands` or the WebSocket `command` message), for when the keys player is the
+        MD. Two modes: SetFlow's approved-clicker path (NEXT/PREVIOUS only, the MD's Control View stays conductor), or
+        full conductor (`POST /api/session/control`). SetFlow has no auth, so full control is opt-in and visible.
+      - **Import a SetFlow setlist.** `GET /api/setlists/:id` → each item's song, arrangement and performance key;
+        `GET /api/songs/:id` for title/artist/key/tempo; `/api/arrangements/:id/chordpro` for the arranged chart.
+        Rig makes (or links) a song per item and a setlist in that order, with key and tempo, and the chart once the
+        chord-chart import exists. Imported charts are licensed content: local only, never in git or uploads.
 - [ ] More 2.x items: Ryan is still thinking. Add them here as they come.
 
 ## A. Features Ryan asked for or floated, not yet built — ALL v1.1+ (Ryan 2026-09-30: "don't make the app too complex"; nothing in A gates v1)

@@ -631,4 +631,7 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 - Not 2.0; queued in the after-2.0 slot (D36) after Windows CI + W1–W11 and the browser remote (D34).
 - Protocol-level interop only: SetFlow (andteklin/setflow, read at 741b972) has no LICENSE file, so no code is copied.
   Its message format is a prototype's; re-read it when the lane starts and pin the version it was built against.
+- Ryan (2026-11-28) adds two parts to D39: Rig as a SetFlow controller (its pedal/pads send NEXT/REPEAT/VAMP/JUMP/END),
+  and importing a SetFlow setlist's songs into Rig (songs + setlist with key and tempo; chart later). Same lane,
+  follower first, then import, then controller.
 
