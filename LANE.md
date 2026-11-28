@@ -23,8 +23,10 @@ capped, values ≤ 3 bit-identical, peaks at max measured. No app/js/engine chan
 - [ ] 9. Final report in this file
 
 ## Next step
-4 (native clamp + mock); baseline renders are in /home/claude/scratch/touch/base-renders (112, from
-native/core/build-touch-base at a28f0b3 sources).
+5 (UI tests: settings app + v6 modes), then 6 (clang-20 / ASan builds, ctest), 7 (docs), 8 (gates).
+Baseline renders: /home/claude/scratch/touch/base-renders (112, native/core/build-touch-base at a28f0b3 sources);
+new renders after the clamp change: 112/112 cmp-identical (g++). build-touch-base is now the lane's g++ build.
+node_modules is a symlink to /home/claude/worship-rig/node_modules (git-ignored).
 
 ## Findings / decisions so far
 - Calibration stored as `settings.keyboards[name].velocity = {in, out}` (2 dp, 2–12 points, in strictly rising,
@@ -36,5 +38,11 @@ native/core/build-touch-base at a28f0b3 sources).
   median ≥ 126.5 (board tops out) plays 127.
 - Dynamics: DYN_RANGE.max 6; velocityDb caps r so span·r ≤ 72 dB (single layer stops at range 3 = 72 dB; ≤ 3 is
   bit-identical, unit-tested over every 0.01 step).
+
+- Golden fixtures dyn-range-salamander-piano / dyn-range-ep-rhodes (range 6, slot tap, gain 0.3) and dyn-peak-r1/3/6
+  (tap out). Native vs web: ep-rhodes 2.98e-8; salamander 1.39e-4 (= the set's own residue, range-1 fixture 1.51e-4);
+  the per-note level change 6 vs 1, web − native ≤ 1.7e-6 dB (.probe/ratio.json). Peaks at out: −1.2 / −0.9 / −0.6 dBFS.
+- Goldens rendered by playwright's chromium-1194 build of 157.0.8103.78 (the pin names the headless-shell-1243 build of
+  the same version); chromiumPin restored to the old object so nothing else churns.
 
 ## Open questions
