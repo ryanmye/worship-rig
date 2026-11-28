@@ -49,6 +49,11 @@ test('bad input is refused with a reason: shape of the text, counts, ranges, mon
     'Velocity = [0, 80, 40; 0, 64, 127]': /must rise/,
     'Velocity = [0, 64, 127; 0, 90, 80]': /can't play quieter/,
     'Velocity = [[0, 127]; [0, 127]]': /one curve/,
+    // touch-skeptic O2
+    'Velocity = [0, , 127; 0, 64]': /missing between two commas/,
+    'Velocity = [, 0, 127; 0, 64, 127]': /missing between two commas/,
+    'Velocity = [0, 127; 0, 127];': /text after/,
+    'Velocity = [0, 127; 0, 127] (FP-10, Medium)': /text after/,
   };
   for (const [t, re] of Object.entries(bad)) {
     const r = C.parseVelocity(t);

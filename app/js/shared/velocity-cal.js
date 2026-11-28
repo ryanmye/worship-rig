@@ -83,6 +83,11 @@ export function parseVelocity(text) {
   if (typeof text !== 'string' || !text.trim()) return fail('Paste a curve like Velocity = [0, 64, 127; 0, 64, 127].');
   let s = text.trim().replace(/^velocity\s*[=:]?\s*/i, '');
   if (s.startsWith('[')) {
+    const close = s.indexOf(']');
+    // touch-skeptic O2: say what is wrong when text follows the curve ("Velocity = [...];" from a forum post)
+    if (close >= 0 && close < s.length - 1 && s.indexOf('[', 1) < 0) {
+      return fail('Paste only the curve: there is text after its closing "]".');
+    }
     if (!s.endsWith(']')) return fail('The curve is missing its closing "]".');
     s = s.slice(1, -1);
   }
@@ -91,6 +96,8 @@ export function parseVelocity(text) {
   if (rows.length !== 2) return fail('Two rows are needed, split by ";": the key velocities, then what they play.');
   const nums = [];
   for (const row of rows) {
+    // touch-skeptic O2: "0, , 127" is a missing number, not two points (refused, not repaired); a trailing comma is ok
+    if (/^\s*,|,\s*,/.test(row)) return fail('A number is missing between two commas.');
     const toks = row.split(/[\s,]+/).filter(Boolean);
     const vals = [];
     for (const t of toks) {
