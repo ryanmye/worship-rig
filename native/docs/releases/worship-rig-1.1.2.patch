@@ -1,0 +1,497 @@
+From 915f496cc437c7c32da36a3683426ca6a15e86d7 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 28 Nov 2026 00:15:14 -0500
+Subject: [PATCH 1/3] =?UTF-8?q?1.1.2:=20Fit=20to=20my=20touch=20reaches=20?=
+ =?UTF-8?q?full=20at=20the=20hardest=20hard=20notes=20(90th=20percentile,?=
+ =?UTF-8?q?=20was=20the=20median);=20Range=20up=20to=206=C3=97=20(pianos?=
+ =?UTF-8?q?=2060=20dB,=20widening=20downwards=20only=20past=203=C3=97)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Ryan, Roland FP-10: soft notes too loud, hard notes not getting louder. Range ≤ 3 and existing curves are unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PmUGbjzkTEf1bsNfFQpAAk
+---
+ CONTRACT_CHANGES.md                      | 13 ++++++++
+ app/js/shared/touch-curve.js             | 39 ++++++++++++++++++------
+ docs/release-notes-1.1.2.md              | 24 +++++++++++++++
+ docs/site/index.html                     |  3 +-
+ package-lock.json                        |  4 +--
+ package.json                             |  2 +-
+ test/phase1/shell/dynamic-range.test.mjs |  9 ++++--
+ test/unit/shared/touch-curve.test.mjs    | 18 +++++++++--
+ 8 files changed, 95 insertions(+), 17 deletions(-)
+ create mode 100644 docs/release-notes-1.1.2.md
+
+diff --git a/CONTRACT_CHANGES.md b/CONTRACT_CHANGES.md
+index 78c2fef..df8b94f 100644
+--- a/CONTRACT_CHANGES.md
++++ b/CONTRACT_CHANGES.md
+@@ -6815,3 +6815,16 @@ slot…` (test 31): "Perform reads slot 3 once per clock frame or sleeps (0.25)"
+ - Tests: `test/phase1/shell/device-settings.test.mjs` (5: block shape, defaults, the marker, import drops it,
+   `backupNow` writes it with the origin tag); `browser.pw.mjs` 1 (the real Export library button, see DS4). The S3 test
+   (`security.test.mjs`) is unchanged and passes: `exportJSON()` without `device` is still clean.
++
++## 1.1.2 touch (Ryan 2026-11-28, Roland FP-10: "soft notes too loud, hard notes not getting louder"; shared/touch-curve.js)
++- **fitTouch:** `top` (the velocity that reaches full) is now `max(hard median, FIT_TOP_PERCENTILE = 0.9 nearest-rank of
++  the hard notes)`, was the hard median. With 6 hard notes that is the hardest one, so a player's hard notes above
++  their median still get louder. Example: hard notes 85, 95, 98, 100, 105, 110 → top 110 (was 99). `soft` / `hard` in
++  the result stay medians (the UI shows them). Curves fitted before keep their stored `top` until re-fitted.
++- **settings.dynamicRange:** `DYN_RANGE.max` 3 → 6. `velocityDb` is bit-for-bit the 1.1.1 formula for range ≤ 3. Past
++  `DYN_UP_MAX` = 3 the multi-layer span (10 dB) widens downwards only: `− spanDb · (range − 3) · (1 − v)`, so pianos
++  reach 60 dB at 6× with the hardest note still at +5 dB (as at 3×; the master ceiling sees no new peak). Spans ≥ 20 dB
++  (the single-layer 24 dB) stop at 3× (72 dB, +12 dB top), as before.
++- No engine file changes (audio.js / sampler.js call the shared functions). Store clamp follows `validDynRange`.
++- 2.0 (v2-native) clamps `dynamicRange` to 1..3 in the native core until lane TOUCH (D43) lands; a 1.1.2 value above 3
++  plays at 3× there.
+diff --git a/app/js/shared/touch-curve.js b/app/js/shared/touch-curve.js
+index a4f28fe..431be01 100644
+--- a/app/js/shared/touch-curve.js
++++ b/app/js/shared/touch-curve.js
+@@ -141,12 +141,20 @@ const median = (a) => {
+   const m = s.length >> 1;
+   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+ };
++/** Share of the hard notes at or below the velocity that reaches full level (1.1.2; nearest rank). */
++export const FIT_TOP_PERCENTILE = 0.9;
++const percentile = (a, p) => {
++  const s = a.slice().sort((x, y) => x - y);
++  return s[Math.min(s.length - 1, Math.max(0, Math.ceil(p * s.length) - 1))];
++};
+ const velocities = (a) => (Array.isArray(a) ? a : []).map(Number).filter((v) => v >= 1 && v <= 127);
+ 
+ /**
+- * Fit a curve to the player's touch: their hard playing (median) reaches the loudest output (top = that velocity),
+- * and their soft playing (median) lands on FIT_SOFT_TARGET of the output range, by choosing the exponent. min / max
+- * are kept from `base` (the curve being replaced), so a floor the player set survives a re-fit.
++ * Fit a curve to the player's touch: their hardest playing (the FIT_TOP_PERCENTILE of the hard notes) reaches the
++ * loudest output (top = that velocity), and their soft playing (median) lands on FIT_SOFT_TARGET of the output range,
++ * by choosing the exponent. min / max are kept from `base` (the curve being replaced), so a floor the player set
++ * survives a re-fit. 1.1.2 (Ryan, FP-10: "hard notes not getting louder"): top was the hard median, so about half of
++ * a player's hard notes already sat at full and playing harder changed nothing.
+  * @param {number[]} soft  velocities of the "play softly" notes
+  * @param {number[]} hard  velocities of the "play hard" notes
+  * @param {object} [base]  current spec (min / max kept)
+@@ -161,7 +169,7 @@ export function fitTouch(soft, hard, base) {
+   if (s.length < FIT_MIN_NOTES || hd.length < FIT_MIN_NOTES) return { ok: false, reason: 'few', soft: sm, hard: hm };
+   if (hm - sm < FIT_MIN_SPREAD) return { ok: false, reason: 'same', soft: sm, hard: hm };
+   const b = normalizeTouch(base);
+-  const top = Math.round(clampTo(hm, TOUCH_RANGE.top));
++  const top = Math.round(clampTo(Math.max(hm, percentile(hd, FIT_TOP_PERCENTILE)), TOUCH_RANGE.top));
+   const x = Math.min(0.98, Math.max(0.02, sm / top));
+   const lo = Math.min(b.min, b.max);
+   const span = Math.max(b.min, b.max) - lo;
+@@ -181,7 +189,15 @@ export function fitTouch(soft, hard, base) {
+  * around DYN_PIVOT, so soft notes get quieter AND the hardest notes louder than today's full (the master ceiling
+  * still catches peaks). Device-local: it is about this player's keyboard and room.
+  */
+-export const DYN_RANGE = Object.freeze({ min: 1, max: 3, default: 1, step: 0.05 });
++export const DYN_RANGE = Object.freeze({ min: 1, max: 6, default: 1, step: 0.05 });
++/**
++ * 1.1.2 (Ryan, FP-10: "soft notes too loud"): past this range the span only grows downwards (soft quieter, the
++ * hardest note stays where 3× put it), like Pianoteq's Dynamics; and only for the multi-layer span (pianos: 10 dB →
++ * 60 dB at 6×). The single-layer span (24 dB) is already 72 dB at 3× and stops there.
++ */
++export const DYN_UP_MAX = 3;
++/** Built-in spans at or above this (dB) don't widen past DYN_UP_MAX (the single-layer 24 dB span). */
++const DYN_WIDE_SPAN = 20;
+ /** Touch level that keeps its loudness at any range: velocity ≈ 96 of 127, where the sampler trims are calibrated. */
+ export const DYN_PIVOT = 0.75;
+ 
+@@ -196,15 +212,20 @@ export function validDynRange(v) {
+ 
+ /**
+  * Note gain in dB for a touch level. range 1 = −spanDb · (1 − v) exactly (the pre-range formula); a wider range adds
+- * spanDb · (range − 1) · (v − DYN_PIVOT): below the pivot quieter, above it louder.
++ * spanDb · (range − 1) · (v − DYN_PIVOT): below the pivot quieter, above it louder. Past DYN_UP_MAX (3×) the
++ * multi-layer span keeps widening downwards only (−spanDb · (range − 3) · (1 − v)); the single-layer span stops at 3×.
++ * Values up to 3 give exactly the 1.1.1 numbers.
+  * @param {number} v01 touch level 0..1
+  * @param {number} spanDb the instrument's built-in span (10 multi-layer, 24 single layer)
+- * @param {number} [range] settings.dynamicRange (1..3)
++ * @param {number} [range] settings.dynamicRange (1..6)
+  * @returns {number}
+  */
+ export function velocityDb(v01, spanDb, range = 1) {
+-  const base = -spanDb * (1 - v01);
+-  return range === 1 ? base : base + spanDb * (range - 1) * (v01 - DYN_PIVOT);
++  if (range === 1) return -spanDb * (1 - v01);
++  const r = Math.min(range, DYN_UP_MAX);
++  const base = -spanDb * (1 - v01) + spanDb * (r - 1) * (v01 - DYN_PIVOT);
++  if (range <= DYN_UP_MAX || spanDb >= DYN_WIDE_SPAN) return base;
++  return base - spanDb * (range - DYN_UP_MAX) * (1 - v01); // 1.1.2: downward only past 3×
+ }
+ 
+ // ---------------------------------------------------------------------------------------------------------------
+diff --git a/docs/release-notes-1.1.2.md b/docs/release-notes-1.1.2.md
+new file mode 100644
+index 0000000..a61f92e
+--- /dev/null
++++ b/docs/release-notes-1.1.2.md
+@@ -0,0 +1,24 @@
++Worship Rig 1.1.2 makes soft playing quieter and hard playing louder on keyboards that felt flat, such as the Roland
++FP-10. Nothing else changes: if you don't touch the two settings below, 1.1.2 sounds exactly like 1.1.1.
++
++### Fit to my touch: playing harder gets louder again
++
++Settings › Your keyboards › Fit to my touch used to put full volume at the middle of your "play hard" notes, so about
++half of them were already as loud as it gets and digging in did nothing. Now full volume sits at your hardest notes,
++so there is still room above your usual hard playing. Run Fit to my touch again to get the new fit; a curve you fitted
++before stays as it is until you do.
++
++### Range goes up to 6×
++
++The Range slider (same place) now goes up to 6×, with more room on the quiet side:
++
++- **Pianos** (sounds with several sample layers) span up to **60 dB** from the softest to the hardest note, up from
++  30 dB at 3×. Past 3× only the soft end gets quieter; the hardest notes stay as loud as at 3×.
++- **Other sampled sounds** already span 72 dB at 3× and stay there.
++- 3× and below sound exactly as in 1.1.1.
++
++Tip for Roland digital pianos: set the piano's own Key Touch to Light, then run Fit to my touch, then raise Range
++until soft playing is as quiet as you want.
++
++Worship Rig 2.0 reads the Range setting from a 1.1.2 backup; until 2.0 gets the wider range too, it plays a setting
++above 3× at 3×.
+diff --git a/docs/site/index.html b/docs/site/index.html
+index a5373e7..b240251 100644
+--- a/docs/site/index.html
++++ b/docs/site/index.html
+@@ -223,7 +223,8 @@
+       <p class="muted">Everything new stays out of the way until you want it. A 1.0 library plays exactly as before.
+         <a href="https://github.com/ryanmye/worship-rig/blob/main/docs/release-notes-1.1.0.md">Full release notes</a>.
+         1.1.1 keeps a 2.0 library safe in the same browser and carries this Mac's settings over to 2.0
+-        (<a href="https://github.com/ryanmye/worship-rig/blob/main/docs/release-notes-1.1.1.md">notes</a>).</p>
++        (<a href="https://github.com/ryanmye/worship-rig/blob/main/docs/release-notes-1.1.1.md">notes</a>). 1.1.2 makes
++        soft playing quieter and hard playing louder (<a href="https://github.com/ryanmye/worship-rig/blob/main/docs/release-notes-1.1.2.md">notes</a>).</p>
+     </div>
+     <ul class="new-grid">
+       <li class="new-card">
+diff --git a/package-lock.json b/package-lock.json
+index fd7dc23..100eeac 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "worship-rig",
+-  "version": "1.1.1",
++  "version": "1.1.2",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "worship-rig",
+-      "version": "1.1.1",
++      "version": "1.1.2",
+       "license": "UNLICENSED",
+       "devDependencies": {
+         "electron": "^44.4.5",
+diff --git a/package.json b/package.json
+index efdd694..16a9966 100644
+--- a/package.json
++++ b/package.json
+@@ -2,7 +2,7 @@
+   "name": "worship-rig",
+   "productName": "Worship Rig",
+   "private": true,
+-  "version": "1.1.1",
++  "version": "1.1.2",
+   "description": "Live MIDI keys, pads and key drones for worship, ambient and lofi. Electron app + Chrome fallback.",
+   "author": "Ryan Ye",
+   "license": "GPL-3.0-only",
+diff --git a/test/phase1/shell/dynamic-range.test.mjs b/test/phase1/shell/dynamic-range.test.mjs
+index 9aeceb7..f39c49a 100644
+--- a/test/phase1/shell/dynamic-range.test.mjs
++++ b/test/phase1/shell/dynamic-range.test.mjs
+@@ -17,6 +17,11 @@ test('velocityDb: range 1 is the old formula; wider = quieter below the pivot, l
+     }
+   }
+   assert.equal(velocityDb(1, 10, 3), 5); // pianos at 3×: +5 dB at the top
++  // 1.1.2: past 3× pianos widen downwards only (60 dB at 6×, the top stays +5 dB); single-layer spans stop at 3×
++  assert.equal(velocityDb(1, 10, 6), 5);
++  assert.ok(Math.abs(velocityDb(1, 10, 6) - velocityDb(0, 10, 6) - 60) < 1e-9);
++  assert.ok(velocityDb(0.15, 10, 6) < velocityDb(0.15, 10, 3), 'soft quieter past 3×');
++  for (const v of [0, 0.3, DYN_PIVOT, 1]) assert.equal(velocityDb(v, 24, 6), velocityDb(v, 24, 3));
+   assert.equal(validDynRange(0.5), DYN_RANGE.min);
+   assert.equal(validDynRange(9), DYN_RANGE.max);
+   assert.equal(validDynRange(1.234), 1.23);
+@@ -30,9 +35,9 @@ test('store: settings.dynamicRange is optional, device-local, clamped; 1 and nul
+   s.set('settings.dynamicRange', 1.8);
+   assert.equal(s.get().settings.dynamicRange, 1.8);
+   s.set('settings.dynamicRange', 7);
+-  assert.equal(s.get().settings.dynamicRange, 3);
++  assert.equal(s.get().settings.dynamicRange, 6, '1.1.2: up to 6×');
+   s.set('settings.dynamicRange', 'loud');
+-  assert.equal(s.get().settings.dynamicRange, 3, 'refused');
++  assert.equal(s.get().settings.dynamicRange, 6, 'refused');
+   s.set('settings.dynamicRange', 1);
+   assert.equal('dynamicRange' in s.get().settings, false, '1 = absent');
+   s.set('settings.dynamicRange', 2);
+diff --git a/test/unit/shared/touch-curve.test.mjs b/test/unit/shared/touch-curve.test.mjs
+index 97f184e..fd286a0 100644
+--- a/test/unit/shared/touch-curve.test.mjs
++++ b/test/unit/shared/touch-curve.test.mjs
+@@ -84,11 +84,13 @@ test('fitTouch: soft playing lands on FIT_SOFT_TARGET (15 %), hard on full; ligh
+   near(at(avg, avg.soft), T.FIT_SOFT_TARGET, 1e-3, 'average: soft notes land on the target');
+   assert.ok(avg.touch.shape > 1.5 && avg.touch.shape < 1.8, `average player ≈ the hard preset (${avg.touch.shape})`);
+   // light-touch board: soft ≈ 20, hard never past ≈ 90 → reaches full at 90, lighter than the average fit
++  // 1.1.2: full is reached at the hardest hard notes (90th percentile), not the median, so harder still gets louder
+   const light = T.fitTouch([18, 20, 22, 21, 19, 20], [88, 90, 92, 91, 89, 90]);
+-  assert.equal(light.touch.top, 90);
++  assert.equal(light.touch.top, 92);
+   assert.ok(light.touch.shape < avg.touch.shape, JSON.stringify(light));
+   near(at(light, light.soft), T.FIT_SOFT_TARGET, 1e-3, 'soft notes land on the target');
+-  near(at(light, light.hard), 1, 1e-12, 'hard notes reach full');
++  near(at(light, 92), 1, 1e-12, 'the hardest hard notes reach full');
++  assert.ok(at(light, light.hard) < 1 && at(light, light.hard) > 0.95, 'the median hard note is just below full');
+   // heavy hand: soft ≈ 60 → heavier than the average fit, still inside the shape range
+   const heavy = T.fitTouch([58, 60, 62, 61, 59, 60], [127, 127, 126, 127, 127, 127]);
+   assert.ok(heavy.touch.shape > avg.touch.shape && heavy.touch.shape <= T.TOUCH_RANGE.shape.max, JSON.stringify(heavy));
+@@ -104,6 +106,18 @@ test('fitTouch: soft playing lands on FIT_SOFT_TARGET (15 %), hard on full; ligh
+   assert.equal(odd.hard, 120);
+ });
+ 
++test('fitTouch 1.1.2: a spread of hard notes keeps headroom above the median (FP-10 "hard notes not louder")', () => {
++  assert.equal(T.FIT_TOP_PERCENTILE, 0.9);
++  const r = T.fitTouch([30, 32, 28, 31, 29, 30], [85, 95, 98, 100, 105, 110]);
++  assert.equal(r.hard, 99);
++  assert.equal(r.touch.top, 110, 'full at the hardest note, not the median 99');
++  const c = T.compileTouch(r.touch);
++  assert.ok(T.touchAt(c, 105) > T.touchAt(c, 99) && T.touchAt(c, 110) > T.touchAt(c, 105), 'harder is louder');
++  // never below the median (a set with one huge outlier low keeps the old behaviour)
++  const few = T.fitTouch([40, 40, 40], [120, 121, 122]);
++  assert.equal(few.touch.top, 122);
++});
++
+ test('fitTouch: too few notes or soft = hard is refused with a reason', () => {
+   assert.deepEqual(T.fitTouch([40, 41], [100, 101, 102]).reason, 'few');
+   assert.deepEqual(T.fitTouch([], []).reason, 'few');
+-- 
+2.43.0
+
+
+From a264575f3201847c2f47d20b506c60291f583366 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 28 Nov 2026 00:36:35 -0500
+Subject: [PATCH 2/3] v112-skeptic: Settings fit result no longer claims the
+ hard median plays at full; settings suite updated to top 100
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The settings browser suite failed 9/60 on 915f496 (60/60 on origin/main): the Your keyboards test still expected
+top 98 (the old median) and the aborted test cascaded into 8 more. Fixed the expectations (p90 of 6 = the hardest
+note, 100) and the result line, which said "about 15% and full volume" although the median hard note now plays
+below full; it now names the level and the velocity that reaches full. Added a Range-row check at 6×.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PmUGbjzkTEf1bsNfFQpAAk
+---
+ app/js/views/settings-keyboards.js |  6 +++++-
+ test/phase2/settings/run.mjs       | 18 ++++++++++++++----
+ 2 files changed, 19 insertions(+), 5 deletions(-)
+
+diff --git a/app/js/views/settings-keyboards.js b/app/js/views/settings-keyboards.js
+index a1c72b2..d473a33 100644
+--- a/app/js/views/settings-keyboards.js
++++ b/app/js/views/settings-keyboards.js
+@@ -311,9 +311,13 @@ export function mountKeyboards({ store, controller, midi, listen, toast = () =>
+       return;
+     }
+     row.preview(r.touch, [r.soft, r.hard]);
++    // 1.1.2: full is reached at the hardest hard notes (fitTouch top), so the median hard note can sit just below it
++    const hardLevel = touchAt(compileTouch(r.touch), r.hard);
++    const loud = hardLevel > 0.995 ? 'full volume'
++      : `${pct(hardLevel)}; your hardest (${r.touch.top}) reach full volume`;
+     row.fitBox.replaceChildren(
+       h('span.st-kb-result', { dataset: { result: 'ok' }, text: `Soft notes came in around ${Math.round(r.soft)}, hard `
+-        + `around ${Math.round(r.hard)}. With this curve they play at about ${pct(FIT_SOFT_TARGET)} and full volume.` }),
++        + `around ${Math.round(r.hard)}. With this curve they play at about ${pct(FIT_SOFT_TARGET)} and ${loud}.` }),
+       btn('Use this', () => {
+         stopFit();
+         row.fitBox.replaceChildren();
+diff --git a/test/phase2/settings/run.mjs b/test/phase2/settings/run.mjs
+index b40916b..6e04932 100644
+--- a/test/phase2/settings/run.mjs
++++ b/test/phase2/settings/run.mjs
+@@ -335,7 +335,9 @@ async function runMode(mode, browser) {
+       await play([96, 100, 98, 97, 99, 98]);
+       await until((r) => document.querySelector(`${r} .st-kb-result`)?.dataset.result === 'ok', row);
+       assert.match(await page.textContent(`${row} .st-kb-result`), /around 24, hard around 98/);
+-      assert.match(await page.textContent(`${row} .st-kb-result`), /play at about 15% and full volume/, 'FIT_SOFT_TARGET');
++      // 1.1.2: full at the hardest hard note (100, the 90th percentile of 6), the median 98 just below it
++      assert.match(await page.textContent(`${row} .st-kb-result`),
++        /play at about 15% and 9\d%; your hardest \(100\) reach full volume/, 'FIT_SOFT_TARGET');
+       // screenshot pass 2026-11-20: btn()'s {class} used to replace the tag's .ed-btn, leaving native grey buttons
+       const unstyled = await ev((r) => [...document.querySelectorAll(`.st-kbs button`)]
+         .filter((b) => !b.classList.contains('ed-btn')).map((b) => b.className), row);
+@@ -345,9 +347,9 @@ async function runMode(mode, browser) {
+       await page.click(`${row} .st-kb-use`);
+       await until(() => !!window.__rig.store.get().settings.keyboards?.['@computer']?.touch);
+       const t = await ev(() => window.__rig.store.get().settings.keyboards['@computer'].touch);
+-      assert.equal(t.top, 98);
+-      // soft 24 of full-at-98 lands on FIT_SOFT_TARGET (0.15, Ryan Q5)
+-      assert.ok(Math.abs(Math.pow(24 / 98, t.shape) - 0.15) < 0.01, `soft notes land on 15 % (${t.shape})`);
++      assert.equal(t.top, 100, '1.1.2: the hardest hard note, not the median 98');
++      // soft 24 of full-at-100 lands on FIT_SOFT_TARGET (0.15, Ryan Q5)
++      assert.ok(Math.abs(Math.pow(24 / 100, t.shape) - 0.15) < 0.01, `soft notes land on 15 % (${t.shape})`);
+       await until((r) => /Own touch/.test(document.querySelector(`${r} .st-kb-sum`).textContent), row);
+       // played notes now carry the curve; the velocity is raw (the Touch setting no longer applies to these keys)
+       const call = await ev(() => {
+@@ -383,6 +385,14 @@ async function runMode(mode, browser) {
+       await page.click(`${tb} .st-kb-forget`);
+       await until((r) => !document.querySelector(r), tb);
+       assert.deepEqual(await ev(() => window.__rig.midi.remembered), []);
++      // 1.1.2: Range goes to 6×; pianos widen downwards only (top stays +5 dB), the others stay at 72 dB
++      assert.equal(await page.getAttribute('[data-testid="setting-dynamic-range"]', 'max'), '6');
++      await ev(() => window.__rig.store.set('settings.dynamicRange', 6));
++      await until(() => /pianos 60 dB, hardest \+5\.0 dB; other sampled sounds 72 dB, hardest \+12\.0 dB/
++        .test(document.querySelector('[data-testid="dynamic-range-span"]').textContent));
++      assert.equal(await page.textContent('[data-testid="dynamic-range-value"]'), '6.0×');
++      await ev(() => window.__rig.store.set('settings.dynamicRange', null));
++      await until(() => !('dynamicRange' in window.__rig.store.get().settings));
+       await page.click(`${row} .st-kb-touch`); // close the editor again
+     });
+ 
+-- 
+2.43.0
+
+
+From 5473b04edf9735a0fe11401b6ea1528aa0cb979c Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Sat, 28 Nov 2026 00:36:36 -0500
+Subject: [PATCH 3/3] v112-skeptic: bit-exact and no-louder guards for
+ velocityDb; percentile edge tests; stale 1..3 comments; 2.0 notes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+dynamic-range.test.mjs compares velocityDb with a frozen copy of the 1.1.1 formula (=== over v step 0.001, ranges
+1..3 step 0.01) and checks no v is louder past 3× than at 3×. touch-curve tests cover unsorted input, junk, equal
+notes, a low and a high outlier, 10 notes. CONTRACT_CHANGES records that lane-touch's D43 law differs past 3× and
+that 2.0's store keeps an imported value above 3 as 3; the release note says the same in plain words.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01PmUGbjzkTEf1bsNfFQpAAk
+---
+ CONTRACT_CHANGES.md                      | 10 +++++++++-
+ app/js/engine/audio.js                   |  2 +-
+ app/js/store.js                          |  2 +-
+ docs/release-notes-1.1.2.md              |  4 ++--
+ test/phase1/shell/dynamic-range.test.mjs | 19 +++++++++++++++++++
+ test/unit/shared/touch-curve.test.mjs    |  9 ++++++++-
+ 6 files changed, 40 insertions(+), 6 deletions(-)
+
+diff --git a/CONTRACT_CHANGES.md b/CONTRACT_CHANGES.md
+index df8b94f..af49275 100644
+--- a/CONTRACT_CHANGES.md
++++ b/CONTRACT_CHANGES.md
+@@ -6827,4 +6827,12 @@ slot…` (test 31): "Perform reads slot 3 once per clock frame or sleeps (0.25)"
+   (the single-layer 24 dB) stop at 3× (72 dB, +12 dB top), as before.
+ - No engine file changes (audio.js / sampler.js call the shared functions). Store clamp follows `validDynRange`.
+ - 2.0 (v2-native) clamps `dynamicRange` to 1..3 in the native core until lane TOUCH (D43) lands; a 1.1.2 value above 3
+-  plays at 3× there.
++  plays at 3× there. Its store (`validDynRange`, DYN_RANGE.max 3) also clamps on import, so the value is kept as 3.
++- **Open (v112-skeptic):** lane-touch's D43 law (249bf16, `r = min(range, 72 / spanDb)`) widens pianos symmetrically
++  around DYN_PIVOT past 3× (+12.5 dB at the top at 6×), not downwards only as here (+5 dB). Same 60 dB span, different
++  levels: ranges ≤ 3 agree bit for bit, ranges above 3 don't. Pick one law before TOUCH merges.
++- Settings › Your keyboards fit result: the hard median now plays just below full, so the line reads "…about 15% and
++  N%; your hardest (top) reach full volume" (still "…and full volume" when the hard notes are all equal).
++- Tests: `dynamic-range.test.mjs` compares velocityDb with a frozen copy of the 1.1.1 formula (`===`, v step 0.001,
++  ranges 1..3 step 0.01, spans 10 / 24) and checks no v is louder past 3× than at 3×; settings suite checks the Range
++  row at 6× (max, "pianos 60 dB, hardest +5.0 dB; … 72 dB, hardest +12.0 dB", "6.0×").
+diff --git a/app/js/engine/audio.js b/app/js/engine/audio.js
+index be6e667..193a714 100644
+--- a/app/js/engine/audio.js
++++ b/app/js/engine/audio.js
+@@ -1420,7 +1420,7 @@ export class AudioEngine extends EventTarget {
+   /**
+    * settings.dynamicRange (shared/touch-curve.js velocityDb): how far sampled instruments spread soft from loud.
+    * Takes effect on the next note (held notes keep their gain). Synth and organ voices are unchanged.
+-   * @param {number} range 1..3 (1 = the built-in spans)
++   * @param {number} range 1..6 (1 = the built-in spans; 1.1.2: was 1..3)
+    * @returns {number} the range in use
+    */
+   setDynamicRange(range) {
+diff --git a/app/js/store.js b/app/js/store.js
+index 958cc44..c33479b 100644
+--- a/app/js/store.js
++++ b/app/js/store.js
+@@ -1055,7 +1055,7 @@ export function createStore(opts = {}) {
+       if (k === 'updateCheck') return typeof value === 'boolean' ? { segs, value } : null;
+       if (k === 'dynamicRange') {
+         if (value === null || value === undefined) return { segs, value: undefined };
+-        const v = validDynRange(value); // a number, clamped to 1..3; 1 = absent (today's sound)
++        const v = validDynRange(value); // a number, clamped to DYN_RANGE (1..6); 1 = absent (today's sound)
+         return v === null ? null : { segs, value: v === 1 ? undefined : v };
+       }
+       // v11-metronome: settings.click is set whole (normalised; empty = absent); midiClockOut is a name or null (off)
+diff --git a/docs/release-notes-1.1.2.md b/docs/release-notes-1.1.2.md
+index a61f92e..24954c1 100644
+--- a/docs/release-notes-1.1.2.md
++++ b/docs/release-notes-1.1.2.md
+@@ -20,5 +20,5 @@ The Range slider (same place) now goes up to 6×, with more room on the quiet si
+ Tip for Roland digital pianos: set the piano's own Key Touch to Light, then run Fit to my touch, then raise Range
+ until soft playing is as quiet as you want.
+ 
+-Worship Rig 2.0 reads the Range setting from a 1.1.2 backup; until 2.0 gets the wider range too, it plays a setting
+-above 3× at 3×.
++Worship Rig 2.0 reads the Range setting from a 1.1.2 backup, but for now it goes up to 3×: a setting above 3× comes
++over as 3×.
+diff --git a/test/phase1/shell/dynamic-range.test.mjs b/test/phase1/shell/dynamic-range.test.mjs
+index f39c49a..fac3274 100644
+--- a/test/phase1/shell/dynamic-range.test.mjs
++++ b/test/phase1/shell/dynamic-range.test.mjs
+@@ -22,6 +22,25 @@ test('velocityDb: range 1 is the old formula; wider = quieter below the pivot, l
+   assert.ok(Math.abs(velocityDb(1, 10, 6) - velocityDb(0, 10, 6) - 60) < 1e-9);
+   assert.ok(velocityDb(0.15, 10, 6) < velocityDb(0.15, 10, 3), 'soft quieter past 3×');
+   for (const v of [0, 0.3, DYN_PIVOT, 1]) assert.equal(velocityDb(v, 24, 6), velocityDb(v, 24, 3));
++  // 1.1.2 guards: ≤ 3× is bit for bit the 1.1.1 formula (same operation order); past 3× no v is louder than at 3×
++  const v111 = (v, s, r) => {
++    const base = -s * (1 - v);
++    return r === 1 ? base : base + s * (r - 1) * (v - DYN_PIVOT);
++  };
++  let diff = 0;
++  let louder = 0;
++  for (const span of [10, 24]) {
++    for (let i = 100; i <= 600; i++) {
++      const r = i / 100;
++      for (let k = 0; k <= 1000; k++) {
++        const v = k / 1000;
++        if (r <= 3 && velocityDb(v, span, r) !== v111(v, span, r)) diff++;
++        if (r > 3 && velocityDb(v, span, r) > velocityDb(v, span, 3)) louder++;
++      }
++    }
++  }
++  assert.equal(diff, 0, 'ranges ≤ 3 give exactly the 1.1.1 numbers');
++  assert.equal(louder, 0, 'past 3× nothing gets louder than at 3×');
+   assert.equal(validDynRange(0.5), DYN_RANGE.min);
+   assert.equal(validDynRange(9), DYN_RANGE.max);
+   assert.equal(validDynRange(1.234), 1.23);
+diff --git a/test/unit/shared/touch-curve.test.mjs b/test/unit/shared/touch-curve.test.mjs
+index fd286a0..e44be00 100644
+--- a/test/unit/shared/touch-curve.test.mjs
++++ b/test/unit/shared/touch-curve.test.mjs
+@@ -113,9 +113,16 @@ test('fitTouch 1.1.2: a spread of hard notes keeps headroom above the median (FP
+   assert.equal(r.touch.top, 110, 'full at the hardest note, not the median 99');
+   const c = T.compileTouch(r.touch);
+   assert.ok(T.touchAt(c, 105) > T.touchAt(c, 99) && T.touchAt(c, 110) > T.touchAt(c, 105), 'harder is louder');
+-  // never below the median (a set with one huge outlier low keeps the old behaviour)
++  // nearest rank: with 3..9 notes the 90th percentile is the hardest note; input order and junk don't matter
+   const few = T.fitTouch([40, 40, 40], [120, 121, 122]);
+   assert.equal(few.touch.top, 122);
++  assert.equal(T.fitTouch([40, 40, 40], [122, 'x', 120, 0, 121, 128]).touch.top, 122, 'unsorted, junk dropped');
++  assert.equal(T.fitTouch([40, 40, 40], [100, 100, 100, 100]).touch.top, 100, 'all equal = the old top');
++  assert.equal(T.fitTouch([40, 40, 40], [20, 100, 101, 102, 100, 101]).touch.top, 102, 'a low outlier changes nothing');
++  // a single accidental slam sets top (the cost of p90 over 6 notes; the result text then names it, see Settings)
++  assert.equal(T.fitTouch([40, 40, 40], [90, 91, 90, 92, 91, 127]).touch.top, 127);
++  // 10 notes: the 9th
++  assert.equal(T.fitTouch([40, 40, 40], [91, 92, 93, 94, 95, 96, 97, 98, 99, 100]).touch.top, 99);
+ });
+ 
+ test('fitTouch: too few notes or soft = hard is refused with a reason', () => {
+-- 
+2.43.0
+
