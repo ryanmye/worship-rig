@@ -10180,15 +10180,11 @@ bank was empty in the Mac / iPad app. app/js needed no change (controller.rescan
     request and the entry disabled; packs + Rescan = the auto song once, 2 bank songs; Try it, Keep, Settings'
     folder line: 4.8 s, 0 console errors, 0 HTTP ≥ 400.
 
-## n1-skeptic: pack caps follow D9 / D33 O4; iPad folder name; parity 'edge' tree (review of lane N1)
+## n1-skeptic: iPad folder name; parity 'edge' tree (review of lane N1)
 
-- **Size cap (F2).** `store.topUpPacks` and `store.addPackSong` refused a pack song that took the library past
-  `LIBRARY_MAX_CHARS` (2,000,000). D9 says a save past 2 M warns and goes through; the D33 O4 note says an add is
-  refused only past `LIBRARY_RESTORE_MAX_CHARS` (2,500,000), so the library's own backup stays restorable. Both now
-  refuse only past the restore cap (same messages: "the library is full; not added / not updated", "The library is
-  full: delete some songs first."); between 2 M and 2.5 M the song goes in and the save's `library-size` notice
-  warns, as for any save. Tests: patch-packs.test.mjs (a 2.5 M song still refused; a 2 M + 1000 song added by both).
-  docs/patch-packs.md "Limits" says so.
+- **Size cap (F2): superseded.** The review found `store.topUpPacks` / `addPackSong` refusing past 2 M (against D9
+  and the D33 O4 note); origin/v2-native's lane CAP (44a72d6, "one size rule for every add") fixed the same thing in
+  the meantime, so the review's own store.js change was dropped before merge.
 - **iPad (O3).** `/api/user-samples` `dir` / `path` on the iPad is "On My iPad › Worship Rig › Samples" (the Files
   name, `RigPaths.userSamplesShownName`) instead of the container path; `roots` keeps the real path. The Mac and any
   `RIG_USER_SAMPLES` / self-test root are unchanged.

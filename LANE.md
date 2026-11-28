@@ -90,7 +90,7 @@ Report: native/docs/reviews/n1-skeptic.md.
 - [x] read RESUMABLE, LANE, CLAUDE.md, NATIVE-GAPS N1, patch-packs.md, D9 / D33 O4
 - [x] code read: patches.cpp, js_json, js_text, sha1, hostkit_c, CLI, devhost, Swift diff
 - [x] parity: new 'edge' tree (corpus.mjs buildEdgeTree): identical to server.js
-- [x] fixes: F1 comment, F2 caps (D9 / O4), F3 parity edge tree, O3 iPad folder name, self-test Bool split
+- [x] fixes: F1 comment, F2 caps (dropped: upstream lane CAP 44a72d6 fixed it), F3 parity edge tree, O3 iPad folder name, self-test Bool split
 - [x] gates: ctest ASan 88/88, clang 88/88 (0 warnings), g++ 87/88 (unit.core3 timing under load), goldens
       byte-identical x3, devhost 21/21 + Playwright 3/3, gates.mjs 6/6 PASS (tree 92908c98031d)
 - [x] report: native/docs/reviews/n1-skeptic.md (verdict MERGE)

@@ -13,15 +13,15 @@ stack. The oracle (`app/js/engine`, `native/contract`) and `native/core/src` out
 Two things the Linux box cannot settle:
 
 - The Swift code only compiles on CI mac-check.
-- The size-cap change F2 is a policy reading. The orchestrator may prefer the old 2 MB refusal for the automatic
-  top-up (see O2).
+- The size-cap question F2 is settled upstream by lane CAP (44a72d6): pack top-up and Song bank add warn past 2 MB
+  and are refused only past 2.5 MB.
 
 ## Fixes made (commits `n1-skeptic: …`)
 
 | id | what | where |
 | --- | --- | --- |
 | F1 | patches.h's header said V8's SyntaxError texts are *not* reproduced and that pack.json errors use hostkit's own wording. Both claims are stale: since 54b7883 they are reproduced and tested. Rewritten, and the read-cap divergence (a file growing between stat and read is read up to 16 MB) is now listed. | native/core/src/hostkit/patches.h |
-| F2 | **Pack size caps vs D9 / D33 O4.** `store.topUpPacks` (auto top-up and in-place updates) and `store.addPackSong` (Song bank › Add / Keep) refused past `LIBRARY_MAX_CHARS` (2 M). D9: a save past 2 M warns and is not refused. The D33 O4 note: an add is refused only past the 2.5 M restore cap. Both now refuse only past `LIBRARY_RESTORE_MAX_CHARS`. Between 2 M and 2.5 M the song goes in, and the save's `library-size` notice warns. The messages are unchanged. This predates N1 (O-AW-PP code), but the brief requires it for pack top-up. | app/js/store.js, test/phase1/shell/patch-packs.test.mjs (+1 test), docs/patch-packs.md "Limits", CONTRACT_CHANGES |
+| F2 | **Pack size caps vs D9 / D33 O4 (superseded upstream).** `store.topUpPacks` and `store.addPackSong` refused past `LIBRARY_MAX_CHARS` (2 M). D9 says a save past 2 M warns and is not refused, and the D33 O4 note says an add is refused only past the 2.5 M restore cap. I fixed this on the branch. Then origin/v2-native merged lane CAP (44a72d6, "one size rule for every add"), which fixes the same thing with the same reading. I dropped my change (store.js, patch-packs.test.mjs, docs/patch-packs.md back to the lane's text), so the rebase takes upstream's version. | (dropped; upstream 44a72d6) |
 | F3 | Parity gaps: the builder's trees had no non-UTF-8 names, quote / backslash / control / newline names, a root that is a link, the exact 1 MiB boundary, a surrogate cut in the pack name's `.slice(0, 120)`, a UTF-16-vs-byte file-name length, `songs` as a file or link, links to a folder or through a file (ENOTDIR), 400k nesting, too-deep-then-syntax-error, repeated `id` / `bank`, `__proto__` envelopes, NFC/NFD twins, pre-1970 half-millisecond mtimes (Math.round vs `std::round`), or the 500-folder cap. Added as tree variant `edge` in parity.test.mjs: 24 songs, 13 packs, 28 errors, **identical**. | test/unit/hostkit/corpus.mjs `buildEdgeTree`, parity.test.mjs |
 | O3 | iPad Settings › My Samples would have said "Folder: /var/mobile/Containers/Data/Application/<UUID>/Documents/Samples". It now says "Folder: On My iPad › Worship Rig › Samples" (`RigPaths.userSamplesShownName`; `roots` keeps the real path; Mac, self-test and `RIG_USER_SAMPLES` unchanged). | RigPaths.swift, RigSchemeHandler.swift, MAC_CHECK step 5 |
 | — | Self-test `packs`: the 6-term `Optional == true` chain is split into one Bool per term, to cut the risk of a type-checker timeout in CI's first compile. Behaviour is unchanged. | RigSelfTest.swift |
@@ -179,7 +179,7 @@ I proved that no request fails because of it, from the code and in the devhost r
 - `native/core/src`, `native/core/include` outside `hostkit`: no file changed. `rig_core` excludes `src/hostkit/`
   through a CMake filter.
 - No pack content, audio or `user-samples/` is committed. Every pack in the tests is generated in a temp folder.
-- The only `app/` change is this review's F2 in store.js.
+- No `app/` file changes on the branch (F2 dropped).
 
 ## 6. Gates (this box: 2 CPUs, another heavy agent running; one at a time)
 
@@ -195,11 +195,7 @@ I proved that no request fails because of it, from the code and in the devhost r
 
 ## Open questions
 
-- **O2 (orchestrator, tier 2): F2's reading for the automatic top-up.** I applied D9 + O4 literally: past 2 M the
-  song goes in and the save warns; only past 2.5 M is it refused. The alternative keeps the automatic top-up at 2 M,
-  since that is not a user save and nothing is lost (it retries next start). Under that reading, only Song bank
-  Add / Keep follows O4. Either reading keeps the backup restorable. Revert the `fits()` line in `topUpPacks` if the
-  stricter reading is preferred.
+- **O2: resolved.** Upstream lane CAP made the same choice for the automatic top-up as for Song bank Add / Keep: it warns past 2 MB and is refused only past 2.5 MB.
 - **O4 (licence owner): collation_table.inc** is data derived from ICU's root collation, generated from Node's
   `Intl.Collator` (ICU 78.3 / Unicode 17). ICU data is under the Unicode License V3, which asks for its notice in
   documentation of anything containing the data or derived from it. LICENSES.md has no Unicode / ICU entry. Worth a
@@ -223,8 +219,11 @@ I proved that no request fails because of it, from the code and in the devhost r
 - iPad: the Files › On My iPad › Worship Rig › Samples folder appears, and Settings shows that name (O3).
 - `~/Music` access raises no TCC prompt (same folder as recordings, so it is expected to be fine).
 
-## Rebase onto origin/v2-native (c025001)
+## Rebase onto origin/v2-native (3f5bf2c)
 
-`git merge-tree` shows one conflict, in **CONTRACT_CHANGES.md**: both sides only append sections at the end. Keep
-both. docs/release-notes-2.0.md, MAC_CHECK.md and NATIVE-GAPS.md merge cleanly. Upstream does not touch store.js,
-controller.js or server.js.
+`git merge-tree` on the final tip shows one conflict, in **CONTRACT_CHANGES.md**: both sides only append sections at
+the end. Keep both. Once F2 was dropped, store.js, patch-packs.test.mjs and docs/patch-packs.md merge cleanly with
+lane CAP, and docs/release-notes-2.0.md, MAC_CHECK.md and NATIVE-GAPS.md auto-merge.
+
+The gates above ran on tree 92908c98031d, which still had F2. Dropping it brings the three files back to the lane's
+text, and upstream CAP replaces them on merge. Re-run shell-unit (patch-packs) and ui-v6-bank on the merged tree.
