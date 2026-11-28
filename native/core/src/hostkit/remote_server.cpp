@@ -634,6 +634,12 @@ void Server::onWs(Client &c) {
     if (c.closing) continue;
     switch (ev.kind) {
       case WsParser::Event::Ping: {
+        bool allowed;
+        {
+          std::lock_guard<std::mutex> g(mu_);
+          allowed = svc_.allowRequest(c.ip);  // pings cost a pong: the same budget as messages (skeptic-2 F1)
+        }
+        if (!allowed) return wsClose(c, 1008, "rate-limited");
         wsEncodeFrame(c.out, WsOp::Pong, ev.payload);
         flush(c);
         break;

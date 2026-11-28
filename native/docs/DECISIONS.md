@@ -707,3 +707,12 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 - Bus contract stays v1, with two optional state fields (`scene.name`, `locked`) and an optional `via:'remote'` on
   commands; the controller refuses every `via:'remote'` command but `panic` while Lock is on.
 - The QR code is drawn from a module matrix made by Nayuki's QR Code generator (MIT), vendored in the core.
+
+## D46: Settings › Mac › Remote, so the native Mac app gets its Mac category now (remote lane, tier 2, 2026-11-28)
+- The browser remote's switch, address, QR code and pairing code are a section of the Mac category, not a category of
+  their own: no change to the category list the settings suites pin, and the remote is a Mac-only feature, which is
+  exactly what that category waits for (settings.js `macFeatures`, lane N0). Consequence: in the native Mac app the
+  Mac category now appears, and its Low-resource section moves there from Look (as `macCat` already does in
+  Electron). The iPad shows no Mac category (the remote is served by the Mac app, D34).
+- The on/off setting lives in the shell (UserDefaults `rig.remote.enabled.v1`), not in the library: it belongs to this
+  Mac, and a library import must never switch a network server on.

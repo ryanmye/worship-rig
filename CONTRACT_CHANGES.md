@@ -10391,3 +10391,24 @@ What changed (native/docs/lanes/REMOTE.md §2.1–2.3; bus contract stays v1, ev
   extra corpus (166 / 217 raw-byte cases: invalid UTF-8, surrogates, 1e999, -0, depth 3000) 0 mismatches; a scratch
   bus.js with one more `AUDIO_STATES` value now fails the parity test (it didn't before review S1). Electron's
   `validateBusState` ignores the new fields; no existing test pins the state's key set.
+
+## Remote lane: the browser remote, its server and the shell's bus (D34, D45, D46; 2026-11-28)
+
+What changed (native/docs/lanes/REMOTE.md):
+- `native/core` (rig_hostkit): `rig_remote.h`, an HTTP / WebSocket server for one page, off until started: local
+  network peers only (loopback, RFC 1918, link-local, CGNAT, ULA), `Host` must be an IP literal, `localhost` or a
+  `.local` name (DNS rebinding), `Origin` absent or `http://<Host>` (no CORS; the token is a header, never a cookie),
+  6-digit pairing code → 128-bit token in memory only, 5 wrong codes per IP per minute, 20 in total rotate the code and
+  pause pairing (60 s, doubling to 1 h; Settings' "New code" ends it), 10 commands/s per phone, 30 requests/s per IP,
+  16 connections (4 per IP), Lock (from the bus state) refuses all but PANIC, a repeated command id within 30 s runs
+  once. Routes: `GET /`, `POST /api/pair`, `GET /api/state[?since=seq]` (long poll ≤ 10 s), `POST /api/cmd`, `GET /ws`.
+  `rig-remote-dev` runs it on stdin / stdout for tests. Vendored: Nayuki's QR Code generator (MIT).
+- `app/remote/index.html`: the page (ES5, plain CSS, one file; WebSocket, then long polling after two failed opens).
+- `app/js/native-shell/40-bus.js`: `rig.busPublish`, `rig.onBusCommand` (so the controller's bus uses the shell in the
+  native app instead of BroadcastChannel) and `rig.remote` (macOS). Swift: `RigBus.swift`; the self-test has a `remote`
+  step (MAC_CHECK.md).
+- `app/js/views/settings-remote.js` + 6 lines in settings.js: Settings › Mac › Remote (D46).
+- Why: D34 (a stripped-down remote for old phones), with every decision in C++ tested on Linux; Swift only relays.
+- Numbers (Linux, this box): hostkit remote suites 36 cases / 1,100+ assertions incl. 8,000 random inputs into each
+  parser and real loopback sockets; test/phase2/remote 11/11 (acorn ES5 parse + Chromium against the real server);
+  page 17 KB; long poll answers a change in < 100 ms; an unchanged long poll is held 10 s.
