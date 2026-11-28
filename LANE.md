@@ -22,14 +22,13 @@ origin/v2-native 030562e). Don't push.
 - [x] 7. Swift: RigPaths.userSampleRoots, RigSchemeHandler routes, bridging header, build-core.sh, self-test `packs`
       (+ node test of its JS)
 - [x] 8. docs: patch-packs.md, devhost README, CONTRACT_CHANGES, MAC_CHECK, release notes known gaps
-- [ ] 9. gates: ctest g++ / clang++-20 / ASan (+ goldens), gates.mjs shell-unit,unit,ui-v6-bank,ui-core,settings,
+- [x] 9. gates: ctest g++ / clang++-20 / ASan (+ goldens), gates.mjs shell-unit,unit,ui-v6-bank,ui-core,settings,
       migration-1x
-- [ ] 10. final report here
+- [x] 10. final report here (below)
 
 ## Next step
 
-9: native gates running (/home/claude/scratch/n1/native-gates.sh, logs .probe/gate-*.log, .probe/gates-native.log;
-reruns skip configs with .probe/gate-<name>.done), then JS gates via gates.mjs, then the report.
+None: lane done, handed back (report below).
 
 ## Findings / decisions
 
@@ -48,3 +47,37 @@ reruns skip configs with .probe/gate-<name>.done), then JS gates via gates.mjs, 
   "which no My Samples pack has" for every user: ref there, which would be false on the native app's side.
 
 ## Open questions
+- Swift /api/health now always says userSamples: true (+ 'user-samples'), so Settings › My Samples shows the folder
+  and Rescan on the native app. Until N2 the folder holds no instruments the native app plays ("No sample instruments
+  yet"); Rescan goes through BridgeEngine.reloadManifests (core), no HTTP request. Check on the Mac (MAC_CHECK).
+
+## Gates (tree 212aa4a, clean; 2026-11-27)
+
+- ctest, native/core: g++ Release 88/88 (rerun at HEAD; the first run's unit.core3 failed a timing bound by 0.02 ms,
+  50.0175 vs 50 ms tick gap, while two-CPU load; it passes on the rerun, and lane N1 touches no core source);
+  clang++-20 Release (-Werror via RigWarnings.cmake, 0 warnings) 88/88; g++ ASan+UBSan RelWithDebInfo 88/88.
+  Includes unit.hostkit-json / -scan / -text / -parity and golden.* (12 lists).
+- Fixtures: the 112 golden renders of the g++ and clang builds are byte-identical (cmp); no file under app/,
+  native/contract or native/core/src outside src/hostkit changed on the lane.
+- native/devhost: devhost_tests 21/21 cases (233 assertions); opt-in node tests with RIG_DEVHOST
+  (songbank-devhost.test.mjs: Song bank on rig-devhost, no pack, Rescan, Try it, Keep, Settings;
+  engine-bridge/devhost.test.mjs) 3/3 pass.
+- gates.mjs: shell-unit, unit (715 pass / 0 fail / 13 skipped; hostkit parity byte for byte on generated trees,
+  packsProbe), ui-v6-bank, ui-core, settings, migration-1x all PASS. (A first settings run died on a Chromium
+  "Target page closed" crash mid-suite, environment; the rerun passed.)
+
+## Final report
+
+Built: rig_hostkit (native/core/src/hostkit, static, no rig_core dependency): port of server.js scanUserPatches /
+hasUserPatches with JS-exact JSON.parse/stringify, localeCompare(numeric, base), sha1; C API rig_hostkit.h; CLI
+rig-hostkit. Served by rig-devhost --user-samples (health flags, /api/user-patches, /api/user-samples summary,
+manifest) and by RigSchemeHandler (health flags via rig_hostkit_has_patches, /api/user-patches via
+rig_hostkit_user_patches_json, both off the main thread; roots RigPaths.userSampleRoots: self-test temp root, else
+RIG_USER_SAMPLES, else ~/Music/Worship Rig/Samples or iPad Documents/Samples). Self-test step `packs`.
+app/js/engine unchanged. No pack content committed (tests generate synthetic packs).
+
+Mac-only (CI mac-check / Ryan's Mac): Swift compiles (RigPaths, RigSchemeHandler, RigSelfTest, bridging header),
+build-core.sh archives rig_hostkit into the slice; self-test `packs` passes; a real ~/Music/Worship Rig/Samples
+pack shows up (auto song joins the library, Song bank lists bank songs, Add to library); iPad Files shows
+Worship Rig › Samples; Settings › My Samples on native with userSamples: true reads sensibly.
+
