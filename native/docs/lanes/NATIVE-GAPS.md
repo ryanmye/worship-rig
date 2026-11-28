@@ -221,6 +221,10 @@ Total [E]: N1 2.0 + N0 1.5 + N10 1.0 + N2 2.0 + N3 1.5 + N5 1.5 + N4 1.5 + N8 1.
 
 ### N0: native shell surface: polyfill files and capability flags (1.5 d)
 
+- Added by the orchestrator from NMA review O3/O5: the shell sends `play panic` (all notes off, pedal up; drone kept) on
+  every page load, not only on a WebContent crash, and the NativeMidiAccess adapter retries a failed first `midi
+  listen` (backoff, then on the next hot-plug) instead of staying failed for the page's life.
+
 - **Scope:**
   - Move the `window.rig` polyfill from the Swift string (RigLibrary.swift:186-217) into
     `native/apple/Resources/shell/*.js`: `00-core.js` (`call`, `menu`, `onMenu`, flags) plus one file per feature.
