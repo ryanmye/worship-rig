@@ -576,13 +576,22 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
 - [ ] 15. **The new layout** (Settings › Look › Perform view › Try the new layout): go through U9-review-list.md
   sections 2–9 and answer each numbered item:
   - [ ] Perform: 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 52, 53, 54
-  - [ ] Song bank and Try it: 26, 28 (needs a pack: run Chrome for this until the app reads My Samples)
+  - [ ] Song bank and Try it: 26, 28 (in the app now: item 16 sets up a pack)
   - [ ] MIDI Learn: 29, 30, 31, 32, 33
   - [ ] Edit: 34, 35, 36, 37
   - [ ] Settings: 38
   - [ ] iPad and small windows: 51, 39, 40, 41
   - [ ] Themes and colour: 42, 43, 44, 45, 46, 47
   - [ ] Esc: 48; design passes: 49, 50
+
+- [ ] 16. **Patch packs and the Song bank in the app** (lane N1): copy one of your real packs (or the
+  `docs/patch-packs.md` example) into `~/Music/Worship Rig/Samples/`, with a bank pack (`pack.json` `"mode": "bank"`)
+  and an auto pack; a folder name with a space and an accent if you have one. Open the app: the auto pack's songs are
+  at the end of the library (once: quit and reopen, no duplicates); Settings › Sounds & Samples shows "Folder:
+  …/Music/Worship Rig/Samples" and "n ready-made songs"; Song bank › Try it plays one, Keep adds it. Add a song file
+  while the app is open, Rescan: it appears. With Chrome (1.x server) on the same folder, the same songs come in with
+  the same ids (no second copy when you import a Chrome library backup into the app). A pack song that uses a My
+  Samples instrument loads with that part silent (lane N2 brings the sound).
 
 ### Step 5: iPad install (Ryan; needs his Apple ID)
 
@@ -597,6 +606,10 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
   only, full screen (`project.yml`); U9 item 51 decides whether it should (then items 35, 41 apply).
 - [ ] Note the free-account limits for the release notes (7-day expiry, data kept on re-install).
 - [ ] The iPad memory budget and its Auto voice limit (Lane E6) stay for 2.0.x unless Ryan wants them first.
+- [ ] **Patch packs on the iPad** (lane N1): Files › On My iPad › Worship Rig shows a **Samples** folder after the
+  first launch; copy (or AirDrop to Files) a pack folder into it; Settings › Rescan; the Song bank lists its bank
+  songs, Try it / Keep work, the auto songs join the library. An iCloud Drive or USB folder is not read (only the
+  app's own Samples folder: picking another folder is lane N2).
 
 ### Step 6: switch the new layout on by default (U9, tier 1: Ryan says when)
 
@@ -697,7 +710,8 @@ What the run is like:
   `rig_apple_null_sink` (a pthread calling `rig_render` at 48 kHz, 128 frames, paced to the wall clock, output
   thrown away after measuring it). No Core Audio device is opened; the runner has none.
 - Isolation, so a run on Ryan's Mac leaves nothing behind: a non-persistent `WKWebsiteDataStore` (no localStorage in
-  the app's real store), backups and recordings under `$TMPDIR/worship-rig-selftest-<pid>` (deleted at the end),
+  the app's real store), backups, recordings and the My Samples root (`Samples/`, lane N1) under
+  `$TMPDIR/worship-rig-selftest-<pid>` (deleted at the end; RIG_USER_SAMPLES is ignored in the self-test),
   the migration answer not written to UserDefaults, Application Support never scanned (only
   `RIG_ELECTRON_BACKUPS`), every RigLibrary dialog answered Yes without being shown. CoreMIDI is created as in the
   app (a client and two ports; no source is connected).
@@ -715,6 +729,7 @@ Checks, in order (`required: false` ones are reported, not gated):
 | `store` | `__rig.store` exists, `get().schema === 2`, at least one song, `loadInfo.status` `ok` or `fresh` |
 | `audio` | the page's `audio start` reached the shell: ≥ 12000 frames on the null output within 5 s, 0 render errors, a `state` event `running` |
 | `note` (not required) | `play {e:'input'}` + note 60 vel 100 through `rig_post` on the song the page committed: peak > -100 dBFS within 0.6 s |
+| `packs` (lane N1) | no `/api/user-patches` request before any pack exists; then the probe builds four files from the current song's export (an auto pack `N1 Auto Ä`, a bank pack `N1 Bank` with `pack.json` and two songs: spaces and non-ASCII on purpose), the shell writes them under `<temp>/Samples` (the self-test's My Samples root), and `controller.rescanPatchPacks()`: `/api/health` says `userPatches: true`, the auto song is in the library, the Song bank has 2 songs, Add to library works, no pack errors (`rig_hostkit` through `RigSchemeHandler`) |
 | `migration` (with `RIG_ELECTRON_BACKUPS`) | `RigLibrary.offerFirstLaunchImport` (newest backup there that parses: the fixture's newer truncated file is skipped, review E5 item 3; pristine library, auto Yes) staged the file, `controller.onMenu('importLatestBackup')` imported it, and a song named the marker is in the library with schema 2 within 10 s |
 | `midi` (not required) | `MIDIClientCreateWithBlock` returned 0 |
 | `webcontent` | no WebContent process termination |
@@ -760,6 +775,10 @@ What it cannot cover (stays on the Tier 2 list):
 - The SwiftUI scene path itself (`WindowGroup`, `RigWebView`, `.onOpenURL`, the menu commands): the self-test builds
   its own window around the same `RigHost`.
 - The iPad target (the mode is macOS only).
+
+Lane N1 (2026-11-27): the `packs` step's JS (`packsProbe`) runs in `test/unit/selftest/selftest-scripts.test.mjs`
+against the real store and server.js's scanner; the Swift around it (RigPaths.userSampleRoots, the RigSchemeHandler
+routes calling `rig_hostkit`, the bridging header) is unbuilt until mac-check.
 
 Verified before CI (Linux, 2026-11-25): `rig_apple_null_sink` against the realtime core
 (`native/apple/selftest/run-null-sink-test.sh`, gcc 13 / clang 20 `-Werror`, TSan clean); the three JS bodies, the

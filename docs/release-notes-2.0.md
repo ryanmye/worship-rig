@@ -116,8 +116,9 @@ Settings) with search and Key, Tempo (under 80, 80–114, 115 and up), Feel and 
 song in place of the current one without saving anything; the banner then offers **Keep it**, **Add to setlist** or
 **Back** (the song you had, exactly as it was).
 
-Patch packs and the Song bank work in the Chrome version today; the Mac and iPad app don't read My Samples yet (see
-"Known gaps").
+Patch packs and the Song bank work in the Mac and iPad app too: on the Mac the packs go in
+`~/Music/Worship Rig/Samples`, on the iPad in **Files › On My iPad › Worship Rig › Samples**. A pack song that uses
+your own My Samples instruments loads, but those parts stay silent in the app for now (see "Known gaps").
 
 ### The new layout (preview)
 
@@ -296,8 +297,8 @@ Required Notice: Copyright Ryan Ye (https://github.com/ryanmye)
 
 **Not in the Mac and iPad app yet** (they work in the Chrome version; the 1.x Mac app had them):
 
-- **My Samples**, **patch packs** and the **Song bank**: the app doesn't read the My Samples folder yet, so its Song
-  bank is empty, and the **GarageBand / Logic importer** isn't there.
+- **My Samples** instruments: the app reads patch packs and the Song bank from the My Samples folder, but not its
+  sample instruments yet, so a part that uses one is silent; the **GarageBand / Logic importer** isn't there.
 - **My Pads**: a pad folder can't be chosen yet; the drone uses the synth drone.
 - **Menu-bar mode**, **Open at login**, **global shortcuts** and the **update check**.
 - **MIDI clock out** for the click.

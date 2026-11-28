@@ -104,5 +104,11 @@ can restore, is skipped with a message and tried again at the next start. The So
 ## Where it works
 
 - **Mac app (Electron) and the Chrome version:** fully supported.
-- **The native 2.0 shell:** doesn't serve My Samples yet. Its `/api/health` says `userPatches: false`, so the
-  app never asks for packs there.
+- **The native 2.0 app (Mac and iPad):** packs and the Song bank work. The Mac app reads
+  `~/Music/Worship Rig/Samples/` (`RIG_USER_SAMPLES` replaces it, as above; there is no `<repo>/user-samples/` in the
+  app). On the iPad the folder is **Files › On My iPad › Worship Rig › Samples**: copy a pack folder there (Files or
+  AirDrop), then press **Rescan**. The native app reads the same files, applies the same limits and gives every song
+  the same id and hash as server.js (the scanner is a C++ port, `native/core/src/hostkit`, checked against server.js
+  byte for byte), so a library moved between the two never takes a pack song twice. Songs that use My Samples
+  instruments (`user:<id>`) load, but those slots stay silent in the native app until My Samples sound comes to it
+  (it doesn't warn about them yet).

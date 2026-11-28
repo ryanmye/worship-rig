@@ -10123,3 +10123,59 @@ touch fitting, the MIDI lamp and the clock-out choice all hung on it).
 - **Residual risk.** Iteration time is wall time, so an iteration preempted on a loaded box counts as held (up to
   158 ms seen at load ~10, still under the load-adapted bound). The same check would suit test_core3's tick-gap
   bounds (not changed here).
+
+## N1: patch packs and the Song bank in the native app (rig_hostkit; NATIVE-GAPS §2 "N1", D35 wave 1)
+
+Why: the native shell answered `/api/health` with `userPatches: false` and an empty `/api/user-patches`, so the Song
+bank was empty in the Mac / iPad app. app/js needed no change (controller.rescanPatchPacks already speaks `rig:`).
+
+- **New C library `rig_hostkit`** (`native/core/include/rig/rig_hostkit.h`, `src/hostkit/`, its own static target,
+  not linked into `rig_core`; yyjson from `rig_third_party`). Pure, reentrant, `[any]` thread, may block on file I/O:
+  - `char *rig_hostkit_scan_patches(const char *roots_json, const char *user_ids_json)`: server.js
+    `scanUserPatches(roots, {userIds})` as `JSON.stringify` writes it. `user_ids_json` NULL / `"null"` = no `user:`
+    check, else a JSON array of `user:<id>` refs.
+  - `char *rig_hostkit_user_patches_json(roots, ids)`: the `/api/user-patches` body (`{app, kind, enabled: true,
+    patches, packs, errors}`).
+  - `int rig_hostkit_has_patches(const char *roots_json)`: server.js `hasUserPatches` (the health flag).
+  - `void rig_hostkit_free(char *)`.
+  - Ported line for line: listPackDirs (realpath, links out of a root, earlier root wins a slug, 500 packs),
+    packSongFiles, readPackJson, checkPatchEntry, userRefsOf, deeperThan, within, every cap and message; Node's fs error
+    texts (libuv's table, e.g. `ENOENT: no such file or directory, realpath '<path>'`); `path.resolve` / `path.join`.
+  - Not yyjson's raw numbers (the NATIVE-GAPS plan): JS semantics are modelled instead, because the pack hash is sha1
+    of `JSON.stringify([schema, song, bank])`: an iterative JSON.parse with V8's grammar and V8's SyntaxError texts
+    (positions in UTF-16 units, `(line l column c)`, the 10-character context of "Unexpected token"), repeated keys
+    (first position, last value), array-index keys first, doubles (yyjson's correctly rounded reader; overflow =
+    Infinity) written as Number#toString (`std::to_chars` shortest: macOS 13.3 / iOS 16.3+, inside the 14.5 / 17.5
+    floors), lone surrogates kept (WTF-8) and escaped as `\udxxx`; Node's UTF-8 decoding (WHATWG U+FFFD), `.length`,
+    `.slice(0, n)`, `.trim()` in UTF-16 units.
+  - Sorting (`localeCompare(b, undefined, {numeric: true, sensitivity: 'base'})` over libuv's strcmp-ordered
+    readdir): a primary-weight model of ICU root generated from Node's own collator
+    (`tools/hostkit/gen-collation.mjs` → `collation_table.inc`, 3218 runs, 176 expansions, Hangul as jamo, Nd digits
+    as numbers; Node 22.23.5 / ICU 78.3). Regenerate it when Electron's / Node's ICU moves (the parity test notices).
+  - Divergences kept: a FIFO / device named `pack.json` reads as empty (server.js blocks on it forever); a name
+    sorted outside the modelled blocks (or using number forms, Suzhou numerals, `ŀ`) may order differently.
+- **rig-devhost `--user-samples DIR`** (repeatable): `/api/health` → `userSamples: true`, `userPatches` and
+  `features: ['user-samples'(, 'user-patches')]` per request; `/api/user-patches` from hostkit (`user:` not checked);
+  `/api/user-samples` with `dir` / `roots` (no instrument scan). Without the flag: unchanged, plus
+  `/api/user-patches` → the server's `enabled: false` empty list instead of a 404.
+- **Apple shell** (unbuilt here; mac-check compiles it): `RigPaths.userSampleRoots` (self-test temp root first, then
+  `RIG_USER_SAMPLES`, else Mac `~/Music/Worship Rig/Samples`, iPad `Documents/Samples`, created at launch so Files
+  shows it) and `userSampleRootsJSON`; `RigSchemeHandler` `/api/health` now `userSamples: true`, `userPatches` from
+  `rig_hostkit_has_patches`, features `['native', 'user-samples'(, 'user-patches')]`, `/api/user-patches` from
+  `rig_hostkit_user_patches_json`, both on the scheme handler's concurrent queue; `/api/user-samples` → `enabled:
+  true`, `dir` = the first root (Settings shows "Folder: …" and a Rescan button); the manifest stays empty (no audio
+  over `rig://`; lane N2). Bridging header includes `rig_hostkit.h`; `build-core.sh` builds `rig_core rig_hostkit`
+  (its `.a` joins `librig_core_all.a`). Self-test step `packs` (MAC_CHECK "Self-test").
+- Tests: ctest `unit.hostkit-json`, `unit.hostkit-text`, `unit.hostkit-scan` (rig_hostkit_tests: 15 cases, 132
+  assertions; pack.json variants, links, dangling / loop links, BOM, too large, nested, caps, unicode slugs, the
+  surrogate cut of `.slice(0, 40)`, roots and duplicates) and `unit.hostkit-parity` (node, below);
+  `unit.devhost-relay` gains the `--user-samples` case; `test/unit/selftest` runs `packsProbe` on the real store.
+- Measured (this box, Node 22.23.5, g++ 13 Release):
+  - parity, byte for byte: 20065 generated JSON texts (15475 valid, 4590 invalid: stringify output and SyntaxError
+    text identical for all), 3000 strings (decode / length / slice / trim), 9000 realistic names (identical order),
+    two generated trees: "main" (342 songs, 25 packs, 59 errors; with a `user:` id list 61) and "caps" (2000 songs,
+    8 MB cap, 3 errors), and server.js's real `/api/user-patches` / `/api/health` over HTTP: identical.
+  - exotic names (every modelled block, Hangul, emoji; 3000): 21 adjacent inversions against ICU.
+  - Playwright on rig-devhost (`songbank-devhost.test.mjs`, the real UI v6 on the native core): no pack = no
+    request and the entry disabled; packs + Rescan = the auto song once, 2 bank songs; Try it, Keep, Settings'
+    folder line: 4.8 s, 0 console errors, 0 HTTP ≥ 400.

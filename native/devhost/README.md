@@ -36,6 +36,7 @@ native/core/build-t09/rig-devhost --backend null --port 0         # headless (CI
 | `--no-serve` | | WebSocket only; serve the UI elsewhere and open it with `?devhost=ws://host:port/__rig/ws` |
 | `--no-patch-main` | | serve `js/main.js` unchanged (then the page uses the Web Audio engine) |
 | `--seed N`, `--exit-after SEC`, `--repo DIR` | | engine seed; stop after SEC (tests); repository root |
+| `--user-samples DIR` | off | a My Samples folder (repeat for more roots, earlier wins a pack name): serves its patch packs like server.js and the Mac app (rig_hostkit, lane N1) |
 
 ## What it serves
 
@@ -44,6 +45,12 @@ native/core/build-t09/rig-devhost --backend null --port 0         # headless (CI
   `boot-smoke.mjs` and the Apple `RigSchemeHandler` do; no file under `app/` is edited).
 - `/__bridge/engine-api.json` (the contract), `/api/health` (`userSamples:false`, `devhost:true`),
   `/api/user-samples*` (empty), `/api/pads` (empty), `/api/heartbeat` and `/favicon.ico` (204). Other `/api/*`: 404.
+- With `--user-samples` (lane N1): `/api/health` says `userSamples:true` and, when a pack there has a
+  `songs/*.json`, `userPatches:true` with `features: ['user-samples', 'user-patches']` (checked per request, no
+  cache); `/api/user-patches` is `rig_hostkit_user_patches_json` (server.js's body byte for byte, `user:` ids not
+  checked); `/api/user-samples` names the first root as `dir`. Without it `/api/user-patches` answers the
+  `enabled:false` empty list. The Song bank end to end: `RIG_DEVHOST=<bin> node --test
+  test/unit/hostkit/songbank-devhost.test.mjs`.
   No pads folder, no My Samples, no MIDI ports, no AAC decode (`decode_file` NULL): those ops answer `unsupported`.
 - `/__rig/ws`: the BRIDGE v1 link. Upgrades from a browser page on another site are refused with 403 (any site may
   open `ws://127.0.0.1`): allowed are no `Origin` (Node, tests), loopback origins on any port, and the request's own

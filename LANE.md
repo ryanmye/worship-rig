@@ -17,18 +17,19 @@ origin/v2-native 030562e). Don't push.
 - [x] 2. differential test vs node: JSON.parse/stringify on a generated corpus; collation order vs Intl.Collator
 - [x] 3. scanner port + C API (`rig_hostkit_scan_patches`, `rig_hostkit_has_patches`, `rig_hostkit_free`) + ctest
 - [x] 4. node parity test (server.js vs CLI on generated trees), wired as a ctest and an opt-in node test
-- [ ] 5. devhost routes (`--user-samples`), devhost test
-- [ ] 6. Playwright: real app on rig-devhost, Song bank from a generated pack, Try it, Keep
-- [ ] 7. Swift: RigPaths.userSampleRoots, RigSchemeHandler routes, bridging header, build-core.sh, self-test `packs`
+- [x] 5. devhost routes (`--user-samples`), devhost test
+- [x] 6. Playwright: real app on rig-devhost, Song bank from a generated pack, Try it, Keep
+- [x] 7. Swift: RigPaths.userSampleRoots, RigSchemeHandler routes, bridging header, build-core.sh, self-test `packs`
       (+ node test of its JS)
-- [ ] 8. docs: patch-packs.md, devhost README, CONTRACT_CHANGES, MAC_CHECK, release notes known gaps
+- [x] 8. docs: patch-packs.md, devhost README, CONTRACT_CHANGES, MAC_CHECK, release notes known gaps
 - [ ] 9. gates: ctest g++ / clang++-20 / ASan (+ goldens), gates.mjs shell-unit,unit,ui-v6-bank,ui-core,settings,
       migration-1x
 - [ ] 10. final report here
 
 ## Next step
 
-5 (devhost routes).
+9: native gates running (/home/claude/scratch/n1/native-gates.sh, logs .probe/gate-*.log, .probe/gates-native.log;
+reruns skip configs with .probe/gate-<name>.done), then JS gates via gates.mjs, then the report.
 
 ## Findings / decisions
 

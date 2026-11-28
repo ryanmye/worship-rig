@@ -452,6 +452,10 @@ output: a DAW follows tempo; another output does not receive it" (NMA's skeptic 
 6. **Hash parity** between a yyjson-written `[schema, song, bank]` and `JSON.stringify` for hand-written pack files
    (numbers like `5.0`, escapes). A mismatch makes one rescan re-record unedited songs in place (store.js topUpPacks
    "rec.hash !== e.hash" path), which should be invisible, but I did not trace the edited-song branch's notices. [U]
+   **Resolved by lane N1 (2026-11-27):** raw-number yyjson would not have matched (`5.0`, `1E2`, escapes, repeated
+   and index keys; yyjson also rejects the lone `\udXXX` escapes JSON.parse accepts). rig_hostkit models JSON.parse
+   and JSON.stringify instead and matches server.js byte for byte, hashes and error texts included
+   (test/unit/hostkit/parity.test.mjs; CONTRACT_CHANGES "N1").
 7. **iPad folder access**: bookmark persistence for USB / iCloud Drive folders, iCloud placeholders the decoder can't
    read, and whether `shareddocuments://` opens Files at a given folder. [U]
 8. **Licence**: whether copying Mac-converted GarageBand packs to Ryan's own iPad is within "personal use". The repo's

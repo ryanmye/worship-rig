@@ -34,7 +34,10 @@ struct TempDir {
   std::string path;
   TempDir() {
     char tmpl[] = "/tmp/rig hostkit test-XXXXXX";  // a space on purpose
-    path = ::mkdtemp(tmpl);
+    // realpath: on macOS /tmp is a link to /private/tmp, and the scanner reports pack folders by their real path
+    char *real = ::realpath(::mkdtemp(tmpl), nullptr);
+    path = real;
+    std::free(real);
   }
   ~TempDir() {
     const std::string cmd = "rm -rf '" + path + "'";
