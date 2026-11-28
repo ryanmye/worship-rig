@@ -335,7 +335,9 @@ async function runMode(mode, browser) {
       await play([96, 100, 98, 97, 99, 98]);
       await until((r) => document.querySelector(`${r} .st-kb-result`)?.dataset.result === 'ok', row);
       assert.match(await page.textContent(`${row} .st-kb-result`), /around 24, hard around 98/);
-      assert.match(await page.textContent(`${row} .st-kb-result`), /play at about 15% and full volume/, 'FIT_SOFT_TARGET');
+      // 1.1.2: full at the hardest hard note (100, the 90th percentile of 6), the median 98 just below it
+      assert.match(await page.textContent(`${row} .st-kb-result`),
+        /play at about 15% and 9\d%; your hardest \(100\) reach full volume/, 'FIT_SOFT_TARGET');
       // screenshot pass 2026-11-20: btn()'s {class} used to replace the tag's .ed-btn, leaving native grey buttons
       const unstyled = await ev((r) => [...document.querySelectorAll(`.st-kbs button`)]
         .filter((b) => !b.classList.contains('ed-btn')).map((b) => b.className), row);
@@ -345,9 +347,9 @@ async function runMode(mode, browser) {
       await page.click(`${row} .st-kb-use`);
       await until(() => !!window.__rig.store.get().settings.keyboards?.['@computer']?.touch);
       const t = await ev(() => window.__rig.store.get().settings.keyboards['@computer'].touch);
-      assert.equal(t.top, 98);
-      // soft 24 of full-at-98 lands on FIT_SOFT_TARGET (0.15, Ryan Q5)
-      assert.ok(Math.abs(Math.pow(24 / 98, t.shape) - 0.15) < 0.01, `soft notes land on 15 % (${t.shape})`);
+      assert.equal(t.top, 100, '1.1.2: the hardest hard note, not the median 98');
+      // soft 24 of full-at-100 lands on FIT_SOFT_TARGET (0.15, Ryan Q5)
+      assert.ok(Math.abs(Math.pow(24 / 100, t.shape) - 0.15) < 0.01, `soft notes land on 15 % (${t.shape})`);
       await until((r) => /Own touch/.test(document.querySelector(`${r} .st-kb-sum`).textContent), row);
       // played notes now carry the curve; the velocity is raw (the Touch setting no longer applies to these keys)
       const call = await ev(() => {
@@ -383,6 +385,14 @@ async function runMode(mode, browser) {
       await page.click(`${tb} .st-kb-forget`);
       await until((r) => !document.querySelector(r), tb);
       assert.deepEqual(await ev(() => window.__rig.midi.remembered), []);
+      // 1.1.2: Range goes to 6×; pianos widen downwards only (top stays +5 dB), the others stay at 72 dB
+      assert.equal(await page.getAttribute('[data-testid="setting-dynamic-range"]', 'max'), '6');
+      await ev(() => window.__rig.store.set('settings.dynamicRange', 6));
+      await until(() => /pianos 60 dB, hardest \+5\.0 dB; other sampled sounds 72 dB, hardest \+12\.0 dB/
+        .test(document.querySelector('[data-testid="dynamic-range-span"]').textContent));
+      assert.equal(await page.textContent('[data-testid="dynamic-range-value"]'), '6.0×');
+      await ev(() => window.__rig.store.set('settings.dynamicRange', null));
+      await until(() => !('dynamicRange' in window.__rig.store.get().settings));
       await page.click(`${row} .st-kb-touch`); // close the editor again
     });
 

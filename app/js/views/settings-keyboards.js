@@ -311,9 +311,13 @@ export function mountKeyboards({ store, controller, midi, listen, toast = () => 
       return;
     }
     row.preview(r.touch, [r.soft, r.hard]);
+    // 1.1.2: full is reached at the hardest hard notes (fitTouch top), so the median hard note can sit just below it
+    const hardLevel = touchAt(compileTouch(r.touch), r.hard);
+    const loud = hardLevel > 0.995 ? 'full volume'
+      : `${pct(hardLevel)}; your hardest (${r.touch.top}) reach full volume`;
     row.fitBox.replaceChildren(
       h('span.st-kb-result', { dataset: { result: 'ok' }, text: `Soft notes came in around ${Math.round(r.soft)}, hard `
-        + `around ${Math.round(r.hard)}. With this curve they play at about ${pct(FIT_SOFT_TARGET)} and full volume.` }),
+        + `around ${Math.round(r.hard)}. With this curve they play at about ${pct(FIT_SOFT_TARGET)} and ${loud}.` }),
       btn('Use this', () => {
         stopFit();
         row.fitBox.replaceChildren();
