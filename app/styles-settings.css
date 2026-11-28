@@ -309,29 +309,58 @@
 .st-kb-remember.on {
   background: var(--accent, #ffc94d); color: var(--accent-ink, #1a1400); border-color: var(--accent, #ffc94d);
 }
-.st-kb-edit { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr); gap: 8px 14px; margin-top: 8px; }
+.st-kb-edit { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .st-kb-edit[hidden] { display: none; }
-.st-kb-graph { display: flex; flex-direction: column; gap: 4px; }
-.st-kb-curve { width: 100%; height: auto; background: var(--panel, #15181d); border: 1px solid var(--line, #2d333d);
-  border-radius: 6px; }
 .st-kb-ref { stroke: var(--line-2, #3a414d); stroke-width: 1.2; stroke-dasharray: 3 3; }
 .st-kb-line { stroke: var(--accent, #ffc94d); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
-.st-kb-mark { fill: var(--text, #f1f4f8); }
-.st-kb-sliders { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.st-kb-mark { fill: var(--text, #f1f4f8); stroke: var(--panel, #15181d); stroke-width: 1; }
 .st-kb-slider {
   display: grid; grid-template-columns: 110px minmax(0, 1fr) 52px; align-items: center; gap: 8px; font-size: 13px;
 }
 .st-kb-slider input { width: 100%; min-width: 0; accent-color: var(--accent, #ffc94d); }
 .st-kb-val { font-variant-numeric: tabular-nums; color: var(--muted, #a3acb8); text-align: right; }
-.st-kb-btns, .st-kb-fit { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.st-kb-fit:empty { display: none; }
+.st-kb-btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .st-kb-prompt { color: var(--accent, #ffc94d); font-size: 15px; }
 .st-kb-result { font-size: 14px; }
-@media (max-width: 560px) {
-  .st-kb-edit { grid-template-columns: minmax(0, 1fr); }
-  .st-kb-slider { grid-template-columns: 90px minmax(0, 1fr) 46px; }
+/* TOUCH (D43): the calibration editor (components/velocity-editor.js). Theme tokens only: the points carry a ring in
+   --text so they read in the colour-blind modes and on the Day themes without relying on the accent hue. */
+.st-cal { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 8px 16px; }
+.st-cal-left, .st-cal-right { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.st-cal-graph { width: 100%; height: auto; touch-action: none; user-select: none; }
+.st-cal-bg { fill: var(--panel, #15181d); stroke: var(--line, #2d333d); }
+.st-cal-grid { stroke: var(--line, #2d333d); stroke-width: 0.6; }
+.st-cal-tick { fill: var(--muted, #a3acb8); font-size: 8.5px; font-variant-numeric: tabular-nums; }
+.st-cal-hist rect { fill: var(--muted, #a3acb8); opacity: 0.28; }
+.st-cal-live { stroke: var(--text, #f1f4f8); stroke-width: 1; stroke-dasharray: 2 2; opacity: 0.8; }
+.st-cal-livedot { fill: var(--text, #f1f4f8); }
+.st-cal-pt { fill: var(--accent, #ffc94d); stroke: var(--text, #f1f4f8); stroke-width: 1.5; cursor: grab; }
+.st-cal-pt:hover, .st-cal-pt:focus-visible { stroke-width: 3; outline: none; }
+.st-cal-pt:active { cursor: grabbing; }
+.st-cal-readout { font-size: 14px; font-variant-numeric: tabular-nums; font-weight: 650; }
+.st-cal-presets, .st-cal-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.st-cal .ed-btn, .st-cal-fit .ed-btn { min-height: 30px; padding: 0 10px; font-size: 13px; }
+.st-cal-preset.on {
+  background: var(--accent, #ffc94d); color: var(--accent-ink, #1a1400); border-color: var(--accent, #ffc94d);
 }
-/* settings.dynamicRange (Ryan 2026-11-20): the Range slider above the keyboard list */
+.st-cal-table { display: grid; gap: 3px; max-height: 220px; overflow-y: auto; }
+.st-cal-tr { display: grid; grid-template-columns: 72px 72px 34px; gap: 6px; align-items: center; font-size: 13px; }
+.st-cal-th { color: var(--muted, #a3acb8); font-size: 12px; }
+.st-cal-num { width: 100%; min-width: 0; font-variant-numeric: tabular-nums; }
+.st-cal-num[aria-invalid="true"], .st-cal-text[aria-invalid="true"] { outline: 2px solid var(--warn, #ffb020); }
+.st-cal .st-cal-rm { min-height: 26px; padding: 0 8px; }
+.st-cal-textrow { display: grid; gap: 3px; font-size: 13px; }
+.st-cal-text { width: 100%; min-width: 0; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; }
+.st-cal-status:empty { display: none; }
+.st-cal-status { font-size: 13px; }
+.st-cal-status[data-kind="error"] { color: var(--warn, #ffb020); font-weight: 600; }
+.st-cal-status[data-kind="error"]::before { content: "⚠ "; }
+.st-cal-fit { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.st-cal-fit:empty { display: none; }
+@media (max-width: 640px) {
+  .st-cal { grid-template-columns: minmax(0, 1fr); }
+  .st-kb-slider { grid-template-columns: 90px minmax(0, 1fr) 52px; }
+}
+/* settings.dynamicRange (Ryan 2026-11-20; TOUCH D43: Dynamics in dB): the slider above the keyboard list */
 .st-kb-range { display: grid; gap: 2px; margin: 8px 0 12px; }
 /* phones / very narrow windows: the dialog takes the whole width */
 @media (max-width: 600px) {
