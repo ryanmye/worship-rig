@@ -674,3 +674,13 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 - Both need Ryan's hardware test: an interface with more than 2 outputs, and two keyboards.
 - Two copies of Rig at once stay unsupported: the second window is muted and read-only (H2).
 
+## D43: Touch: Pianoteq-style keyboard calibration and dynamics in dB, in 2.0 (Ryan, 2026-11-28: "put these into 2.0")
+- Two parts, specified in native/docs/lanes/IO-2.0.md "Lane TOUCH":
+  - A per-keyboard multi-point calibration curve, applied in the controller. It reads and writes Pianoteq's text format
+    and has a five-step assistant (silence, p, mp, f, fff).
+  - Dynamics shown in dB, with the limit raised to about 60 dB for multi-layer instruments (today at most 30 dB).
+- No `app/js/engine` code change; with nothing set, the sound is unchanged.
+- Why: on his FP-10, soft notes are too loud (the built-in span is only 10 dB) and hard notes don't get louder (the
+  fit puts full level at the median hard note).
+- Ryan to try first: FP-10 Key Touch Light, and Dynamic range at max. Unverified on his FP-10.
+

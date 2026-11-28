@@ -61,3 +61,46 @@ pickers are hidden: the controller hides them when the engine doesn't advertise 
   - the pedal on one keyboard doesn't hold the other's notes;
   - unplugging one keyboard mid-note releases its notes.
 - **Estimate:** 1–2 agent-days [E].
+
+## Lane TOUCH: Pianoteq-style keyboard calibration + dynamics in dB (D43)
+
+Ryan, 2026-11-28, on his Roland FP-10: soft notes too loud, and hard notes don't get louder. Copy Pianoteq's two-part
+model as it is ("instead of creating another simplified version just with more variables").
+
+**1. Per-keyboard calibration curve**
+- Piecewise-linear velocity → velocity, monotone, with 2–12 points.
+- Kept in `settings.keyboards[<device name>]`, device-local like today's per-keyboard touch.
+- Applied in the controller before the engine; the engine then gets the calibrated velocity on the linear curve.
+  - So it needs no engine change and works in Chrome and native.
+  - The layers' own `velocityCurve` / `touch` still apply after it.
+- **Text format:** Pianoteq's `Velocity = [in…; out…]`, for both paste and copy. Community curves for many keyboards
+  exist in it; an example for the FP-10 is `[0, 1, 18, 32, 50, 108, 127; 0, 0, 30, 57, 84, 127, 127]`.
+- **Assistant:** five steps, silence threshold, p, mp, f and fff.
+  - The player plays several notes at each level; Rig takes the median for each.
+  - Those medians map to fixed targets, with Pianoteq's p/mf/f reference points at 32/64/96. Pick the fff target and the
+    silence point so playing harder than f still gets louder. Don't clamp at the median hard note: that is the current
+    fit's flaw.
+- **Editor:** drag points on a graph, with numbers for each point and presets (Linear plus the old named curves as
+  points), plus a live velocity readout and a histogram of the last ~200 notes.
+- **Migration:** an existing `{shape, min, max, top}` keyboard curve keeps working as it is. A curve becomes points only
+  when the player saves a new one.
+
+**2. Dynamics in dB**
+- `settings.dynamicRange` (device-local, today 1..3 × the built-in span) is shown as dB: the span from the softest to
+  the loudest note. Built-in spans are 10 dB (multi-layer) and 24 dB (single layer), see `shared/touch-curve.js`.
+- Raise the limit so multi-layer instruments can reach about 60 dB (Pianoteq's default; range ≈ 6).
+  - `DYN_RANGE.max` in shared.
+  - The native `Model::setDynamicRange` clamp (bridge.cpp / schema.cpp say 1..3), plus `mock-native.js`.
+- `app/js/engine` code stays as it is. Values ≤ 3 play bit-for-bit as today, so the fixtures don't change.
+- Check the master ceiling/limiter with ~60 dB at the loud end and record peak levels in CONTRACT_CHANGES.
+- Decide and record in CONTRACT_CHANGES whether to show the setting as one dB number for both instrument kinds or as a
+  multiplier. Single-layer instruments would reach 144 dB at 6×, so the single-layer span probably needs its own cap.
+
+**Tests**
+- With no curve set, the output is identical to today's.
+- A pasted Pianoteq string matches its points, and copying it back out returns the same string.
+- The curve is monotone; bad input is refused.
+- Assistant fits on synthetic velocity sets, including a light board that never sends 127.
+- dynamicRange > 3 on web and native agree within ≈1e-5.
+
+**Then:** Ryan's FP-10 test (MAC_CHECK step 4). **Estimate:** 2–3 agent-days [E].
