@@ -589,3 +589,13 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
 - All of these are built before the 2.0 tag (tier 1 answered). Estimate 12–20 agent-days [E]. Each is a lane with a
   builder and a skeptic; iPad equivalents where they make sense (Files picker / security-scoped bookmarks for folders;
   no menu bar or global shortcuts on iPad).
+
+## D36: After-2.0 work runs alongside the 2.0 work (Ryan, 2026-11-28: "Interleave now")
+- Ryan wants the after-2.0 things released around when 2.0 is. Of the box's two heavy slots, one keeps 2.0 moving
+  (the D35 native-gaps lanes and their reviews, release prep) and the other takes after-2.0 work. 2.0 finishes later
+  than it would with both slots; the rest arrives close behind it.
+- Tier 2 (mine), order for the after-2.0 slot: (1) Windows CI + the W1–W11 tree fixes (land on v2-native only with
+  fixtures byte-identical, D31); (2) the Mac command bus, then the browser remote (D34); (3) the iPhone remote app
+  (D30, iOS 15 floor); (4) Lane P sound-pack build scripts (no audio in git, no uploads); (5) Windows WebView2 shell.
+- Unchanged: D13 — FX steps 2–4 change the web engine (the golden oracle) and still wait for the 2.0 release; and
+  anything that needs hardware Claude can't reach (a Windows PC, an iPhone, Ryan's App Store account) waits for Ryan.
