@@ -662,3 +662,15 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   of this repository and every build (mine, tier 2: the safest reading of "personal use"), writing into My Samples.
   Plan in native/docs/lanes/SUNDAY-KEYS.md §4; first step is checking the installed formats in the Mac session.
 
+## D42: Multiple audio outputs and per-layer keyboard assignment are 2.0 (Ryan, 2026-11-28: "yes")
+- Two 2.0 lanes, specified in native/docs/lanes/IO-2.0.md:
+  - **OUT:** each layer, the drone and the click get an output pair, and each pair carries its own effects.
+  - **KBD:** each layer gets a Keyboard (by name) and a Channel; absent means Any.
+- Both change the engine, so in 2.0 they are native only (Mac first); the Chrome version hides the pickers.
+  - The web engine stays frozen until the 2.0 tag (D13).
+  - Correction to what I first told Ryan: KBD needs an engine change too, because `noteOn` tracks notes by number only.
+- The iPad gets multichannel output in 2.0.x. Windows gets both with its host.
+- With nothing set, the native output must stay bit-for-bit what it is today, so the fixtures don't change.
+- Both need Ryan's hardware test: an interface with more than 2 outputs, and two keyboards.
+- Two copies of Rig at once stay unsupported: the second window is muted and read-only (H2).
+
