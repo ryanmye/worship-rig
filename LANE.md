@@ -8,7 +8,11 @@ Windows plan's ASIO lines (WASAPI only), CLAUDE.md/rules docs. Light lane: only 
 unit,shell-unit` at the end. Don't push.
 
 ## Steps
-- [ ] 1. Clean-room rewrite of test/port-preflight.mjs + call sites + findings-doc lines
+- [x] 1. ~~Clean-room rewrite~~ CANCELLED: coordinator relayed Ryan's confirmation that GitHub "ilomacht" is his own
+  account (D38 updated on origin, 9ac004f). The draft rewrite was never committed; test/port-preflight.mjs,
+  test/run-all.mjs, test/phase1/shell/run.mjs and reviews/v11-local-findings.md are byte-identical to origin/v2-native.
+  Copyright holders of v2-native: Ryan Ye (GitHub accounts ryanmye and ilomacht) plus AI-generated contributions made
+  at his direction (recorded in CONTRIBUTING.md and LICENSE-1.x.md).
 - [ ] 2. LICENSE (PolyForm NC 1.0.0 verbatim) + LICENSE-1.x.md
 - [ ] 3. Licence statements (package.json, README, site, release notes, app/, Info.plist, CONTRIBUTING.md, LICENSES.md)
 - [ ] 4. Bundled third-party licence audit; Windows plan ASIO lines
