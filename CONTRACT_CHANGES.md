@@ -10371,3 +10371,23 @@ NATIVE-GAPS §2 "N3", finding 8; MAC_CHECK "B2"; LaneR F2; n0-skeptic O1.
 - Tests: files.test.mjs 10 → 14 (SVG anchor, `afterSave`, auxclick, the hand-off); selftest filesProbe: no
   warnings; native-shell B2 +1 subtest (a `{canceled}`
   reply: no "Exported" toast, checked with a MutationObserver; fails with `afterSave` mutated to always toast).
+
+## Remote lane: bus v1 additions and the C++ bus checks (D45, 2026-11-28)
+
+What changed (native/docs/lanes/REMOTE.md §2.1–2.3; bus contract stays v1, every addition optional):
+- `shared/bus.js`: `state.scene.name` (string, ≤ `SCENE_NAME_MAX` = 40 code points), `state.locked` (bool); commands
+  may carry `via: 'remote'` (any other value is refused: the controller compares with `===`, so an ignored `'Remote'`
+  would have skipped the Lock gate); `droneToggle.on` (bool, absolute). A `hello` with `via` is not answered by the
+  bus (it would bypass the 250 ms throttle). New exports: `REMOTE_VIA`, `SCENE_NAME_MAX`.
+- `controller.js`: `menuBarState()` adds `locked` and `scene.name` (through `sceneNameOf`, so a bad name can't make
+  the whole state invalid); `handleCommand()` refuses `via:'remote'` commands outside D34's list, and all but `panic`
+  under Lock, before `noteActivity` (a refused command doesn't wake sleeping audio); `droneToggle` honours `on`.
+- `native/core` (rig_hostkit): `rig_bus.h` `rig_bus_check_state` / `rig_bus_check_command` (0 valid, 1 invalid with a
+  reason, -1 internal error; never throw) = bus.js `stateError` / `commandError` behind Electron main.js's caps
+  (64 KB / 4 KB in UTF-16 units), plus a depth bound of 16 that bus.js doesn't have.
+- Why: the browser remote (D34) needs the snapshot name and Lock, a Lock gate the controller enforces itself, and a
+  drone command a retry can't double; the Mac relay (RigBus.swift) checks every message with the C++ port.
+- Numbers: parity corpus 680 states / 2,400 commands, identical reasons (`unit.hostkit-bus-parity`); the skeptic's
+  extra corpus (166 / 217 raw-byte cases: invalid UTF-8, surrogates, 1e999, -0, depth 3000) 0 mismatches; a scratch
+  bus.js with one more `AUDIO_STATES` value now fails the parity test (it didn't before review S1). Electron's
+  `validateBusState` ignores the new fields; no existing test pins the state's key set.

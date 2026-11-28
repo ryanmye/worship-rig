@@ -68,6 +68,15 @@ key to wake"), not as a fault.
 everything else by the controller. `nextScene` / `prevScene` (v11-scenes, still v 1) step the current song's scenes
 (own levels → 1 → 2 → 3 → 1 / back to the own levels); a song without scenes ignores them. The state then carries
 the optional `scene: {n, count}` (only while the song has scenes; `n` 0-based, null = the song's own levels).
+
+Remote lane (D45, 2026-11-28; `v` stays 1; native/docs/lanes/REMOTE.md), all optional:
+- `state.scene.name`: the playing snapshot's name (D25, ≤ 40 code points); absent while none plays or it has no name.
+- `state.locked`: Perform Lock (`settings.performLock`). The controller always sends it.
+- `command.via`: only `'remote'`, set by the native relay for the browser remote's commands, never by a page. The
+  controller then accepts only `prevSong`, `nextSong`, `prevScene`, `nextScene`, `panic` and `droneToggle`, and under
+  Lock only `panic` (refusals emit `bus-refused`); bus.js does not answer a `hello` that carries it.
+- `droneToggle.on` (boolean): set the drone on / off instead of flipping it (already there = nothing). The remote
+  always sends it, so a doubled or retried press can't flip the drone twice.
 `nextSong` / `prevSong` (v11-decisions, still v 1; sent by the global hotkeys) step the current setlist (else the
 library) exactly like Perform's → / ← and the footswitch: the same gapless switch, and the first / last song is the
 end (no wrap). `nextMode` / `prevMode` stay the popover's and the Tray's ‹ › through the menu-bar modes (wrapping).

@@ -95,8 +95,12 @@ int main(int argc, char **argv) {
   if (cmd == "bus-state" || cmd == "bus-command") {
     for (const std::string &l : lines) {
       const std::string b = unhex(l);
-      char *e = cmd == "bus-state" ? rig_bus_check_state(b.data(), b.size()) : rig_bus_check_command(b.data(), b.size());
-      if (e) {
+      char *e = nullptr;
+      const int rc = cmd == "bus-state" ? rig_bus_check_state(b.data(), b.size(), &e)
+                                        : rig_bus_check_command(b.data(), b.size(), &e);
+      if (rc < 0) {
+        std::cout << "internal\n";
+      } else if (rc == 1) {
         std::cout << "err " << hex(e) << '\n';
         rig_hostkit_free(e);
       } else {

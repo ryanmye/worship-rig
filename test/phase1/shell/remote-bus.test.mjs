@@ -3,7 +3,7 @@
 // Perform Lock (all but panic) and any remote command outside D34's list.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { stateError, commandError, SCENE_NAME_MAX as BUS_SCENE_NAME_MAX } from '../../../app/js/shared/bus.js';
+import { createBus, stateError, commandError, SCENE_NAME_MAX as BUS_SCENE_NAME_MAX } from '../../../app/js/shared/bus.js';
 import { SCENE_NAME_MAX } from '../../../app/js/shared/scenes.js';
 import { createController } from '../../../app/js/controller.js';
 import { MidiInput } from '../../../app/js/midi.js';
@@ -58,6 +58,38 @@ test('bus: command via is optional and only "remote"', () => {
   assert.equal(commandError({ v: 1, type: 'panic', via: 'tray' }), 'via');
   assert.equal(commandError({ v: 1, type: 'panic', via: null }), 'via');
   assert.equal(commandError({ v: 1, type: 'nope', via: 'x' }), 'unknown type "nope"', 'type is checked first');
+  assert.equal(commandError({ v: 1, type: 'droneToggle', on: true }), null);
+  assert.equal(commandError({ v: 1, type: 'droneToggle', on: 'x' }), 'droneToggle.on');
+});
+
+test('bus: a relayed remote hello is not answered by the bus (no throttle bypass)', () => {
+  const sent = [];
+  let onCmd = null;
+  const bus = createBus({ role: 'main', rig: { busPublish: (j) => sent.push(j), onBusCommand: (cb) => { onCmd = cb; } },
+    BroadcastChannel: null, timers: { setTimeout: () => 0, clearTimeout: () => {} }, now: () => 0, warn: () => {} });
+  bus.publish(base());
+  assert.equal(sent.length, 1);
+  for (let i = 0; i < 20; i++) onCmd(JSON.stringify({ v: 1, type: 'hello', via: 'remote' }));
+  assert.equal(sent.length, 1, 'remote hellos send nothing');
+  onCmd(JSON.stringify({ v: 1, type: 'hello' }));
+  assert.equal(sent.length, 2, 'a popover hello is answered at once, as before');
+});
+
+test('controller: droneToggle with on sets the drone (absolute); without on it flips as before', async () => {
+  const { store, ctl } = await setup();
+  const id = store.currentSong().id;
+  store.set(`songs.${id}.drone.mode`, 'synth');
+  const mode = () => store.currentSong().drone.mode;
+  assert.equal(ctl.handleCommand({ v: 1, type: 'droneToggle', on: true, via: 'remote' }), true);
+  assert.equal(mode(), 'synth', 'already on: unchanged');
+  ctl.handleCommand({ v: 1, type: 'droneToggle', on: false, via: 'remote' });
+  ctl.handleCommand({ v: 1, type: 'droneToggle', on: false, via: 'remote' });
+  assert.equal(mode(), 'off', 'two offs: still off');
+  ctl.handleCommand({ v: 1, type: 'droneToggle', on: true, via: 'remote' });
+  ctl.handleCommand({ v: 1, type: 'droneToggle', on: true, via: 'remote' });
+  assert.equal(mode(), 'synth', 'back to the mode it had');
+  ctl.handleCommand({ v: 1, type: 'droneToggle' });
+  assert.equal(mode(), 'off', 'no on: a flip');
 });
 
 test('controller: the state carries locked (Perform Lock) and the playing snapshot name', async () => {

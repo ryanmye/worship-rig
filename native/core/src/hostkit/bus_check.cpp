@@ -136,6 +136,10 @@ std::optional<std::string> busCommandError(const JVal &root) {
     return isInteger(pc) && pc->num >= 0 && pc->num <= 11 ? std::nullopt
                                                            : std::optional<std::string>("droneKey.pc (0..11)");
   }
+  if (t == "droneToggle") {  // D45: optional absolute `on`
+    const JVal *on = m->get("on");
+    return !on || isBool(on) ? std::nullopt : std::optional<std::string>("droneToggle.on");
+  }
   if (t == "lowResource" || t == "record") {
     return isBool(m->get("on")) ? std::nullopt : std::optional<std::string>(t + ".on");
   }
@@ -143,7 +147,8 @@ std::optional<std::string> busCommandError(const JVal &root) {
 }
 
 std::optional<std::string> busCheckText(std::string_view bytes, std::size_t maxUnits, bool isState, JVal *out) {
-  // a UTF-8 byte is at most one UTF-16 unit, so more than 4 bytes per unit can't fit: refuse before decoding
+  // a UTF-16 unit takes at most 3 UTF-8 bytes (a 4-byte sequence is 2 units), so more than 4 bytes per allowed unit
+  // can never fit: refuse before decoding (looser than needed; the exact check follows)
   if (bytes.size() > maxUnits * 4) {
     return "too large (" + std::to_string(bytes.size()) + " bytes > " + std::to_string(maxUnits) + ")";
   }
@@ -162,21 +167,31 @@ std::optional<std::string> busCheckText(std::string_view bytes, std::size_t maxU
 }  // namespace rig::hostkit
 
 namespace {
-char *dup(const std::optional<std::string> &s) {
-  if (!s) return nullptr;
-  char *p = static_cast<char *>(std::malloc(s->size() + 1));
-  if (!p) return nullptr;
-  std::memcpy(p, s->c_str(), s->size() + 1);
-  return p;
+/** 0 valid, 1 invalid (*reason set when asked), -1 internal error (allocation): never throws across the C API. */
+int check(const char *json, size_t len, bool isState, char **reason) {
+  if (reason) *reason = nullptr;
+  try {
+    std::optional<std::string> err =
+        json ? rig::hostkit::busCheckText(std::string_view(json, len), isState ? RIG_BUS_STATE_MAX : RIG_BUS_COMMAND_MAX,
+                                          isState)
+             : std::optional<std::string>("not JSON");
+    if (!err) return 0;
+    if (reason) {
+      *reason = static_cast<char *>(std::malloc(err->size() + 1));
+      if (!*reason) return -1;
+      std::memcpy(*reason, err->c_str(), err->size() + 1);
+    }
+    return 1;
+  } catch (...) {
+    return -1;
+  }
 }
 }  // namespace
 
-extern "C" char *rig_bus_check_state(const char *json, size_t len) {
-  if (!json) return dup(std::string("not JSON"));
-  return dup(rig::hostkit::busCheckText(std::string_view(json, len), RIG_BUS_STATE_MAX, true));
+extern "C" int rig_bus_check_state(const char *json, size_t len, char **reason) {
+  return check(json, len, true, reason);
 }
 
-extern "C" char *rig_bus_check_command(const char *json, size_t len) {
-  if (!json) return dup(std::string("not JSON"));
-  return dup(rig::hostkit::busCheckText(std::string_view(json, len), RIG_BUS_COMMAND_MAX, false));
+extern "C" int rig_bus_check_command(const char *json, size_t len, char **reason) {
+  return check(json, len, false, reason);
 }

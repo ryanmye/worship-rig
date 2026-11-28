@@ -205,13 +205,10 @@ TEST_SUITE("hostkit-remote-service") {
     CHECK(bus("nextSnapshot", "a3") == R"({"v":1,"type":"nextScene","via":"remote"})");
     CHECK(bus("prevSnapshot", "a4") == R"({"v":1,"type":"prevScene","via":"remote"})");
     CHECK(bus("panic", "a5") == R"({"v":1,"type":"panic","via":"remote"})");
-    // drone: absolute on/off; a toggle only when the state differs; a second tap before the state arrives is a no-op
-    CHECK(bus("droneOff", "d1") == "none");
-    CHECK(bus("droneOn", "d2") == R"({"v":1,"type":"droneToggle","via":"remote"})");
-    CHECK(bus("droneOn", "d3") == "none");
-    CHECK(bus("droneOff", "d4") == R"({"v":1,"type":"droneToggle","via":"remote"})");
-    REQUIRE(r.svc.setState(rep(state(), "\"droneOn\":false", "\"droneOn\":true")));
-    CHECK(bus("droneOff", "d5") == R"({"v":1,"type":"droneToggle","via":"remote"})");
+    // drone: absolute on/off (D45 droneToggle.on): the same press twice, or against a stale state, sets it twice
+    CHECK(bus("droneOff", "d1") == R"({"v":1,"type":"droneToggle","on":false,"via":"remote"})");
+    CHECK(bus("droneOn", "d2") == R"({"v":1,"type":"droneToggle","on":true,"via":"remote"})");
+    CHECK(bus("droneOn", "d3") == R"({"v":1,"type":"droneToggle","on":true,"via":"remote"})");
     CommandResult rep = r.svc.command(tok, cmd("nextSong", "a1"));
     CHECK(rep.ok);
     CHECK(rep.repeated);

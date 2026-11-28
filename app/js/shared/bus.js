@@ -81,7 +81,8 @@ export function stateError(m) {
 
 /**
  * Check a `command` message against contract v1 (per-type payload: selectMode.id, master.value 0..2,
- * droneKey.pc 0..11, lowResource.on / record.on booleans).
+ * droneKey.pc 0..11, lowResource.on / record.on booleans; D45: droneToggle's optional `on`, any command's optional
+ * `via: 'remote'`).
  * @param {any} m
  * @returns {string|null} null when valid, else the first problem
  */
@@ -98,6 +99,10 @@ export function commandError(m) {
       return isNum(m.value) && m.value >= 0 && m.value <= 2 ? null : 'master.value (0..2)';
     case 'droneKey':
       return Number.isInteger(m.pc) && m.pc >= 0 && m.pc <= 11 ? null : 'droneKey.pc (0..11)';
+    case 'droneToggle':
+      // remote lane (D45, optional): `on` makes it absolute (set, not flip), so a retried or doubled remote press
+      // can't flip the drone twice against a state that is up to one throttle window old
+      return m.on === undefined || isBool(m.on) ? null : 'droneToggle.on';
     case 'lowResource':
     case 'record':
       return isBool(m.on) ? null : `${m.type}.on`;
@@ -209,7 +214,8 @@ export function createBus(o = {}) {
     if (m === undefined) return void warn('dropped a command that is not JSON');
     const err = commandError(m);
     if (err) return void warn(`dropped an invalid command (${err})`);
-    if (m.type === 'hello' && lastState) {
+    // a relayed remote's hello is not answered here (the controller refuses it): it must not bypass the throttle
+    if (m.type === 'hello' && m.via === undefined && lastState) {
       // answer at once (bypasses the throttle): a popover that just opened must not wait up to 250 ms
       if (timer !== null) timers.clearTimeout(timer);
       timer = null;

@@ -9,7 +9,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { stateError, commandError, COMMAND_TYPES } from '../../../app/js/shared/bus.js';
+import {
+  stateError, commandError, COMMAND_TYPES, AUDIO_STATES, REMOTE_VIA, SCENE_NAME_MAX,
+} from '../../../app/js/shared/bus.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const STATE_MAX = 64 * 1024; // main.js BUS_STATE_MAX
@@ -116,6 +118,9 @@ function stateCorpus() {
     .replace('"count":2', `"count":2,"name":"${'\\ud83d\\ude00'.repeat(40)}"`));
   out.push(JSON.stringify({ ...baseState(), scene: { n: 0, count: 2 } })
     .replace('"count":2', `"count":2,"name":"${'\\ud83d'.repeat(41)}"`));
+  // skeptic S1: every enum value and cap bus.js exports, so a value added on one side only fails here
+  for (const a of AUDIO_STATES) out.push(JSON.stringify({ ...baseState(), audio: a }));
+  for (const n of [SCENE_NAME_MAX - 1, SCENE_NAME_MAX, SCENE_NAME_MAX + 1]) out.push(sc('n'.repeat(n)));
   // duplicate keys (the later value wins), key order, extra fields
   out.push(JSON.stringify(baseState()).replace('"v":1', '"v":1,"v":2'));
   out.push(JSON.stringify(baseState()).replace('"v":1', '"v":2,"v":1'));
@@ -143,11 +148,12 @@ function commandCorpus() {
     for (const k of ['id', 'value', 'pc', 'on', 'via']) {
       for (const v of VALUES) out.push(JSON.stringify(setPath({ v: 1, type }, k, v)));
     }
-    out.push(JSON.stringify({ v: 1, type, via: 'remote' }));
+    for (const via of REMOTE_VIA) out.push(JSON.stringify({ v: 1, type, via }));
   }
   for (const t of [undefined, null, 1, true, [], {}, { a: [1, null, 'x'] }, '\ud800', 'é"\\\n']) {
     out.push(JSON.stringify(setPath({ v: 1 }, 'type', t)));
   }
+  for (const on of [true, false]) out.push(JSON.stringify({ v: 1, type: 'droneToggle', on, via: 'remote' }));
   for (const raw of RAW_NUMS) {
     out.push(`{"v":1,"type":"master","value":${raw}}`, `{"v":1,"type":"droneKey","pc":${raw}}`,
       `{"v":${raw},"type":"panic"}`);

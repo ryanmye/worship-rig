@@ -47,7 +47,7 @@ struct CommandResult {
   bool ok = false;
   std::string error;        // 'locked' | 'not-ready' | 'bad-command' | 'bad-id' | 'not-paired' | 'rate-limited'
   bool repeated = false;    // answered from the first time this id was sent
-  /** The bus command to hand to the main page (ok and not a no-op). */
+  /** The bus command to hand to the main page (ok, and not a repeated id). */
   std::optional<std::string> bus;
   /** JSON reply for the page: {"ok":true} / {"ok":false,"error":"…"}, with "id". */
   std::string replyJson;
@@ -131,7 +131,6 @@ class Service {
   std::uint64_t seq_ = 0;
   std::string viewBody_;  // the view without seq
   bool locked_ = false;
-  bool droneOn_ = false;
 };
 
 /** Constant-time comparison of two strings (length leaks; content does not). */

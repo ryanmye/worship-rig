@@ -4279,7 +4279,9 @@ export function createController(o) {
     if (!si.count) return {};
     const song = si.id ? store.getSong(si.id) : null;
     const sc = si.n !== null ? scenesOf(song)[si.n] : null;
-    const name = sc && typeof sc.name === 'string' && sc.name ? sc.name : null;
+    // sceneNameOf: the store already normalises names (D25); again here, so a bad one can never make the whole state
+    // invalid (the popover, Tray and remote would all go stale)
+    const name = sc ? sceneNameOf(sc.name) : null;
     return { scene: { n: si.n, count: si.count, ...(name ? { name } : {}) } };
   }
   /**
@@ -4381,8 +4383,11 @@ export function createController(o) {
         if (!song) break;
         // D26.1: the drone as it plays (a scene may hold its ON / sound); a scene that holds it takes the toggle
         const heard = live(song);
+        const isOn = heard.drone.mode !== 'off';
+        // D45: `on` (the browser remote) sets the drone instead of flipping it; already there = nothing to do
+        if (typeof cmd.on === 'boolean' && cmd.on === isOn) break;
         let mode;
-        if (heard.drone.mode !== 'off') {
+        if (isOn) {
           lastDroneOnMode = heard.drone.mode;
           mode = 'off';
         } else {

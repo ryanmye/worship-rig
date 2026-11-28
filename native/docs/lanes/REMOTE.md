@@ -34,7 +34,7 @@ page's HTML and the bus state in, and hands commands back to the page.
 - `rig_bus_check_state(json)` / `rig_bus_check_command(json)`: the size cap (64 KB / 4 KB, as main.js
   `BUS_STATE_MAX` / `BUS_COMMAND_MAX`), JSON parse, then `stateError` / `commandError` from `shared/bus.js`, rule for
   rule. They return NULL when valid, else the first problem in bus.js's words.
-- Parity: a `rig-hostkit bus-check` CLI subcommand and a node test that runs the same corpus through bus.js and the
+- Parity: `rig-hostkit bus-state` / `bus-command` CLI subcommands and a node test that runs the same corpus through bus.js and the
   C++ port (the pattern of `test/unit/hostkit/parity.test.mjs`).
 
 ### 2.2 Bus v1 additions (optional fields, still v1)
@@ -42,9 +42,14 @@ page's HTML and the bus state in, and hands commands back to the page.
 The remote needs two things the v1 state does not carry yet. Both are optional, like `theme` and `scene`:
 - `scene.name` (string, ≤ 40 chars, D25's `SCENE_NAME_MAX`): the playing snapshot's name; absent = "Scene n".
 - `locked` (bool): `settings.performLock`.
-- Commands may carry `via: 'remote'` (ignored by bus.js validation, as unknown fields already are). The controller
-  refuses any `via: 'remote'` command but `panic` while locked. That makes the controller the authority, not a
-  possibly stale state in the relay. The relay also refuses at once, so the phone gets an immediate "Locked" answer.
+- Commands may carry `via: 'remote'`. bus.js refuses any other `via` value (an ignored `'Remote'` would skip a gate
+  that compares with `===`). The controller refuses any `via: 'remote'` command outside D34's list, and all but
+  `panic` while locked. That makes the controller the authority, not a possibly stale state in the relay. The relay
+  also refuses at once, so the phone gets an immediate "Locked" answer.
+- `droneToggle` may carry `on` (bool): set instead of flip. The remote always sends it, so a doubled press or a retry
+  against a state up to one throttle window old can't flip the drone twice (skeptic S4).
+- RigBus.swift builds remote commands itself (from rig_remote's callback) and never forwards page-supplied JSON on the
+  remote path: the gate trusts `via` to come from the relay only.
 
 These need small edits to `app/js/shared/bus.js` (state check) and `app/js/controller.js` (`menuBarState`,
 `handleCommand`), both in the menu-bar section, far from TOUCH's MIDI note path. The web engine is untouched.
@@ -62,8 +67,8 @@ These need small edits to `app/js/shared/bus.js` (state check) and `app/js/contr
   every route; at most 16 connections in total and 4 per IP.
 - **Commands from the page:** `prevSong`, `nextSong`, `prevSnapshot`, `nextSnapshot`, `panic`, `droneOn`, `droneOff`,
   each with a client `id` (≤ 32 chars, `[A-Za-z0-9_-]`). They are mapped to bus commands (`prevScene` / `nextScene`;
-  `droneOn` / `droneOff` become `droneToggle` only when the last state's `droneOn` differs, so a retried poll request
-  cannot double-toggle). A repeated `id` within 30 s is answered from the first result and not run again.
+  `droneOn` / `droneOff` become `droneToggle` with `on: true / false`). A repeated `id` within 30 s is answered from
+  the first result and not run again.
 - **Lock:** while the last state says `locked`, every command but `panic` is answered `{ok:false, error:'locked'}`.
 - **View:** the page never sees the bus state. It sees `{seq, song, snapshot, snapshotCount, droneOn, locked, audio}`,
   built from it (names cut to 80 / 40 chars).

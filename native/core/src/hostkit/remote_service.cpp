@@ -219,9 +219,8 @@ bool Service::setState(std::string_view json) {
   body += n && n->type == JVal::Num ? std::to_string(static_cast<long long>(n->num)) : "null";
   body += ",\"snapshotCount\":";
   body += scene ? std::to_string(static_cast<long long>(scene->get("count")->num)) : "0";
-  droneOn_ = m.get("droneOn")->b;
   locked_ = locked && locked->b;
-  body += droneOn_ ? ",\"droneOn\":true" : ",\"droneOn\":false";
+  body += m.get("droneOn")->b ? ",\"droneOn\":true" : ",\"droneOn\":false";
   body += locked_ ? ",\"locked\":true" : ",\"locked\":false";
   body += ",\"audio\":" + quote(m.get("audio")->str);
   hasState_ = true;
@@ -298,17 +297,15 @@ CommandResult Service::command(std::string_view token, std::string_view bodyJson
     }
   }
   std::string type;
+  std::string extra;
   if (c == "prevSnapshot") type = "prevScene";
   else if (c == "nextSnapshot") type = "nextScene";
   else if (c == "droneOn" || c == "droneOff") {
-    const bool want = c == "droneOn";
-    if (droneOn_ != want) {
-      type = "droneToggle";
-      droneOn_ = want;  // until the next state: a second tap before it arrives must not toggle back
-    }
+    type = "droneToggle";  // with D45's absolute `on`: a doubled or retried press can't flip it twice
+    extra = c == "droneOn" ? ",\"on\":true" : ",\"on\":false";
   } else type = c;
   r.ok = true;
-  if (!type.empty()) r.bus = "{\"v\":1,\"type\":\"" + type + "\",\"via\":\"remote\"}";
+  r.bus = "{\"v\":1,\"type\":\"" + type + "\"" + extra + ",\"via\":\"remote\"}";
   return finish(t, id, r);
 }
 

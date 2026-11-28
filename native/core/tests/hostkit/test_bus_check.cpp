@@ -10,14 +10,18 @@
 namespace {
 
 std::string state(const std::string &json) {
-  char *e = rig_bus_check_state(json.data(), json.size());
-  std::string r = e ? e : "ok";
+  char *e = nullptr;
+  const int rc = rig_bus_check_state(json.data(), json.size(), &e);
+  std::string r = rc == 0 ? "ok" : rc == 1 && e ? e : "internal";
+  if (rc == 0) CHECK(e == nullptr);
   rig_hostkit_free(e);
   return r;
 }
 std::string command(const std::string &json) {
-  char *e = rig_bus_check_command(json.data(), json.size());
-  std::string r = e ? e : "ok";
+  char *e = nullptr;
+  const int rc = rig_bus_check_command(json.data(), json.size(), &e);
+  std::string r = rc == 0 ? "ok" : rc == 1 && e ? e : "internal";
+  if (rc == 0) CHECK(e == nullptr);
   rig_hostkit_free(e);
   return r;
 }
@@ -92,6 +96,9 @@ TEST_SUITE("hostkit-bus") {
     CHECK(command(R"({"v":1,"type":"droneKey","pc":11})") == "ok");
     CHECK(command(R"({"v":1,"type":"droneKey","pc":1.5})") == "droneKey.pc (0..11)");
     CHECK(command(R"({"v":1,"type":"record","on":1})") == "record.on");
+    CHECK(command(R"({"v":1,"type":"droneToggle","on":true})") == "ok");
+    CHECK(command(R"({"v":1,"type":"droneToggle","on":"yes"})") == "droneToggle.on");
+    CHECK(command(R"({"v":1,"type":"droneToggle","on":null})") == "droneToggle.on");
     CHECK(command(R"({"v":1,"type":"lowResource","on":false})") == "ok");
     CHECK(command(R"({"v":1,"type":"panic","via":"remote"})") == "ok");
     CHECK(command(R"({"v":1,"type":"panic","via":"tray"})") == "via");
@@ -110,10 +117,12 @@ TEST_SUITE("hostkit-bus") {
     CHECK(command(fits) == "ok");
     std::string deep = R"({"v":1,"type":"panic","x":)" + std::string(20, '[') + std::string(20, ']') + "}";
     CHECK(command(deep) == "too deep");
-    CHECK(rig_bus_check_command(nullptr, 0) != nullptr);
-    char *e = rig_bus_check_command(nullptr, 0);
+    char *e = nullptr;
+    CHECK(rig_bus_check_command(nullptr, 0, &e) == 1);
     CHECK(std::string(e) == "not JSON");
     rig_hostkit_free(e);
+    CHECK(rig_bus_check_command("{}", 2, nullptr) == 1);  // no reason wanted
+    CHECK(rig_bus_check_command(R"({"v":1,"type":"panic"})", 22, nullptr) == 0);
     CHECK(state(std::string(70000, ' ')).rfind("too large (", 0) == 0);
   }
 }
