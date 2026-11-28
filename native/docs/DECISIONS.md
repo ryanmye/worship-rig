@@ -642,3 +642,13 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   command bus + browser remote and the iPhone remote. SetFlow stays the 2.1 feature set; Windows ships when it's ready. 2.1 = follower + setlist import + controller, plus the ChordPro chart
   import if it fits; FX steps 2–4 (D13) may also land in 2.1 if done in time, but don't hold it.
 
+## D40: Windows, the iPhone remote and the browser remote are 2.0 work (Ryan, 2026-11-28: "make windows, phone, etc 2.0 level")
+- They are no longer "after 2.0": they count as 2.0 work with the same priority as the D35 Mac lanes, and both heavy
+  slots (D36's split is retired) take them in turn with the 2.0 lanes.
+- Release (Ryan, same day, "Mac/iPad first"): 2.0 ships for Mac/iPad when that is ready; Windows (D27/D28, WASAPI per
+  D38) and the remotes (D30/D34, needing the Mac command bus) follow as 2.0.x releases, not 2.1. Windows needs Ryan's
+  real-PC test before its release.
+- Order in the slots (mine, tier 2): Mac/iPad release blockers and D35 lanes first, interleaved with Windows CI +
+  W1–W11 → Windows WebView2 shell, and the Mac command bus → browser remote → iPhone remote.
+- 2.1 stays the SetFlow work (D39), after those. FX steps 2–4 (D13) still wait for the 2.0 tag.
+\n
