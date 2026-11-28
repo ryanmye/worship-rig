@@ -342,7 +342,8 @@ void Engine::controlLoop() {
     publishPerformMeters(graph_, model_);  // CORE2B
     if (cacheSvc_) cacheSvc_->emitSampleChanges();  // Lane F2: at most one eviction / trim / rate `samples` per tick
     emitTick();
-    flush();
+    // core3f skeptic F1: recorded before the flush, so a reader woken by anything this iteration sends (the reply
+    // that closes a runtime_preload checkLive window) already sees it; after the flush it could miss it
     const double iterMs =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - iterStart).count();
     if (iterMs >= kLongIterationMs) {
@@ -351,6 +352,7 @@ void Engine::controlLoop() {
       longIter_.push_back({iterStart, iterMs});
       iterMaxMs_ = std::max(iterMaxMs_, iterMs);
     }
+    flush();
   }
 }
 

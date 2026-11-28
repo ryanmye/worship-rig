@@ -92,7 +92,8 @@ class Engine final : public CommandSink {
   bool realtime() const { return cfg_.mode == RIG_MODE_REALTIME; }
   const rig_host *host() const { return cfg_.host ? &host_ : nullptr; }
   std::string statsJson();
-  /** core3f T3: one realtime control-loop iteration (from its wake to its flush) that took kLongIterationMs or more:
+  /** core3f T3: one realtime control-loop iteration (from its wake to just before its flush; recorded before the flush,
+   *  so whatever that flush delivers is ordered after the record: skeptic F1) that took kLongIterationMs or more:
    *  the loop was held by its own work (or a lock), as opposed to a tick gap from the thread not being scheduled. */
   struct LongIteration {
     std::chrono::steady_clock::time_point start;

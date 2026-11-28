@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -110,6 +111,8 @@ struct Rt {
   /** Set by boot(): the loop's own largest tick gap over two idle seconds, and the bound it gives (gapBound). */
   double idleGapMs = 0;
   double bound = kMaxGapMs;
+  /** core3f skeptic F1: called with each payload on the control thread, inside on_event (under mu). */
+  std::function<void(const std::string &)> onEv;
 
   Rt() {
     rig_config cfg;
@@ -122,6 +125,7 @@ struct Rt {
       const auto now = Clock::now();
       std::lock_guard<std::mutex> lk(r->mu);
       r->evs.push_back({now, std::string(j, n)});
+      if (r->onEv) r->onEv(r->evs.back().text);
     };
     cfg.event_user = this;
     e = rig_create(&cfg, nullptr);
@@ -590,5 +594,43 @@ TEST_SUITE("runtime_preload") {
     CHECK(!rt.replied(10));
     REQUIRE(!rt.reply(10, kSanitized ? 120000 : 30000).second.empty());
     rt.checkLive(t0, Clock::now(), "joined keys");
+  }
+
+  TEST_CASE("core3f skeptic F1: a long control-loop iteration is recorded before the events it flushes") {
+    // checkLive reads Engine::longIterations() once the reply that closes its window has arrived. That reply goes
+    // out in its iteration's flush(): an iteration recorded only after its flush can be missed by a reader the reply
+    // woke (a held loop read as a box stall). Read inside on_event, on the control thread, it is deterministic.
+    Rt rt;
+    rt.boot();
+    std::atomic<double> seen{-1};
+    bool armed = false;
+    Clock::time_point armedAt{};
+    {
+      std::lock_guard<std::mutex> lk(rt.mu);
+      rt.onEv = [&](const std::string &t) {
+        if (!armed && t.find("\"ev\":\"tick\"") != std::string::npos) {
+          armed = true;
+          armedAt = Clock::now();  // during this iteration's flush: the next iteration starts after it
+          // on the control thread (Engine::at is a control-thread call): the next iteration's timers
+          impl(rt.e).at(0, [&rt](double) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(40));  // that iteration held 40 ms by its own work
+            impl(rt.e).emit(R"({"v":1,"ev":"skeptic-probe"})");          // and flushed by that same iteration
+          });
+        }
+        if (t.find("\"ev\":\"skeptic-probe\"") == std::string::npos) return;
+        double worst = 0;
+        for (const auto &it : impl(rt.e).longIterations())
+          if (it.start >= armedAt) worst = std::max(worst, it.ms);  // not boot's own long iterations
+        seen = worst;
+      };
+    }
+    for (const auto end = Clock::now() + std::chrono::seconds(10); seen.load() < 0 && Clock::now() < end;)
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    {
+      std::lock_guard<std::mutex> lk(rt.mu);
+      rt.onEv = nullptr;
+    }
+    MESSAGE("longest iteration recorded when its own event was delivered: " << seen.load() << " ms");
+    CHECK(seen.load() >= 39);
   }
 }
