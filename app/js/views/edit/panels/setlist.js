@@ -5,7 +5,8 @@
 // Ported from views/edit.js "LEFT: setlists + songs" (lines 457–949); mockup design/H-v2/edit.png `.lib`/`.song-row`.
 // Every write goes through the store helpers; song switches through controller.selectSong (CONTRACT.md §3.3).
 import {
-  h, setText, icon, iconButton, button, section, firstSentence, download, today, safeName, TRIAL_EXPORT_MESSAGE,
+  h, setText, icon, iconButton, button, section, firstSentence, download, afterSave, today, safeName,
+  TRIAL_EXPORT_MESSAGE,
 } from '../lib.js';
 import { CATEGORIES, CATEGORY_LABELS, factoryByCategory } from '../../../presets.js';
 import { keyName } from '../../../shared/music.js';
@@ -644,8 +645,9 @@ export default {
     // ---------------------------------------------------------------------------------------------------------
     // import / export
     function exportLibrary() {
-      download(`Worship Rig library ${today()}.json`, store.exportJSON());
-      toast('Library exported');
+      // n3-skeptic F1: in the native app the toast waits for the save panel's answer (none on Cancel)
+      afterSave(download(`Worship Rig library ${today()}.json`, store.exportJSON()),
+        () => toast('Library exported'));
     }
     function exportSong() {
       const s = store.currentSong();

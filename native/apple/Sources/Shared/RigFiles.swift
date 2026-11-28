@@ -56,8 +56,13 @@ final class RigFiles: NSObject, RigShellFeature, WKDownloadDelegate {
         save(data, name: name, reply: reply)
     }
 
+    /// A file name's longest UTF-8 form: APFS allows 255 bytes (not characters; n3-skeptic F2), with a margin.
+    static let maxNameBytes = 240
+
     /// A file name the panel and the file system accept: no path separators, colons or control characters, no
-    /// leading dot (a hidden file), at most 200 characters; "Worship Rig export.json" if nothing is left.
+    /// leading dot (a hidden file), at most `maxNameBytes` UTF-8 bytes with its suffix kept (".rig-song.json":
+    /// n3-skeptic F2, a long non-ASCII song name lost its extension or failed with ENAMETOOLONG);
+    /// "Worship Rig export.json" if nothing is left.
     static func safeName(_ raw: String?) -> String {
         let bad = CharacterSet(charactersIn: "/\\:").union(.controlCharacters)
         let dash: Unicode.Scalar = "-"
@@ -66,7 +71,23 @@ final class RigFiles: NSObject, RigShellFeature, WKDownloadDelegate {
         var s = String(view)
         s = s.trimmingCharacters(in: .whitespacesAndNewlines)
         while s.hasPrefix(".") { s.removeFirst() }
-        if s.count > 200 { s = String(s.prefix(200)) }
+        if s.utf8.count > maxNameBytes {
+            // the suffix: from the first dot whose tail is short and has no space (".rig-song.json", ".json")
+            var base = s
+            var suffix = ""
+            var i = s.startIndex
+            while let dot = s[i...].firstIndex(of: ".") {
+                let tail = String(s[dot...])
+                if tail.utf8.count <= 24 && !tail.contains(" ") {
+                    base = String(s[..<dot])
+                    suffix = tail
+                    break
+                }
+                i = s.index(after: dot)
+            }
+            while !base.isEmpty && base.utf8.count + suffix.utf8.count > maxNameBytes { base.removeLast() }
+            s = base.trimmingCharacters(in: .whitespaces) + suffix
+        }
         return s.isEmpty ? "Worship Rig export.json" : s
     }
 
@@ -274,6 +295,9 @@ final class RigFiles: NSObject, RigShellFeature, WKDownloadDelegate {
         exporter = d
         let picker = UIDocumentPickerViewController(forExporting: [tmp], asCopy: true)
         picker.delegate = d
+        // n3-skeptic F3: a picker swiped away may not call documentPickerWasCancelled [U]; without an answer `busy`
+        // would refuse every later export until a relaunch
+        picker.presentationController?.delegate = d
         top.present(picker, animated: true)
     }
 
@@ -283,7 +307,7 @@ final class RigFiles: NSObject, RigShellFeature, WKDownloadDelegate {
         RigLibrary.topViewController()?.present(a, animated: true)
     }
 
-    private final class ExportDelegate: NSObject, UIDocumentPickerDelegate {
+    private final class ExportDelegate: NSObject, UIDocumentPickerDelegate, UIAdaptivePresentationControllerDelegate {
         private var done: ((URL?) -> Void)?
         init(_ done: @escaping (URL?) -> Void) { self.done = done }
         private func answer(_ url: URL?) {
@@ -293,6 +317,7 @@ final class RigFiles: NSObject, RigShellFeature, WKDownloadDelegate {
         }
         func documentPicker(_ c: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { answer(urls.first) }
         func documentPickerWasCancelled(_ c: UIDocumentPickerViewController) { answer(nil) }
+        func presentationControllerDidDismiss(_ p: UIPresentationController) { answer(nil) }
     }
     #endif
 }

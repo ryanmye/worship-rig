@@ -80,7 +80,8 @@
     if (ev.defaultPrevented) return; // nothing will be followed anyway
     var a = downloadAnchor(ev);
     if (!a) return;
-    var href = String(a.href || a.getAttribute('href') || '');
+    // an SVG <a>'s href is an SVGAnimatedString, not the URL (n3-skeptic O-svg)
+    var href = typeof a.href === 'string' && a.href ? a.href : String(a.getAttribute('href') || '');
     if (!/^(blob|data):/i.test(href)) return; // rig:// downloads are WKDownloads (RigNavigation)
     ev.preventDefault();
     saveUrl(href, a.getAttribute('download') || 'download');

@@ -165,3 +165,26 @@ test('Swift side: RigFiles answers saveFile, caps at the same size, and reads te
   assert.match(js, /var MAX_BYTES = 64 \* 1024 \* 1024;/);
   assert.ok(swift.includes('body["text"] as? String') && swift.includes('body["base64"] as? String'));
 });
+
+test('n3-skeptic: an SVG <a download> (href is an SVGAnimatedString) is taken over by its href attribute',
+  async () => {
+    const href = 'blob:rig://app/svg';
+    const s = filesWindow({ blobs: { [href]: new Blob(['<svg/>'], { type: 'image/svg+xml' }) } });
+    const a = el('a', { download: 'chart.svg', href }, { baseVal: href, animVal: href });
+    assert.equal(s.click(a).defaultPrevented, true);
+    await settle();
+    assert.deepEqual(plain(s.handler.calls), [{ name: 'chart.svg', text: '<svg/>', m: 'saveFile' }]);
+  });
+
+test('n3-skeptic F1: afterSave toasts at once for a browser download, only on {saved} in the native app',
+  async () => {
+    const { afterSave } = await import('../../../app/js/views/edit/lib.js');
+    const seen = [];
+    afterSave(undefined, () => seen.push('browser'));
+    assert.deepEqual(seen, ['browser'], 'synchronous, as before N3');
+    afterSave(Promise.resolve({ saved: true, name: 'a.json' }), () => seen.push('saved'));
+    afterSave(Promise.resolve({ canceled: true }), () => seen.push('canceled'));
+    afterSave(Promise.resolve({ error: 'busy' }), () => seen.push('error'));
+    await settle();
+    assert.deepEqual(seen, ['browser', 'saved']);
+  });

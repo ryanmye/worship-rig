@@ -213,6 +213,16 @@ export function download(filename, text) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
+/**
+ * Runs `fn` once `download()`'s file is saved (n3-skeptic F1): at once for a browser download (as before), only on
+ * `{saved}` in the native app, so a Cancel in the save panel / Files picker shows no "exported" toast.
+ * @param {Promise<object>|undefined} result what `download()` returned
+ * @param {() => void} fn
+ */
+export function afterSave(result, fn) {
+  if (!result || typeof result.then !== 'function') return fn();
+  result.then((r) => { if (r && r.saved) fn(); });
+}
 export const today = () => new Date().toISOString().slice(0, 10);
 /**
  * UI6-U7a O3: Export song on a Song bank trial song (D17 Try it: not in the library, nothing saved) is refused with

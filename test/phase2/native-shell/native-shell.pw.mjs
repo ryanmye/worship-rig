@@ -57,6 +57,11 @@ function fakeShell(info) {
     // lane N3: RigFiles (the Mac's save panel; here the user always picks the suggested name)
     saveFile: (b) => {
       window.__shell.saves.push(b);
+      const next = window.__shell.nextSave; // n3-skeptic F1: one scripted answer (a Cancel)
+      if (next) {
+        window.__shell.nextSave = null;
+        return next;
+      }
       return { saved: true, name: b.name, path: `/Users/ryan/Desktop/${b.name}` };
     },
   };
@@ -334,6 +339,32 @@ test('B2 (lane N3): exports during a recording go through rig.saveText: no downl
       await a.until(() => [...document.querySelectorAll('.toast')].some((x) => /Exported/.test(x.textContent)));
     });
 
+    await t.test('n3-skeptic F1: Cancel in the save panel → saveFile answered {canceled}, no "Exported" toast',
+      async () => {
+        await a.ev(() => {
+          window.__shell.nextSave = { canceled: true };
+          window.__n3Toasts = [];
+          window.__n3Obs = new MutationObserver((ms) => {
+            for (const m of ms) {
+              const at = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+              const el = at?.closest?.('.toast') || [...m.addedNodes].find((n) => n.classList?.contains('toast'));
+              if (el) window.__n3Toasts.push(el.textContent);
+            }
+          });
+          window.__n3Obs.observe(document.body, { subtree: true, childList: true, characterData: true });
+        });
+        await a.page.click('[data-testid="v6-songmenu-btn"]');
+        await a.until(() => !!document.querySelector('[data-testid="v6-songmenu"]'));
+        await a.page.click('[data-testid="v6-sm-export"]');
+        await a.until(() => window.__shell.saves.length === 5);
+        await a.page.waitForTimeout(400);
+        const seen = await a.ev(() => {
+          window.__n3Obs.disconnect();
+          return window.__n3Toasts;
+        });
+        assert.ok(!seen.some((x) => /Exported/.test(x)), `toasts after a Cancel: ${JSON.stringify(seen)}`);
+      });
+
     await t.test('any other <a download> on blob: / data: (as recorder.js downloadBlob) is taken over', async () => {
       await a.ev(() => {
         const click = (href, name) => {
@@ -348,9 +379,9 @@ test('B2 (lane N3): exports during a recording go through rig.saveText: no downl
           'Rig take.wav');
         click('data:application/json,%7B%22a%22%3A1%7D', 'tiny.json');
       });
-      await a.until(() => window.__shell.saves.length === 6);
+      await a.until(() => window.__shell.saves.length === 7);
       // each read is async (text vs arrayBuffer): the order of the two saves is not the order of the clicks
-      const [wav, tiny] = (await saves()).slice(4).sort((x, y) => (x.name < y.name ? -1 : 1));
+      const [wav, tiny] = (await saves()).slice(5).sort((x, y) => (x.name < y.name ? -1 : 1));
       assert.deepEqual(wav, { name: 'Rig take.wav', text: undefined, base64: 'UklGRgD/' });
       assert.deepEqual(tiny, { name: 'tiny.json', text: '{"a":1}', base64: undefined });
     });

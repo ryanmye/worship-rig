@@ -12,7 +12,7 @@
 // written nothing is deleted. In Chrome there are no automatic backups, and the menu says so.
 import { h, setText } from '../components/util.js';
 import { holdButton } from '../components/holdButton.js';
-import { download, safeName } from '../edit/lib.js';
+import { download, afterSave, safeName } from '../edit/lib.js';
 import { button, popover, HOLD_MS } from './lib.js';
 import { setlistMenu } from './bank/bank.js';
 import { nameDialog } from './dialogs.js';
@@ -98,8 +98,9 @@ export function songMenu(v) {
             closePop();
             const text = !v.isLocked() && store.exportSong(id);
             if (text) {
-              download(`${safeName(s.name)}.rig-song.json`, text);
-              v.toast(`Exported “${s.name}”.`);
+              // n3-skeptic F1: native: only once the save panel / Files picker says saved
+              afterSave(download(`${safeName(s.name)}.rig-song.json`, text),
+                () => v.toast(`Exported “${s.name}”.`));
             }
           });
         const reset = holdItem(pd, '.v6-mi-reset', 'Reset to as saved (hold)', 'same as Revert', 'v6-sm-reset', () => {
