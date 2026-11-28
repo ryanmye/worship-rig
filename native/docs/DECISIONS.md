@@ -722,3 +722,12 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   assistant.
 - Curves saved by 1.x keep playing exactly as before. `fitTouch` stays exported, but the UI no longer uses it.
 
+## D48: A fuller custom touch in 2.0 (Ryan, 2026-11-28: "add")
+- Lane TOUCH2 (native/docs/lanes/IO-2.0.md) adds, on top of TOUCH:
+  - shape sliders: Lighter/Heavier, Squeeze/Spread, Silent below, Loudest;
+  - key balance: black/white, per-key offsets and an Even out assistant;
+  - a curve library, per keyboard and optionally per layer;
+  - an adjustable Fixed value.
+- It copies the SL88, MainStage's Velocity Processor, PianoTuner and Kawai VPC / VelPro.
+- It is controller-side, with no engine change. It runs after lane KBD.
+

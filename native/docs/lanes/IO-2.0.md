@@ -104,3 +104,55 @@ model as it is ("instead of creating another simplified version just with more v
 - dynamicRange > 3 on web and native agree within ≈1e-5.
 
 **Then:** Ryan's FP-10 test (MAC_CHECK step 4). **Estimate:** 2–3 agent-days [E].
+
+## Lane TOUCH2: a fuller custom touch (D48)
+
+Ryan, 2026-11-28: "add a custom touch but make it more comprehensive. look at how other apps do this", then "add".
+It builds on TOUCH (D43, merged c64aa857). Everything is applied in the controller before the engine, so
+`app/js/engine` doesn't change and it works in Chrome and native. It runs after lane KBD, because both change the
+controller's MIDI note path.
+
+Models it copies:
+- the Studiologic SL88: keyboard sensitivity ±25 % relative to the current curve; black/white balance plus per-key
+  sensitivity; 6 user curves; a programmable Fixed value;
+- MainStage's Velocity Processor: Scale/Add and Compress/Expand;
+- PianoTuner: a cut-off velocity and a maximum-velocity slider;
+- Kawai's VPC editor and VelPro: key velocity offsets and per-key curves.
+
+1. **Shape sliders on top of the points curve:**
+   - Lighter ↔ Heavier: relative sensitivity, about ±25 %.
+   - Squeeze ↔ Spread: compress/expand around the middle.
+   - Silent below: the cut-off.
+   - Loudest: a cap.
+
+   They transform the saved points, not the raw velocity a second time, and the graph shows the result live. Store the
+   sliders next to the points so they can be undone. The pure maths goes in `shared/velocity-cal.js` and stays
+   monotone.
+2. **Key balance, per keyboard** (device-local):
+   - a black/white offset;
+   - an 88-key per-key offset strip, ±20 velocity steps or a %;
+   - an "Even out" assistant: play each key once at the same strength, take the median, and suggest offsets toward the
+     keyboard's median. The player keeps or undoes them.
+
+   The offset applies to the raw velocity before the curve. It works by MIDI note number, so it follows physical keys,
+   not transposed notes.
+3. **Curve library:**
+   - Named curves saved on this device.
+   - Pick one per keyboard (today's default) and, optionally, per layer: a `slots.<i>.velocityCurve` value naming a
+     library curve.
+   - A per-layer curve must not apply twice with the keyboard curve: define and test the order (keyboard calibration,
+     then the layer curve).
+   - Export/import of a library curve as Pianoteq text.
+4. **Fixed:** a value from 1 to 127 (today it is fixed at 100/127).
+
+Leave out release velocity: no Rig instrument uses note-off velocity (check and record the result).
+
+**Tests:**
+- With nothing set, the output is identical to today's (TOUCH curves play the same).
+- Sliders keep the curve monotone.
+- Key-balance offsets clamp to 1..127 and never turn a sounding note silent unless the cut-off says so.
+- The Even out assistant behaves on synthetic uneven boards.
+- The library curve per layer combines with the keyboard curve as intended.
+
+**Then:** UI in the old layout and v6, then Ryan's FP-10 check in MAC_CHECK step 4. **Estimate:** about 2 agent-days
+[E].
