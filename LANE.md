@@ -108,13 +108,15 @@ Tip: see `git log -1 lane-n3` (this report commit, docs only, on top of the gate
 ## Skeptic (n3-skeptic, 2026-11-28)
 
 - [x] Read RESUMABLE, LANE, CLAUDE.md, NATIVE-GAPS N3 + finding 8, SHELL.md, n0-skeptic O1
-- [x] Rebase: origin/v2-native is still cd377cf (the lane's base): nothing to rebase
+- [x] Rebase: cd377cf at the start (nothing to do); moved to e8bd0c7 (D44, DECISIONS.md only) during the gates:
+      rebased cleanly
 - [x] JS review + Chromium listener probe (/home/claude/scratch/n3/probe/out.json)
 - [x] Swift review (tree-sitter 0 ERROR nodes after the fixes)
 - [x] Fixes F1 (toast on {saved}), F2 (safeName bytes + suffix), F3 (iPad swipe dismiss), F4 (failed read → WebKit
       download hand-off), O-mid (auxclick), O-svg
-- [ ] Gates (UI6_PURITY_BASE=origin/v2-native) on the fix tree
-- [ ] Report native/docs/reviews/n3-skeptic.md
+- [x] Gates (UI6_PURITY_BASE=origin/v2-native) 10/10 PASS on tree 641120a (cde92dc, pre-rebase)
+- [ ] shell-unit, unit, native-shell rerun on the final rebased tree
+- [x] Report native/docs/reviews/n3-skeptic.md (verdict MERGE)
 
 Findings so far: F1 toasts before the panel answers (fixed); F2 200-character cap is not a byte cap, cuts the
 suffix (fixed); F3 iPad picker swiped away may leave `busy` set forever [U] (fixed, belt); O-mid middle-click is
