@@ -638,13 +638,13 @@
       "name": "setDynamicRange",
       "kind": "method",
       "sync": true,
-      "returns": "number (the range in force, 1..3)",
+      "returns": "number (the range in force, 1..6)",
       "idempotent": true,
       "ref": "audio.js:1426",
       "args": [
         {
           "name": "range",
-          "type": "number 1..3 (absent/invalid = 1)"
+          "type": "number 1..6 (absent/invalid = 1)"
         }
       ],
       "callers": [

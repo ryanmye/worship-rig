@@ -120,7 +120,7 @@ test('presets: Linear plus the old named curves as points (light = soft v^0.6, h
 
 const rep = (v, n = 6) => Array.from({ length: n }, (_, i) => v + ((i % 3) - 1)); // v−1, v, v+1, …
 
-test('assistant: medians map to silence 0 / p 32 / mp 48 / f 96 / fff 120, and harder than fff still gets louder', () => {
+test('assistant: medians map to silence 0 / p 32 / mp 48 / f 96 / fff 120; harder than fff still gets louder', () => {
   const r = C.fitCalibration({ silence: rep(6), p: rep(30), mp: rep(48), f: rep(80), fff: rep(104) });
   assert.equal(r.ok, true);
   assert.deepEqual(r.medians, { silence: 6, p: 30, mp: 48, f: 80, fff: 104 });
@@ -152,7 +152,8 @@ test('assistant: a light board that never sends 127 reaches full level at its ha
 });
 
 test('assistant: a hard board whose fff tops out at 127 plays full there, with an f → fff step still louder', () => {
-  const r = C.fitCalibration({ silence: rep(10), p: rep(45), mp: rep(62), f: rep(100), fff: [127, 127, 127, 126, 127] });
+  const top = [127, 127, 127, 126, 127];
+  const r = C.fitCalibration({ silence: rep(10), p: rep(45), mp: rep(62), f: rep(100), fff: top });
   assert.equal(r.ok, true);
   assert.deepEqual(r.curve, { in: [0, 10, 45, 62, 100, 127], out: [0, 0, 32, 48, 96, 127] });
   // fff median 124: the extrapolated full point (124 + 7) lands past 127, so full is at 127

@@ -49,7 +49,7 @@ test('no curve set: the engine gets exactly what it got before (Touch setting, 2
   }
 });
 
-test('a calibrated keyboard: velocity mapped before the engine (no {touch}), 0 = silent, others untouched', async () => {
+test('a calibrated keyboard: velocity mapped before the engine (no {touch}), 0 = silent, others same', async () => {
   const store = makeStore();
   store.set('settings.velocitySens', 'hard'); // must not apply to the calibrated board
   store.set('settings.midiInputId', 'all');
@@ -145,7 +145,7 @@ test('recentVelocities: the last 200 raw velocities per keyboard, oldest first, 
   ctl.dispose();
 });
 
-test('store: velocity curves are validated (refused on set, dropped on load), migrate() idempotent, device-local', () => {
+test('store: velocity curves validated (refused on set, dropped on load), migrate() idempotent, device-local', () => {
   const store = makeStore();
   assert.equal(store.setKeyboard(FP10, { velocity: { in: [0, 64, 60], out: [0, 64, 127] } }), false, 'not monotone');
   assert.equal(store.setKeyboard(FP10, { velocity: { in: [0], out: [0] } }), false, 'one point');

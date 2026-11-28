@@ -550,7 +550,7 @@ export class MockNative {
       Object.assign(r, this._voiceLimitFields());
     }
     if (typeof m.droneFreeze === 'boolean') r.droneFreeze = this.droneFreeze = m.droneFreeze;
-    // bridge.cpp opConfig -> Model::setDynamicRange: validDynRange, a non-finite number = 1
+    // bridge.cpp opConfig -> Model::setDynamicRange: validDynRange (1..6 since TOUCH D43), a non-finite number = 1
     if (typeof m.dynamicRange === 'number') r.dynamicRange = this.dynamicRange = validDynRange(m.dynamicRange) ?? 1;
     if (m.meters) {
       this.meters = {

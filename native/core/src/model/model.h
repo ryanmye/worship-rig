@@ -212,7 +212,8 @@ class Model {
   // a retiring channel, T11 O3); T14's perform code resolves note targets through it.
   SongGraph &songGraph() { return *sg_; }
   const SongGraph &songGraph() const { return *sg_; }
-  // INTERFACE-CHANGE(T13) T12 O1: settings.dynamicRange (JS engine.setDynamicRange, 1..3, default 1; invalid -> 1):
+  // INTERFACE-CHANGE(T13) T12 O1: settings.dynamicRange (JS engine.setDynamicRange, 1..6 since TOUCH D43, default 1;
+  // invalid -> 1):
   // stored here, sent to every live sampler (slots + retiring) and to every sampler attached later. Returns the range
   // in use. Needs a bridge row (`config {dynamicRange}`, T08 / contract) to reach it from the UI.
   double setDynamicRange(double range);

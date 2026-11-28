@@ -623,8 +623,8 @@ bool SongGraph::eqAudition(int slot, std::string_view mode, double when) {
 }
 
 double SongGraph::setDynamicRange(double range) {
-  // shared/touch-curve.js validDynRange (?? 1): 1..3, rounded to 0.01
-  dynRange_ = std::isfinite(range) ? std::floor(std::min(3.0, std::max(1.0, range)) * 100 + 0.5) / 100 : 1.0;
+  // shared/touch-curve.js validDynRange (?? 1): 1..6 (TOUCH, D43: was 1..3), rounded to 0.01
+  dynRange_ = std::isfinite(range) ? std::floor(std::min(kDynRangeMax, std::max(1.0, range)) * 100 + 0.5) / 100 : 1.0;
   auto send = [&](UnitSlot u) {
     if (m_.attachedKind(u) != kKindSampler) return;
     Command c{};

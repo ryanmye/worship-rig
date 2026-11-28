@@ -23,7 +23,7 @@ test('contract: config carries droneFreeze and dynamicRange, the reply echoes bo
   assert.equal(op.args.dynamicRange, 'number?');
   assert.match(op.reply, /droneFreeze\?/);
   assert.match(op.reply, /dynamicRange\?/);
-  for (const ok of [1, 2.5, 3, undefined]) assert.ok(checkSpec(op.args.dynamicRange, ok).ok, String(ok));
+  for (const ok of [1, 2.5, 3, 6, undefined]) assert.ok(checkSpec(op.args.dynamicRange, ok).ok, String(ok));
   for (const bad of ['2', true, null, NaN]) assert.ok(!checkSpec(op.args.dynamicRange, bad).ok, String(bad));
 });
 
@@ -78,7 +78,9 @@ test('setDynamicRange: validated like the web engine (validDynRange, else 1), se
   async () => {
     const r = rig();
     await r.engine.start();
-    const cases = [[2, 2], [2.345, 2.35], [0.2, 1], [9, 3], ['wide', 1], [NaN, 1], [undefined, 1], [1.5, 1.5]];
+    // TOUCH (D43): the cap is 6 (60 dB for pianos)
+    const cases = [[2, 2], [2.345, 2.35], [0.2, 1], [9, 6], [4.5, 4.5], ['wide', 1], [NaN, 1], [undefined, 1],
+      [1.5, 1.5]];
     for (const [v, want] of cases) assert.equal(r.engine.setDynamicRange(v), want, String(v));
     await flush();
     assert.deepEqual(sent(r.log, 'config').filter((m) => 'dynamicRange' in m).map((m) => m.dynamicRange),
@@ -87,7 +89,7 @@ test('setDynamicRange: validated like the web engine (validDynRange, else 1), se
     const st = await r.engine._link.request('get', { what: 'state' });
     assert.equal(st.dynamicRange, 1.5);
     // the mock clamps like the core (Model::setDynamicRange) when a caller sends a raw number
-    assert.deepEqual(await r.engine._link.request('config', { dynamicRange: 7 }), { dynamicRange: 3 });
+    assert.deepEqual(await r.engine._link.request('config', { dynamicRange: 7 }), { dynamicRange: 6 });
     await assert.rejects(r.engine._link.request('config', { dynamicRange: 'x' }), (e) => e.code === 'bad-request');
     assert.ok(r.mock.findings.every((f) => f.field === 'dynamicRange' && f.kind === 'type'));
     r.mock.close();

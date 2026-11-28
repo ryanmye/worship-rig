@@ -107,8 +107,9 @@ export const METHODS = [
     callers: ['controller.js'], bridge: { op: 'config', field: 'mono' } },
   // UIB (T12 O1): settings.dynamicRange; the web engine has had it since the hardware batch (controller.js calls it
   // through call(), so an engine without it is skipped), the bridge sends config {dynamicRange}
-  { name: 'setDynamicRange', kind: 'method', sync: true, returns: 'number (the range in force, 1..3)',
-    idempotent: true, ref: 'audio.js:1426', args: [a('range', 'number 1..3 (absent/invalid = 1)')],
+  // TOUCH (D43): the range is 1..6 (was 1..3); same field and reply, so no minor bump (see CONTRACT_CHANGES "TOUCH")
+  { name: 'setDynamicRange', kind: 'method', sync: true, returns: 'number (the range in force, 1..6)',
+    idempotent: true, ref: 'audio.js:1426', args: [a('range', 'number 1..6 (absent/invalid = 1)')],
     callers: ['controller.js'], bridge: { op: 'config', field: 'dynamicRange' } },
   // 2.0 Settings › Sound (native DECISIONS D1, D2, D4, D5): native-only. The web engine (the 1.x oracle) has none of
   // them, so the controller sends them only when the engine has the setters (engineTakesSound2 / optional()).
@@ -421,9 +422,10 @@ export const BRIDGE = {
     // (voiceLimitEffective, 0 = off).
     // droneFreeze: DECISIONS D5 (T16): true (default) = the drone plays a frozen loop whenever lowResource is on (1.x),
     // false = always the live drone; the reply echoes it.
-    // dynamicRange: T12 O1 / UIB (minor 4, capability 'dynamicRange'): settings.dynamicRange 1..3 (absent = 1),
-    // how far the sampled instruments spread soft from loud (shared/touch-curve.js velocityDb); clamped and rounded to
-    // 0.01 like validDynRange (non-finite = 1), kept for samplers built later; the reply and get state echo the range.
+    // dynamicRange: T12 O1 / UIB (minor 4, capability 'dynamicRange'): settings.dynamicRange 1..6 (TOUCH D43),
+    // absent = 1; how far the sampled instruments spread soft from loud (shared/touch-curve.js velocityDb); clamped
+    // and rounded to 0.01 like validDynRange (non-finite = 1), kept for samplers built later; the reply and get state
+    // echo the range.
     { op: 'config', args: { mono: 'bool?', lowResource: 'bool?', eqAudition: '{slot, mode}?',
       meters: '{rate?, slots?, rta?}?',
       midiClock: '{port: id|null}?', when: 'engine s?', polyphony: '32|64|128?',

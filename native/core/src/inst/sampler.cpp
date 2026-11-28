@@ -32,10 +32,13 @@ double butter2Q() {
   return q;
 }
 
-/** touch-curve.js velocityDb(v01, spanDb, range). */
+/** touch-curve.js velocityDb(v01, spanDb, range); TOUCH (D43): r capped so spanDb · r <= kDynSpanMaxDb (72 / 24 = 3
+ *  exactly, so every range <= 3 computes the same numbers as before). */
 double velocityDb(double v01, double spanDb, double range) {
   const double base = -spanDb * (1 - v01);
-  return range == 1 ? base : base + spanDb * (range - 1) * (v01 - kDynPivot);
+  if (range == 1) return base;
+  const double r = std::min(range, kDynSpanMaxDb / spanDb);
+  return base + spanDb * (r - 1) * (v01 - kDynPivot);
 }
 
 }  // namespace
@@ -305,7 +308,7 @@ void SamplerInstrument::applyModule(const Command &c) {
       return;
     }
     case SamplerOp::DynamicRange:
-      dynRange_ = std::isfinite(c.f.a) ? clampD(c.f.a, 1, 3) : 1;
+      dynRange_ = std::isfinite(c.f.a) ? clampD(c.f.a, 1, kDynRangeMax) : 1;  // TOUCH (D43): was 3
       return;
     default:
       if (c.sub == kSubOwnedPayload) deferGarbage(static_cast<Owned *>(c.p.ptr));

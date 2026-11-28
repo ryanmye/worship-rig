@@ -207,7 +207,8 @@ TEST_SUITE("song") {
     CHECK(e.model().dynamicRange() == 1.0);
     CHECK(e.model().setDynamicRange(2.345) == doctest::Approx(2.35));
     CHECK(e.model().setDynamicRange(0.2) == 1.0);
-    CHECK(e.model().setDynamicRange(9) == 3.0);
+    CHECK(e.model().setDynamicRange(9) == 6.0);  // TOUCH (D43): the cap went 3 -> 6
+    CHECK(e.model().setDynamicRange(4.567) == doctest::Approx(4.57));
     CHECK(e.model().setDynamicRange(std::nan("")) == 1.0);
     CHECK(e.model().setDynamicRange(2) == 2.0);
     CHECK(contains(e.call(R"({"v":1,"op":"get","what":"state","id":9})"), "\"dynamicRange\":2"));

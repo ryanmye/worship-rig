@@ -461,8 +461,8 @@ void opConfig(Engine &e, const Req &r) {
     bool now = false;
     if (drone::setDroneFreeze(m, yyjson_get_bool(v), &now)) j.kvBool("droneFreeze", now);
   }
-  // INTERFACE-CHANGE(UIB): settings.dynamicRange (T12 O1; audio.js setDynamicRange): Model clamps to 1..3 (rounded to
-  // 0.01; non-finite -> 1), stores it for samplers attached later and echoes the range in force
+  // INTERFACE-CHANGE(UIB): settings.dynamicRange (T12 O1; audio.js setDynamicRange): Model clamps to 1..6 (TOUCH D43,
+  // was 1..3; rounded to 0.01; non-finite -> 1), stores it for samplers attached later and echoes the range in force
   if (yyjson_val *v = yyjson_obj_get(r.m, "dynamicRange"); v && yyjson_is_num(v))
     j.kv("dynamicRange", m.setDynamicRange(yyjson_get_num(v)));
   j.end();
