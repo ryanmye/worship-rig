@@ -695,3 +695,15 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   tags or releases; Ryan publishes v1.1.2 from GitHub's release page, which creates the tag and builds the files.
 - 2.0 lane TOUCH (D43) uses the same Range formula, so a 1.1.2 backup sounds the same in 2.0.
 
+
+## D45: The Mac command bus and the browser remote live in rig_hostkit (remote lane, tier 2, 2026-11-28)
+- Shape for D34 (plan: `native/docs/lanes/REMOTE.md`). Bus validation (a C++ port of `shared/bus.js` with main.js's
+  64 KB / 4 KB caps), the remote's pairing, rate limits, Lock gate and its HTTP / WebSocket server are C++ in
+  `native/core/src/hostkit` (`rig_bus.h`, `rig_remote.h`), tested on Linux; Swift only switches it on, feeds it the
+  bus state and the page, and passes commands to the page.
+- Off by default; local-network peers only; pairing with a 6-digit code that buys a 128-bit token kept in memory only
+  (an app restart, the remote off or "Forget phones" ends every pairing); per-IP and per-token rate limits; the code
+  rotates after 20 failures.
+- Bus contract stays v1, with two optional state fields (`scene.name`, `locked`) and an optional `via:'remote'` on
+  commands; the controller refuses every `via:'remote'` command but `panic` while Lock is on.
+- The QR code is drawn from a module matrix made by Nayuki's QR Code generator (MIT), vendored in the core.
