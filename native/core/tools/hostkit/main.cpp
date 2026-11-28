@@ -9,6 +9,8 @@
 //   json:    `ok <deep 0|1> <hex of JSON.stringify(JSON.parse(text))>` or `err <hex of the SyntaxError text>`
 //   text:    `<hex decoded> <length> <hex slice> <hex trim>`
 //   collate: the sorted input lines (hex), stable
+//   rig-hostkit bus-state < cases / bus-command < cases    rig_bus_check_state / _command (remote lane, D45):
+//            `ok` or `err <hex of the reason>` per line
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -18,6 +20,7 @@
 
 #include "js_json.h"
 #include "js_text.h"
+#include "rig/rig_bus.h"
 #include "rig/rig_hostkit.h"
 
 namespace {
@@ -43,7 +46,7 @@ std::string hex(const std::string &s) {
 }
 
 int usage() {
-  std::fprintf(stderr, "usage: rig-hostkit scan|user-patches|has <roots json> [<user ids json>] | json|text|collate\n");
+  std::fprintf(stderr, "usage: rig-hostkit scan|user-patches|has <roots json> [<user ids json>] | json|text|collate|bus-state|bus-command\n");
   return 2;
 }
 
@@ -86,6 +89,19 @@ int main(int argc, char **argv) {
     for (const std::string &l : lines) {
       const std::string s = decodeUtf8(unhex(l));
       std::cout << hex(s) << ' ' << jsLength(s) << ' ' << hex(jsSliceStart(s, 40)) << ' ' << hex(jsTrim(s)) << '\n';
+    }
+    return 0;
+  }
+  if (cmd == "bus-state" || cmd == "bus-command") {
+    for (const std::string &l : lines) {
+      const std::string b = unhex(l);
+      char *e = cmd == "bus-state" ? rig_bus_check_state(b.data(), b.size()) : rig_bus_check_command(b.data(), b.size());
+      if (e) {
+        std::cout << "err " << hex(e) << '\n';
+        rig_hostkit_free(e);
+      } else {
+        std::cout << "ok\n";
+      }
     }
     return 0;
   }

@@ -198,5 +198,10 @@ if(RIG_BUILD_TESTS)
              COMMAND ${NODE_EXECUTABLE} --test ${RIG_REPO_ROOT}/test/unit/hostkit/parity.test.mjs)
     set_tests_properties(unit.hostkit-parity PROPERTIES LABELS unit TIMEOUT 300
                          ENVIRONMENT "RIG_HOSTKIT_CLI=$<TARGET_FILE:rig-hostkit>")
+    # remote lane (D45): rig_bus.h against app/js/shared/bus.js on one generated corpus
+    add_test(NAME unit.hostkit-bus-parity
+             COMMAND ${NODE_EXECUTABLE} --test ${RIG_REPO_ROOT}/test/unit/hostkit/bus-parity.test.mjs)
+    set_tests_properties(unit.hostkit-bus-parity PROPERTIES LABELS unit TIMEOUT 300
+                         ENVIRONMENT "RIG_HOSTKIT_CLI=$<TARGET_FILE:rig-hostkit>")
   endif()
 endif()
