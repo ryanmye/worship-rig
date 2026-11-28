@@ -169,6 +169,9 @@ RunResult runFixture(const Fixture &f, const std::string &goldenDir, double sr) 
     postSkippable("{\"v\":1,\"op\":\"song\",\"id\":4,\"tempo\":" + str(v) + "}", "song tempo");
   if (yyjson_val *v = yyjson_obj_get(setup, "timeSig"))
     postSkippable("{\"v\":1,\"op\":\"song\",\"id\":4,\"timeSig\":" + str(v) + "}", "song timeSig");
+  // TOUCH (D43): setup.dynamicRange = settings.dynamicRange, sent before the song (page.js setDynamicRange)
+  if (yyjson_val *v = yyjson_obj_get(setup, "dynamicRange"))
+    postSkippable("{\"v\":1,\"op\":\"config\",\"id\":4,\"dynamicRange\":" + str(v) + "}", "config dynamicRange");
   if (yyjson_val *c = yyjson_obj_get(setup, "click"))
     postSkippable("{\"v\":1,\"op\":\"click\",\"id\":4,\"action\":\"config\"" + field(c, "level") + field(c, "record") +
                       field(c, "output") + ",\"when\":0}",

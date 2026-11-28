@@ -250,6 +250,7 @@ export async function renderFixture(fx) {
   if (engine.drone?.o?.rng) engine.drone.o.rng = countingRng(engine.drone.o.rng, 'drone', draws);
   if (s.tempo) engine.setTempo(s.tempo);
   if (s.timeSig) engine.setTimeSig(s.timeSig);
+  if (s.dynamicRange) engine.setDynamicRange(s.dynamicRange); // TOUCH (D43): settings.dynamicRange, before the song
   if (s.click) engine.setClick(s.click, { when: 0 });
   const tok = await engine.prepare(patch);
   if (!engine.commit(tok, { when: 0 })) throw new Error('commit refused');

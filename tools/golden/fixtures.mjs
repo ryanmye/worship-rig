@@ -562,5 +562,27 @@ const SWEEP_SETS = [
     setup: { patch: { slots: slots.concat([null, null, null, null]).slice(0, 4) }, tap: 'out' }, events: ev });
 });
 
+// ---- TOUCH (DECISIONS D43): settings.dynamicRange past the old cap of 3 ----------------------------------------
+// setup.dynamicRange = engine.setDynamicRange before the song (page.js; native fixture_runner: config {dynamicRange}).
+// dyn-range-<set>: the sampler-<set> events at range 6, tapped before the master, so web / native agree on the
+// velocityDb law at 6 sample by sample (salamander: 60 dB; ep-rhodes: single layer, capped at range 3 = 72 dB).
+// dyn-peak-r<n>: loud dry piano chords through the master chain (tap 'out'): the ceiling at ranges 1, 3 and 6.
+const addD = (f) => add({ addedBy: 'TOUCH', ...f });
+for (const id of ['salamander-piano', 'ep-rhodes']) {
+  const base = fixtures.find((f) => f.id === `sampler-${id}`);
+  addD({ id: `dyn-range-${id}`, kind: 'dynamics', seconds: base.seconds,
+    setup: { ...base.setup, dynamicRange: 6 }, events: base.events });
+}
+for (const range of [1, 3, 6]) {
+  const ev = [];
+  [[0.1, 127], [1.6, 110], [3.1, 127]].forEach(([t, vel], i) => {
+    const notes = i === 1 ? [60] : [36, 48, 55, 60, 64, 67, 72];
+    ev.push(...chordOn(t, notes, vel), ...chordOff(r6(t + 1.2), notes));
+  });
+  addD({ id: `dyn-peak-r${range}`, kind: 'dynamics', seconds: 5, needsPcm: true,
+    setup: { patch: { slots: [sampSlot('salamander-piano'), null, null, null] }, dynamicRange: range, tap: 'out' },
+    events: ev });
+}
+
 /** All fixtures, in render order. */
 export const FIXTURES = Object.freeze(JSON.parse(JSON.stringify(fixtures)));

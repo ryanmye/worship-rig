@@ -14,7 +14,7 @@ capped, values ≤ 3 bit-identical, peaks at max measured. No app/js/engine chan
 - [x] 1. shared/velocity-cal.js: parse/format/eval/validate/fit/presets + node:test
 - [x] 2. store.js: settings.keyboards[*].velocity validation; migrate idempotent; tests
 - [x] 3. controller: apply calibration before the engine (silent = 0), capture/readout/histogram feed; tests
-- [ ] 4. DYN_RANGE max 6, single-layer cap (72 dB), validDynRange; native clamp (song.cpp, sampler.cpp, schema/bridge
+- [x] 4. DYN_RANGE max 6, single-layer cap (72 dB), validDynRange; native clamp (song.cpp, sampler.cpp, schema/bridge
       comments), mock-native; tests (web/native agree > 3)
 - [ ] 5. UI: Settings › Keyboards (old layout) + v6 equivalent: editor, assistant, dB dynamics; tests
 - [ ] 6. Native rebuild g++ / clang-20 -Werror / ASan; ctest; fixtures byte-identical vs baseline
