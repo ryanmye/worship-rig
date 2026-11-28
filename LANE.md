@@ -53,17 +53,17 @@ At 9e7e887 (tree clean) I ran `git stash -q && <parse> ; git stash pop -q` to co
 nothing to stash, `stash pop` applied the repo-wide **stash@{0} "WIP on lane-u4: 28544f2 …"** (another lane's, shared
 across worktrees) into wt-n0: conflicts in app/js/views/v6/perform.js, app/styles-v6.css, test/phase2/ui-v6/run.mjs
 (UU). The stash entry was kept (still stash@{0}). Reverting the three files was refused by the permission classifier,
-so they are left as they are. **To fix:**
-`git -C /home/claude/wt-n0 restore --source=HEAD --staged --worktree -- app/js/views/v6/perform.js app/styles-v6.css test/phase2/ui-v6/run.mjs`
-None of my work is in those three files (all N0 work up to 9e7e887 is committed). Until then nothing can be committed
-on lane-n0 (unmerged index), so later N0 edits sit uncommitted in the worktree.
+so they are left as they are. Everything else uncommitted in wt-n0 is a copy of
+what is committed on `lane-n0-tip` (c5930dc and after), so **to fix:**
+`git -C /home/claude/wt-n0 restore --source=HEAD --staged --worktree -- .` then
+`git -C /home/claude/wt-n0 merge --ff-only lane-n0-tip`, then `git worktree remove /home/claude/wt-n0g` and
+`git branch -d lane-n0-tip`. stash@{0} (lane-u4's) is untouched on the stash list.
 
 ## Final report (builder N0)
 
 **Where the work is.** lane-n0 tip 9e7e887 (all code + tests). The docs, the report and one Swift tidy-up are one
 more commit on **branch `lane-n0-tip`** (worktree /home/claude/wt-n0g, made from 9e7e887 because wt-n0's index holds
-the foreign stash, see INCIDENT). After the restore command above: `git -C /home/claude/wt-n0 merge --ff-only
-lane-n0-tip`, then delete wt-n0g and lane-n0-tip. Not pushed.
+the foreign stash, see INCIDENT). Fix per INCIDENT, then lane-n0 = lane-n0-tip. Not pushed.
 
 **Changes**
 - `window.rig` moved out of Swift into `app/js/native-shell/{00-core,10-library,20-info}.js` (classic scripts;
@@ -94,7 +94,8 @@ run-all: 10 Playwright checks, Mac / iPad / Chrome); migration-1x browser.pw.mjs
 **Gates** (tools/cloud/gates.mjs, UI6_PURITY_BASE=origin/v2-native, tree 9e7e887 clean, in wt-n0g): shell-unit PASS
 39 s, unit PASS 37 s, native-midi PASS 4 s (9/9), native-shell PASS 13 s (10/10), settings PASS 157 s, migration-1x
 PASS 128 s, ui-core PASS 342 s, ui-v6 PASS 286 s (flag-off purity vs base: pass), ui-v6-edit PASS 281 s (purity:
-pass). After the docs commit: unit + shell-unit rerun (see below). app/js/engine untouched (`git diff
+pass). On the docs commit c5930dc: shell-unit PASS 31 s, unit PASS 26 s, native-shell PASS 12 s (the other suites
+read no doc and no Swift; their 9e7e887 passes stand). app/js/engine untouched (`git diff
 origin/v2-native --stat -- app/js/engine` empty). tree-sitter-swift: 0 ERROR nodes in all 12 Shared/*.swift.
 
 **Mac / iPad only** (MAC_CHECK): CI mac-check compiles RigShellRouter.swift and the edits, and the self-test `shell`
