@@ -10097,3 +10097,28 @@ touch fitting, the MIDI lamp and the clock-out choice all hung on it).
   replace / restore only.
 - Tests: shell unit `chart-store.test.mjs` "CAP: a chart past 2 MB …", `patch-packs.test.mjs` "CAP: pack top-up …",
   "CAP: a pack update …", "CAP: Song bank add …" (all four fail on the old store).
+
+## core3f T3 (runtime_preload: a held control loop vs a runner stall)
+
+- **Flake.** macos-15 `unit.runtime_preload` failed at test_runtime_preload.cpp:314 `CHECK(gap < rt.bound)`,
+  `301.5 < 156.083` (run 45940152991, 2026-11-27 04:33Z; and :373 `168.6 < 131.3` in run 45813422147): the largest
+  tick gap while a cold salamander-piano `prepare` decoded (4.7 s window).
+- **Root cause: the runner, not the engine.** In the same job the next case's idle measurement (nothing loading or
+  building) showed a **242.8 ms** gap; macOS idle samples are otherwise 40-60 ms (one 33 ms tick + timer slack).
+  Here, idle or under three busy loops, the window never exceeded 60 ms and no control-loop iteration reached 10 ms;
+  idle, 2 of 300 windows still showed 116 / 143 ms gaps with no long iteration (the old check fails both). A tick gap
+  alone cannot tell the loop held by its work (the CORE2A defect) from the process not being scheduled.
+- **Fix.** `Engine` records every realtime control-loop iteration of `kLongIterationMs` (10 ms) or more, from its
+  wake to its flush (the last 256: `Engine::longIterations()`; stats `loopIterMaxMs`, the longest since start).
+  Two `steady_clock::now()` per iteration; the mutex only for a long one or a read. runtime_preload's
+  `checkLive(from, to, what)` replaces its seven tick-gap checks: no iteration overlapping the window may reach the
+  bound (fails a held loop, lock waits included: wall time); a gap past the bound with no long iteration is reported
+  as the box and fails only past `kStallCapMs` (1 s; 3 s sanitized). Each window's message gives the gap, where it
+  starts and the longest iteration, so a CI failure says which it was.
+- **Proof.** A 350 ms SIGSTOP inside the cold-salamander window: old test 3/3 FAIL (362-382 ms gaps), new 3/3 pass
+  ("the tick gap is the box"). Mutation, a 300 ms sleep in the control loop while it handles that `prepare`: new
+  test 2/2 FAIL (iteration 302 ms). Loops: the case 300x g++ idle, 100x clang-20 under three busy loops (load ~10;
+  11 box gaps up to 692 ms), the suite 30x g++: all pass; ASan 8/8, TSan 8/8 with 0 warnings.
+- **Residual risk.** Iteration time is wall time, so an iteration preempted on a loaded box counts as held (up to
+  158 ms seen at load ~10, still under the load-adapted bound). The same check would suit test_core3's tick-gap
+  bounds (not changed here).
