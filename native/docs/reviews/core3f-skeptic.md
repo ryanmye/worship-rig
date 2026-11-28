@@ -100,15 +100,37 @@ only.
 - F2 (the song menu's Keep + Add to setlist toasted twice) is fixed. I checked every caller of `addFromBank` /
   `keepTrial` (Settings, bank sheet, trial banner, song menu): each skips its own toast on `notified`.
 
-## 4. Gates (tree 6c88d33 for native; JS tree in §4.2)
+## 4. Gates (native: tree 6c88d33, S1 included; JS: §4.2)
 
 ### 4.1 Native
 
-GATES_NATIVE
+- **ctest** (logs in `scratch/core3f-sk/ng/`), with `unit.core3` and `unit.runtime_preload` passing in each:
+  - g++ 13 Release: 84/84;
+  - clang++-20 Release `-Werror`: 84/84, 0 warnings;
+  - g++ ASan+UBSan: 84/84, 0 sanitizer reports.
 
-### 4.2 JS (gates.mjs)
+  Another agent's ASan build and browser suites were running alongside (load average 2–6).
+- **TSan** (`-ts=core3`, `-ts=runtime_preload`): both pass, 0 ThreadSanitizer warnings.
+- **Fixtures.** All 112 `rig_render` outputs, g++ and clang-20, are **byte-identical** (`cmp`) to a fresh render of
+  origin/v2-native's `native/core`, built in the probe worktree.
+- **Loop**, g++, 100 runs of the new core3f case and the :353 supersede case:
+  - prebuild counts: busy ≤ 1 and hits + busy = 10 in all 100 runs of both cases (99 at 9 / 1, 1 at 10 / 0);
+  - 34 runs failed `maxGapMs < kLongGapMs` (:359 16×, :391 25×). That is the known load-sensitive tick-gap bound
+    (CORE3 O2), under load 4–6 from another lane's settings suite, and it is not this lane's code.
+  - Runs 1–15, before that load, were clean.
 
-GATES_JS
+### 4.2 JS (gates.mjs, tree 0184957+clean; later commits are docs only)
+
+`PLAYWRIGHT_BROWSERS_PATH=/root/.cache/rig-pw`; every suite passed on the first run:
+
+| suite | result |
+|---|---|
+| shell-unit | 421/421 (the bank-trial test that failed on the old base passes: FU2's fix is in v2-native now) |
+| unit | 720 pass, 0 fail, 13 skip |
+| chart | 47/47 |
+| migration-1x | 115/0 |
+| ui-v6-bank | 24/24 (incl. F2's case) |
+| settings | 118/118 |
 
 ## 5. Open questions / notes (none blocks the merge)
 

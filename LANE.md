@@ -138,7 +138,7 @@ size rule). Try to break each, fix real defects with failing-first tests, write 
       suites run with PLAYWRIGHT_BROWSERS_PATH=/home/claude/scratch/core3f/pw-browsers (symlinks to 1243)
 - [ ] native gates: g++, clang-20 -Werror, ASan+UBSan, TSan; fixtures byte-identical
 - [ ] JS gates via gates.mjs
-- [ ] review doc + final report
+- [x] review doc native/docs/reviews/core3f-skeptic.md (verdict MERGE) + final report
 
 ### Findings so far
 - F1 (T3): Engine records a long iteration AFTER flush(): an event that iteration flushes (a reply closing a
@@ -160,9 +160,10 @@ Brief: same as above; report goes to native/docs/reviews/core3f-skeptic.md. Scra
       tick-gap lines fail); no sleep: base 10/10 busy 1 (passes, as on CI mostly). Logs scratch/core3f-sk/loop-*
 - [x] T1 mutation (lane 1's wait ignores held_): new core3f case 5/5 PASS (9/1) -> S1; :353 + sleep 5/5 busy 3-4
 - [x] S1 fixed 6c88d33: held, the hook waits ms/100; mutation now 5/5 FAIL (1-4 adopted), lane 5/5 pass (~2 s)
-- [ ] native gates (scratch/core3f-sk/native-gates.sh, resumable; summary in ng/summary.txt)
-- [ ] JS gates: shell-unit, unit, chart, migration-1x, ui-v6-bank, settings (gates.mjs)
-- [ ] review doc + final report
+- [x] native gates (tree 6c88d33): g++ / clang-20 -Werror / ASan 84/84, TSan core3 + runtime_preload 0 warnings,
+      fixtures 112/112 byte-identical to origin/v2-native; loop 100x: prebuild counts clean, 34 tick-gap (load)
+- [x] JS gates (tree 0184957): shell-unit 421, unit 720/0/13, chart 47, migration-1x 115, ui-v6-bank 24, settings 118
+- [x] review doc native/docs/reviews/core3f-skeptic.md (verdict MERGE) + final report
 
 Findings (skeptic 2):
 - S1 (T1 test strength): testWaitPrebuildStart returned at once while held, so the new case could not tell a
