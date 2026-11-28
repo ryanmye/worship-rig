@@ -223,8 +223,16 @@ test('D11 Settings › Import… of a 1.1.1 export from this computer: the box i
   assert.equal(await box.isChecked(), true);
   assert.match(await page.getByTestId('import-device-offer').textContent(), /this computer had in Worship Rig 1\.x/);
   assert.deepEqual(await settingsNow(page), before, 'nothing happens before Import');
+  // touch-skeptic: the toast stack keeps 2 (main.js), and the warn toasts for this machine's missing devices can
+  // arrive after the info "Device settings used" and evict it before a poll sees it (flaky on a loaded box since
+  // N0 at least): read every toast that was added, as the first-launch test does
+  await page.evaluate(() => {
+    window.__toastLog = [];
+    new MutationObserver((ms) => ms.forEach((m) => m.addedNodes.forEach((n) => window.__toastLog.push(n.textContent))))
+      .observe(document.getElementById('toasts'), { childList: true });
+  });
   await page.getByTestId('import-device-go').click();
-  await until(page, () => [...document.querySelectorAll('#toasts > *')].some((t) => /Device settings used: \d+/.test(t.textContent)));
+  await until(page, () => window.__toastLog.some((t) => /Device settings used: \d+/.test(t)));
   const st = await settingsNow(page);
   for (const k of PORTABLE) assert.deepEqual(st[k], DEV.settings[k], k);
   assert.equal(await page.evaluate(() => window.__rig.store.get().songOrder.length), 20, 'the library came too');

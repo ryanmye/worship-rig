@@ -139,4 +139,8 @@ Findings:
 - velocityDb: JS byte-identical to wt-v112 5473b04 (function + constants + validDynRange); native same op order,
   -ffp-contract=off. Native after rebase: g++ ctest 89/89, clang-20 0 warnings 89/89, ASan+UBSan 89/89 (79 + 10
   rerun after a 30-min cut); 112 old fixtures cmp-identical to base renders with g++ and clang-20.
+- F2 (fixed 0d84888): ui-v6-edit's own flag-off purity check failed (the builder ran edit-v2, not ui-v6-edit):
+  same narrow TOUCH exclusion as ui-v6.
+- O8 (fixed): migration-1x D11 "from this computer" toast flake (2-toast stack evicts the info toast); pre-existing,
+  reproduced on clean archives of 9f844af and e8bd0c7; the test now reads a MutationObserver toast log.
 - Next: S8 JS gates (shell-unit,unit,settings,ui-core,ui-v6,edit-v2,ui-v6-edit,migration-1x,chart), then report.
