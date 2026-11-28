@@ -59,12 +59,16 @@ class Server {
   bool publishState(std::string_view json);
   void newCode();
   void forgetAll();
-  /** Settings: {"on","port","addresses":[{"name","ip"}],"url","pairUrl","code","paired","pausedSec","qr":{…}}. */
+  /**
+   * Settings: {"on","port","addresses":[{"name","ip"}],"url","pairUrl","code","paired","pausedSec","pairingSec",
+   * "qr":{…}}. pairingSec: seconds left to pair a phone (0 = closed: press New code).
+   */
   std::string infoJson();
 
   /** Connection limits (tests read them). */
   static constexpr int kMaxClients = 16;
-  static constexpr int kMaxClientsPerIp = 4;
+  static constexpr int kMaxClientsPerIp = 4;  // per IPv4 address / per IPv6 /64
+  static constexpr std::int64_t kFirstByteMs = 3000;  // a new connection must start its request this soon
 
  private:
   struct Client;
@@ -93,6 +97,7 @@ class Server {
   std::string page_;
   std::vector<std::string> pending_;  // bus commands to hand out after the lock is released
   std::uint64_t infoSeen_ = 0;
+  bool pairingSeen_ = false, pausedSeen_ = false;  // window / pause edges also refresh Settings (skeptic-2 N7)
 
   std::thread thread_;
   std::atomic<bool> running_{false};

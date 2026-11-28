@@ -55,11 +55,37 @@ export function mountRemote(d) {
   const paired = h('p.st-hint.st-remote-paired', { 'data-testid': 'remote-paired' });
   const status = h('p.st-status.st-remote-status', { 'data-testid': 'remote-status', role: 'status' });
   const newCode = btn('New code', () => run(() => rig.remote.newCode()), { 'data-testid': 'remote-new-code',
-    title: 'A new pairing code; phones already paired stay paired' });
+    title: 'A new pairing code, open for 5 minutes; phones already paired stay paired' });
+  const window_ = h('p.st-hint.st-remote-window', { 'data-testid': 'remote-window' });
   const forget = btn('Forget phones', () => run(() => rig.remote.forgetAll()), { 'data-testid': 'remote-forget',
     title: 'Every paired phone has to enter the code again' });
-  const details = h('div.st-remote-details', { 'data-testid': 'remote-details' }, url, qr, code,
+  const details = h('div.st-remote-details', { 'data-testid': 'remote-details' }, url, qr, code, window_,
     h('div.st-inline', {}, newCode, forget), paired);
+  // the pairing window counts down here; the shell pushes an update when it (or a pause) ends
+  let tick = null;
+  let left = 0;
+  const fmt = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  function renderWindow() {
+    window_.textContent = left > 0 ? `Phones can pair for ${fmt(left)}.`
+      : 'Pairing is closed. Press New code to pair another phone.';
+    qr.style.opacity = left > 0 ? '' : '0.25';
+  }
+  function startTick() {
+    if (tick) clearInterval(tick);
+    tick = null;
+    left = info.on ? Math.max(0, info.pairingSec | 0) : 0;
+    renderWindow();
+    if (left > 0) {
+      tick = setInterval(() => {
+        left = Math.max(0, left - 1);
+        renderWindow();
+        if (!left) {
+          clearInterval(tick);
+          tick = null;
+        }
+      }, 1000);
+    }
+  }
   const el = h('section.st-section.st-remote', { 'aria-label': 'Remote', 'data-section': 'remote',
     'data-testid': 'settings-remote' },
   h('h2.st-h2', { text: 'Remote' }),
@@ -73,12 +99,13 @@ export function mountRemote(d) {
     forget.disabled = busy || !info.on || !(info.paired > 0);
     details.hidden = !info.on;
     if (info.on) {
-      url.textContent = info.url ? `On a phone on the same Wi-Fi, open ${info.url}` : 'This Mac has no Wi-Fi or network '
-        + 'address. Connect it to the same network as the phones.';
+      url.textContent = info.url ? `On a phone on the same Wi-Fi, open ${info.url}`
+        : 'This Mac has no Wi-Fi or network address. Connect it to the same network as the phones.';
       drawQr(qr, info.url ? info.qr : null);
       code.textContent = `Code ${info.code || '—'}`;
       paired.textContent = info.paired === 1 ? '1 phone paired' : `${info.paired || 0} phones paired`;
     }
+    startTick();
     let s = error;
     if (!s && info.on && info.pausedSec > 0) {
       s = `Too many wrong codes: pairing paused for ${info.pausedSec} s, and the code changed.`;
@@ -121,6 +148,7 @@ export function mountRemote(d) {
     el,
     refresh,
     destroy() {
+      if (tick) clearInterval(tick);
       off();
       onToggle.destroy();
     },

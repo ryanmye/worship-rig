@@ -23,6 +23,8 @@ struct Limits {
   int globalFailuresBeforeRotate = 20;    // wrong codes in total before the code rotates
   std::int64_t failureWindowMs = 60000;   // the per-IP window, and the first pause after a rotation
   std::int64_t maxPauseMs = 3600000;      // the pause doubles with each rotation up to this (skeptic-2 C3)
+  std::int64_t pairWindowMs = 300000;     // pairing is open this long after switch-on / New code (skeptic-2 F3)
+  std::int64_t failureDecayMs = 3600000;  // the global failure count starts over after this long without one (N4)
   double cmdRatePerSec = 10;              // per token
   double cmdBurst = 20;
   double reqRatePerSec = 30;              // per peer IP, every route
@@ -37,9 +39,9 @@ struct Limits {
 extern const char *const kPageCommands[7];
 
 struct PairResult {
-  int status = 200;         // 200 paired, 400 bad request, 403 wrong code, 429 too many tries / paused
+  int status = 200;         // 200 paired, 400 bad request, 403 wrong code / closed, 429 too many tries / paused
   std::string token;        // 200 only
-  std::string error;        // 'bad-code-format' | 'wrong-code' | 'too-many-tries' | 'paused'
+  std::string error;        // 'bad-code-format' | 'wrong-code' | 'too-many-tries' | 'paused' | 'pairing-closed'
   int retryAfterSec = 0;    // 429 only
 };
 
@@ -69,6 +71,14 @@ class Service {
    * and resets the backoff, since a person at the Mac asked for it (skeptic-2 C4).
    */
   void newCode(bool byUser = false);
+  /**
+   * Open pairing for pairWindowMs (the remote switched on, Settings "New code"). Outside the window /api/pair answers
+   * 'pairing-closed' without looking at the code: guessing is only possible while someone is at the Mac (skeptic-2
+   * F3). Bumps infoVersion().
+   */
+  void openPairing();
+  /** ms left in the pairing window, 0 = closed. */
+  std::int64_t pairingMs() const;
   /** Try a code from `ip`. */
   PairResult pair(const std::string &ip, std::string_view code);
   /** Pairing paused after a rotation: ms left, 0 = not paused. */
@@ -129,6 +139,8 @@ class Service {
   std::string code_;
   int globalFailures_ = 0;
   int rotations_ = 0;  // automatic rotations since the last pairing or user "New code": the pause doubles
+  std::int64_t lastFailure_ = 0;
+  std::int64_t pairingUntil_ = 0;
   std::int64_t pausedUntil_ = 0;
   std::vector<Token> tokens_;
   std::map<std::string, IpEntry> ips_;

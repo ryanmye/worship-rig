@@ -76,6 +76,7 @@ void Service::newCode(bool byUser) {
   if (byUser) {
     pausedUntil_ = 0;
     rotations_ = 0;
+    pairingUntil_ = now_() + lim_.pairWindowMs;
   }
   std::uint32_t limit = 1;
   for (int i = 0; i < lim_.codeDigits; ++i) limit *= 10;
@@ -97,6 +98,16 @@ void Service::newCode(bool byUser) {
   ++infoVersion_;
 }
 
+void Service::openPairing() {
+  pairingUntil_ = now_() + lim_.pairWindowMs;
+  ++infoVersion_;
+}
+
+std::int64_t Service::pairingMs() const {
+  const std::int64_t left = pairingUntil_ - now_();
+  return left > 0 ? left : 0;
+}
+
 std::int64_t Service::pausedMs() const {
   const std::int64_t left = pausedUntil_ - now_();
   return left > 0 ? left : 0;
@@ -116,9 +127,18 @@ Service::IpEntry &Service::ipEntry(const std::string &ip) {
   auto it = ips_.find(ip);
   if (it == ips_.end()) {
     if (ips_.size() >= lim_.maxTrackedIps) {
-      auto oldest = std::min_element(ips_.begin(), ips_.end(),
-                                     [](const auto &a, const auto &b) { return a.second.touched < b.second.touched; });
-      ips_.erase(oldest);
+      // evict the least recent entry with no failures in its window; churning through addresses must not wipe a
+      // guesser's count (skeptic-2 F3). With every entry failing, the oldest goes: the global limit still holds.
+      auto victim = ips_.end();
+      for (auto i = ips_.begin(); i != ips_.end(); ++i) {
+        const bool failing = !i->second.failures.empty() && i->second.failures.back() > t - lim_.failureWindowMs;
+        if (!failing && (victim == ips_.end() || i->second.touched < victim->second.touched)) victim = i;
+      }
+      if (victim == ips_.end()) {
+        victim = std::min_element(ips_.begin(), ips_.end(),
+                                  [](const auto &a, const auto &b) { return a.second.touched < b.second.touched; });
+      }
+      ips_.erase(victim);
     }
     IpEntry e;
     e.bucket.tokens = lim_.reqBurst;
@@ -159,6 +179,11 @@ PairResult Service::pair(const std::string &ip, std::string_view code) {
     return r;
   }
   const std::int64_t t = now_();
+  if (pairingUntil_ <= t) {
+    r.status = 403;
+    r.error = "pairing-closed";
+    return r;
+  }
   if (pausedUntil_ > t) {
     r.status = 429;
     r.error = "paused";
@@ -174,6 +199,8 @@ PairResult Service::pair(const std::string &ip, std::string_view code) {
   }
   if (!constantTimeEquals(code, code_)) {
     e.failures.push_back(t);
+    if (lastFailure_ && t - lastFailure_ > lim_.failureDecayMs) globalFailures_ = 0;  // old typos don't add up (N4)
+    lastFailure_ = t;
     if (++globalFailures_ >= lim_.globalFailuresBeforeRotate) {
       newCode();  // resets globalFailures_; Settings shows the new code
       // the pause doubles with each rotation (60 s, 2 min, … 1 h): at most ~20 guesses an hour once it has grown,
@@ -261,7 +288,8 @@ std::string Service::viewJson() const {
 
 CommandResult Service::finish(Token *t, const std::string &id, CommandResult r) {
   r.replyJson = reply(id, r.ok, r.error);
-  if (t && !id.empty() && r.status == 200) {
+  // only a command that ran is remembered: a refusal (locked, not-ready) retried later is a new try (skeptic-2 N1)
+  if (t && !id.empty() && r.status == 200 && r.ok) {
     t->seen.emplace_back(id, std::make_pair(now_(), r.replyJson));
     while (t->seen.size() > lim_.dedupePerToken) t->seen.pop_front();
   }

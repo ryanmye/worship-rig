@@ -61,10 +61,18 @@ These need small edits to `app/js/shared/bus.js` (state check) and `app/js/contr
   (`http://<ip>:<port>/#p=<code>`). A correct code returns a 128-bit random token (hex). Tokens live in memory only:
   quitting the app, switching the remote off or "Forget phones" ends every pairing. At most 8 paired phones (the
   oldest is dropped).
-- **Brute force:** per peer IP, 5 failed codes per 60 s; globally, 20 failures in total rotate the code (Settings shows
-  the new one) and pairing pauses for 60 s. 10^6 codes at that rate cannot be searched in a service.
+- **Pairing window:** /api/pair is open for 5 minutes after the remote is switched on or "New code" is pressed;
+  outside it every try is refused without looking at the code ('pairing-closed'), so guessing is only possible while
+  someone is at the Mac (skeptic-2 F3).
+- **Brute force:** per peer IP (an IPv6 /64 counts as one), 5 failed codes per 60 s; a busy IP table never evicts an
+  IP that is still failing. Globally, 20 failures rotate the code and pause pairing: 60 s, doubling with each rotation
+  up to 1 h (≈ 20 guesses an hour at most once grown); "New code" or a successful pairing resets it; failures more
+  than an hour apart start the count over (typos over days don't add up).
 - **Rate limits:** per token, a token bucket of 10 commands/s with a burst of 20; per peer IP, 30 requests/s across
-  every route; at most 16 connections in total and 4 per IP.
+  every route (WebSocket messages and pings included); at most 16 connections in total and 4 per IP. When full, the
+  oldest connection that has proved nothing yet (no request served, no paired WebSocket) makes room; a new connection
+  must send its first byte within 3 s (skeptic-2 F8).
+- Only a command that ran is remembered for dedupe: a refusal (locked, not-ready) retried later is a new try.
 - **Commands from the page:** `prevSong`, `nextSong`, `prevSnapshot`, `nextSnapshot`, `panic`, `droneOn`, `droneOff`,
   each with a client `id` (≤ 32 chars, `[A-Za-z0-9_-]`). They are mapped to bus commands (`prevScene` / `nextScene`;
   `droneOn` / `droneOff` become `droneToggle` with `on: true / false`). A repeated `id` within 30 s is answered from
@@ -83,9 +91,11 @@ devhost's `http.cpp` / `ws_codec.cpp`, with tighter limits: 8 KB request head, 1
 - **DNS rebinding:** `Host` must be an IP literal (with the port) or `<name>.local`. **Cross-site:** POSTs and the WS
   upgrade need an `Origin` equal to `http://<Host>`, or none. Auth is a header token (`X-Rig-Token`), never a cookie,
   so another site cannot ride it.
-- Routes: `GET /` (the page, `Cache-Control: no-store`, a strict CSP: `default-src 'none'; script-src 'self'
-  'unsafe-inline'`, … no remote origins), `POST /api/pair`, `GET /api/state` (poll; `?since=<seq>` waits up to 10 s,
-  then answers `{seq}` alone), `POST /api/cmd`, `GET /ws` (upgrade; the first message must be `{"auth":token}` within
+- POST bodies must be `application/json` (a cross-site form can't send that without a CORS preflight, which never
+  succeeds here).
+- Routes: `GET /` (the page, `Cache-Control: no-store`, a strict CSP: `default-src 'none'; script-src
+  'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'self' ws://<Host>; frame-ancestors 'none'`), `POST /api/pair`, `GET /api/state` (poll; `?since=<seq>` waits up to 10 s,
+  then answers the same view), `POST /api/cmd`, `GET /ws` (upgrade; the first message must be `{"auth":token}` within
   5 s; then state pushes and `{cmd,id}` → `{ack:id, ok, error?}`). Everything else is 404. Bodies must be JSON
   objects.
 - Timeouts: an idle HTTP connection is dropped after 15 s, an unauthenticated WS after 5 s, a WS with no traffic
@@ -149,6 +159,10 @@ Not touched: `app/js/engine/**` (the oracle), the N2 and TOUCH files, `RigPaths.
 - Fixtures byte-identical (`native/golden`, core fixtures); the affected UI suites (`unit`, `mini`, `settings`,
   `shell-unit`) through `node tools/cloud/gates.mjs`.
 - Each change is reviewed by a separate skeptic agent before it is pushed.
+
+Known and accepted (skeptic-2 nits): more than ~8 KB of WebSocket frames pending at once closes the socket (the page
+sends one small message at a time); a 1-byte close payload is accepted and text frames are not UTF-8 checked (nothing
+reads them as text but the JSON parser); `HEAD /` answers Content-Length 0.
 
 ## 5. Only a Mac can verify
 

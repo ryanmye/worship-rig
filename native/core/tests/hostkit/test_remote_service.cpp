@@ -18,8 +18,15 @@ struct Rig {
   std::uint32_t counter = 0;
   std::vector<std::uint32_t> script;  // returned first (as 4-byte words), then a counter-based stream
   Service svc;
-  explicit Rig(Limits l = {})
-      : svc(l, [this] { return t; }, [this](std::uint8_t *p, std::size_t n) { fill(p, n); }) {}
+  /** Limits for the other rules: the pairing window open for good (its own test sets a real one). */
+  static Limits open(Limits l) {
+    l.pairWindowMs = 1000LL * 3600 * 24 * 365;
+    return l;
+  }
+  explicit Rig(Limits l = {}, bool openForGood = true)
+      : svc(openForGood ? open(l) : l, [this] { return t; }, [this](std::uint8_t *p, std::size_t n) { fill(p, n); }) {
+    svc.openPairing();
+  }
   void fill(std::uint8_t *p, std::size_t n) {
     for (std::size_t i = 0; i < n; i += 4) {
       std::uint32_t w;
@@ -149,6 +156,45 @@ TEST_SUITE("hostkit-remote-service") {
     r.pairOk("10.8.0.1");  // a phone paired: the backoff starts over
     burn(53);
     CHECK(r.svc.pausedMs() == 60000);
+  }
+
+  TEST_CASE("pairing window: 5 minutes after switch-on / New code; closed means no code is even looked at") {
+    Rig r({}, false);
+    CHECK(r.svc.pairingMs() == 300000);
+    r.t += 299999;
+    CHECK(r.svc.pairingMs() == 1);
+    r.t += 1;
+    CHECK(r.svc.pairingMs() == 0);
+    PairResult closed = r.svc.pair("10.0.0.2", r.svc.code());
+    CHECK(closed.status == 403);
+    CHECK(closed.error == "pairing-closed");
+    const std::string wrong = r.svc.code() == "000000" ? "000001" : "000000";
+    for (int i = 0; i < 30; ++i) r.svc.pair("10.0.0." + std::to_string(i), wrong);
+    CHECK(r.svc.pausedMs() == 0);  // closed: guesses don't count, rotate or pause anything
+    const std::string before = r.svc.code();
+    r.svc.newCode(true);  // Settings "New code"
+    CHECK(r.svc.code() != before);
+    CHECK(r.svc.pairingMs() == 300000);
+    CHECK(r.svc.pair("10.0.0.2", r.svc.code()).status == 200);
+  }
+
+  TEST_CASE("per-IP tables: churning addresses can't evict an IP that is failing; old failures decay") {
+    Limits l;
+    l.maxTrackedIps = 4;
+    Rig r(l);
+    const std::string wrong = r.svc.code() == "000000" ? "000001" : "000000";
+    for (int i = 0; i < 5; ++i) r.svc.pair("10.0.0.66", wrong);
+    for (int i = 0; i < 50; ++i) r.svc.allowRequest("10.1.0." + std::to_string(i));  // churn
+    CHECK(r.svc.pair("10.0.0.66", r.svc.code()).status == 429);  // still out of tries
+    // N4: 19 typos, an hour and more of quiet, then 19 more: no rotation (the count started over)
+    Rig q;
+    const std::string w2 = q.svc.code() == "000000" ? "000001" : "000000";
+    const std::string c0 = q.svc.code();
+    for (int i = 0; i < 19; ++i) q.svc.pair("10.2.0." + std::to_string(i), w2);
+    q.t += 3600001;
+    for (int i = 0; i < 19; ++i) q.svc.pair("10.3.0." + std::to_string(i), w2);
+    CHECK(q.svc.code() == c0);
+    CHECK(q.svc.pausedMs() == 0);
   }
 
   TEST_CASE("hasToken does not count as a use (LRU)") {
@@ -284,12 +330,12 @@ TEST_SUITE("hostkit-remote-service") {
     CommandResult p = r.svc.command(tok, cmd("panic", "p1"));
     CHECK(p.ok);
     CHECK(p.bus.value() == R"({"v":1,"type":"panic","via":"remote"})");
-    // a refused id stays refused when repeated after the unlock (it is the same press)
+    // a refusal is not remembered (skeptic-2 N1): the same id after the unlock is a new try
     REQUIRE(r.svc.setState(state(R"(,"locked":false)")));
     CommandResult again = r.svc.command(tok, cmd("nextSong", "lnextSong"));
-    CHECK(again.repeated);
-    CHECK_FALSE(again.ok);
-    CHECK(r.svc.command(tok, cmd("nextSong", "fresh")).ok);
+    CHECK_FALSE(again.repeated);
+    CHECK(again.ok);
+    CHECK(again.bus.has_value());
   }
 
   TEST_CASE("commands: not paired, bad bodies, bad ids, rate limit") {

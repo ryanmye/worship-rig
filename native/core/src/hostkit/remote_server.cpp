@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
@@ -81,7 +82,12 @@ bool peerOf(const sockaddr_storage &ss, std::string *ip) {
       std::memcpy(&v4, b.data() + 12, 4);
       inet_ntop(AF_INET, &v4, buf, sizeof buf);
     } else {
-      inet_ntop(AF_INET6, &a->sin6_addr, buf, sizeof buf);
+      // one IPv6 host has a whole /64 to pick addresses from: limits count per /64 (skeptic-2 F8)
+      in6_addr net{};
+      std::memcpy(&net, b.data(), 8);
+      inet_ntop(AF_INET6, &net, buf, sizeof buf);
+      *ip = std::string(buf) + "/64";
+      return isLocalIPv6(b);
     }
     *ip = buf;
     return isLocalIPv6(b);
@@ -219,6 +225,10 @@ bool Server::start(const StartOptions &opt, std::string *err) {
     setNonBlocking(wakeFds_[0]);
     setNonBlocking(wakeFds_[1]);
   }
+  {
+    std::lock_guard<std::mutex> g(mu_);
+    svc_.openPairing();  // switched on: phones can pair for a few minutes (REMOTE.md §2.3)
+  }
   stop_ = false;
   running_ = true;
   thread_ = std::thread([this] { loop(); });
@@ -297,12 +307,13 @@ void Server::notifyInfo() {
 std::string Server::infoJson() {
   std::string code;
   std::size_t paired;
-  std::int64_t paused;
+  std::int64_t paused, pairing;
   {
     std::lock_guard<std::mutex> g(mu_);
     code = svc_.code();
     paired = svc_.pairedCount();
     paused = svc_.pausedMs();
+    pairing = svc_.pairingMs();
   }
   const bool on = running_.load();
   std::string j = "{\"on\":";
@@ -311,6 +322,7 @@ std::string Server::infoJson() {
   j += ",\"port\":" + std::to_string(on ? port : 0);
   j += ",\"code\":" + quote(code) + ",\"paired\":" + std::to_string(paired);
   j += ",\"pausedSec\":" + std::to_string((paused + 999) / 1000);
+  j += ",\"pairingSec\":" + std::to_string(on ? (pairing + 999) / 1000 : 0);
   j += ",\"addresses\":[";
   std::string url;
   if (on) {
@@ -405,8 +417,8 @@ void Server::loopOnce() {
           }
           respond(*c, 200, "application/json", view);
         }
-      } else if (t - c->since > to_.httpMs) {
-        c->dead = true;
+      } else if (t - c->since > to_.httpMs || (c->in.empty() && t - c->openedAt > kFirstByteMs)) {
+        c->dead = true;  // slow, or connected and silent (skeptic-2 F8)
       }
     }
     // hand out commands and info changes without the lock
@@ -415,7 +427,10 @@ void Server::loopOnce() {
     {
       std::lock_guard<std::mutex> g(mu_);
       cmds.swap(pending_);
-      infoChanged = svc_.infoVersion() != infoSeen_;
+      const bool pairing = svc_.pairingMs() > 0, paused = svc_.pausedMs() > 0;
+      infoChanged = svc_.infoVersion() != infoSeen_ || pairing != pairingSeen_ || paused != pausedSeen_;
+      pairingSeen_ = pairing;
+      pausedSeen_ = paused;
     }
     for (const std::string &m : cmds) {
       if (hooks_.command) hooks_.command(m);
@@ -424,7 +439,7 @@ void Server::loopOnce() {
     // reap
     for (auto &c : clients_) {
       if (c->closing && c->out.empty()) c->dead = true;
-      if (c->dead) close(c->fd);
+      if (c->dead && c->fd >= 0) close(c->fd);
     }
     clients_.erase(std::remove_if(clients_.begin(), clients_.end(), [](const auto &c) { return c->dead; }),
                    clients_.end());
@@ -439,10 +454,32 @@ void Server::acceptAll() {
     if (fd < 0) return;
     std::string ip;
     const bool local = peerOf(ss, &ip);
-    const auto perIp = std::count_if(clients_.begin(), clients_.end(), [&](const auto &c) { return c->ip == ip; });
-    if (!local || static_cast<int>(clients_.size()) >= kMaxClients || perIp >= kMaxClientsPerIp) {
-      close(fd);  // not on the local network, or too many connections: no reply at all
+    if (!local) {
+      close(fd);  // not on the local network: no reply at all
       continue;
+    }
+    // full: make room by dropping the oldest connection that hasn't proved anything yet (no request served, no
+    // paired WebSocket), from this IP when it is the IP that is full; else refuse the newcomer (skeptic-2 F8: idle
+    // sockets that reconnect at once could hold every slot)
+    auto live = [](const auto &c) { return !c->dead && !c->closing; };
+    auto unproven = [&](const auto &c) { return live(c) && !c->polling && (c->ws ? !c->authed : true); };
+    const auto perIp = std::count_if(clients_.begin(), clients_.end(),
+                                     [&](const auto &c) { return !c->dead && c->ip == ip; });
+    const auto total = std::count_if(clients_.begin(), clients_.end(), [](const auto &c) { return !c->dead; });
+    const bool ipFull = perIp >= kMaxClientsPerIp, allFull = total >= kMaxClients;
+    if (ipFull || allFull) {
+      Client *victim = nullptr;
+      for (auto &c : clients_) {
+        if (!unproven(c) || (ipFull && c->ip != ip)) continue;
+        if (!victim || c->openedAt < victim->openedAt) victim = c.get();
+      }
+      if (!victim) {
+        close(fd);
+        continue;
+      }
+      victim->dead = true;
+      close(victim->fd);
+      victim->fd = -1;
     }
     setNonBlocking(fd);
     auto c = std::make_unique<Client>();
@@ -568,6 +605,12 @@ void Server::onHttp(Client &c) {
       return respond(c, 405, "application/json", "{\"error\":\"method\"}");
     }
     if (!originOk) return respond(c, 403, "application/json", "{\"error\":\"origin\"}");
+    // JSON only: a cross-site form can't send it without a CORS preflight, which never succeeds here (skeptic-2 N3)
+    std::string ct = req.header("content-type");
+    for (char &ch : ct) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    if (req.method == "POST" && ct.rfind("application/json", 0) != 0) {
+      return respond(c, 415, "application/json", "{\"error\":\"content-type\"}");
+    }
   }
   if (p == "/api/pair") {
     PairResult r;

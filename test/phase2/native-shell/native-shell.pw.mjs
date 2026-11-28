@@ -65,7 +65,7 @@ function fakeShell(info) {
     remoteInfo: () => window.__shell.remote,
     remoteSetEnabled: (b) => {
       const r = window.__shell.remote;
-      Object.assign(r, b.on ? { on: true, port: 8450, url: 'http://192.168.1.20:8450/',
+      Object.assign(r, b.on ? { on: true, port: 8450, pairingSec: 300, url: 'http://192.168.1.20:8450/',
         pairUrl: `http://192.168.1.20:8450/#p=${r.code}`, qr: { size: 21, modules: '1'.repeat(7) + '0'.repeat(434) },
         addresses: [{ name: 'en0', ip: '192.168.1.20' }] } : { on: false, port: 0, url: null, qr: null, addresses: [] });
       return r;
@@ -216,6 +216,7 @@ test('native Mac app: flags, merged __rigShell, Settings without Chrome wording,
           assert.equal((await q('remote-details')).hidden, false);
           assert.match((await q('remote-url')).text, /open http:\/\/192\.168\.1\.20:8450\//);
           assert.equal((await q('remote-code')).text, 'Code 123456');
+          assert.equal((await q('remote-window')).text, 'Phones can pair for 5:00.');
           assert.equal((await q('remote-paired')).text, '0 phones paired');
           assert.equal((await q('remote-forget')).disabled, true, 'nothing to forget');
           const qr = await a.ev(() => {

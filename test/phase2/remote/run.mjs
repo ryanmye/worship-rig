@@ -257,7 +257,8 @@ if (host) {
     // even a crafted request is refused by the server while locked
     const tok = await page.evaluate(() => localStorage.getItem('worship-rig.remote.token'));
     const r = await page.evaluate(async (t) => {
-      const x = await fetch('/api/cmd', { method: 'POST', headers: { 'X-Rig-Token': t }, body: '{"cmd":"nextSong","id":"z1"}' });
+      const x = await fetch('/api/cmd', { method: 'POST', headers: { 'X-Rig-Token': t, 'Content-Type': 'application/json' },
+        body: '{"cmd":"nextSong","id":"z1"}' });
       return x.json();
     }, tok);
     assert.deepEqual(r, { id: 'z1', ok: false, error: 'locked' });

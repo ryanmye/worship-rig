@@ -94,7 +94,7 @@ std::string get(std::uint16_t port, const std::string &path, const std::string &
 }
 std::string post(std::uint16_t port, const std::string &path, const std::string &body, const std::string &token = "",
                  const std::string &origin = "") {
-  std::string raw = "POST " + path + " HTTP/1.1\r\nHost: " + std::string(kHost) + "\r\nContent-Type: text/plain\r\n"
+  std::string raw = "POST " + path + " HTTP/1.1\r\nHost: " + std::string(kHost) + "\r\nContent-Type: application/json\r\n"
                     + "Content-Length: " + std::to_string(body.size()) + "\r\n";
   if (!token.empty()) raw += "X-Rig-Token: " + token + "\r\n";
   if (!origin.empty()) raw += "Origin: " + origin + "\r\n";
@@ -237,6 +237,11 @@ TEST_SUITE("hostkit-remote-server") {
     CHECK(status(post(f.port(), "/api/pair", "{\"code\":\"" + f.code() + "\"}", "", "null")) == 403);
     CHECK(status(post(f.port(), "/api/pair", "{\"code\":\"" + f.code() + "\"}", "", "http://127.0.0.1:8450")) == 200);
     CHECK(status(get(f.port(), "/api/pair")) == 405);
+    // skeptic-2 N3: JSON only (a cross-site form can only send text/plain, urlencoded or multipart)
+    const std::string form = "POST /api/pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: text/plain\r\n"
+                             "Content-Length: 17\r\n\r\n{\"code\":\"123456\"}";
+    CHECK(status(request(f.port(), form)) == 415);
+    CHECK(f.server.infoJson().find("\"pairingSec\":300") != std::string::npos);  // switched on: pairing open
     CHECK(status(post(f.port(), "/api/state", "{}")) == 405);
   }
 
@@ -277,7 +282,7 @@ TEST_SUITE("hostkit-remote-server") {
     // a body in pieces, and one too large
     const int fd = connectTo(f.port());
     const std::string body = R"({"cmd":"panic","id":"c5"})";
-    sendAll(fd, "POST /api/cmd HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Rig-Token: " + tok
+    sendAll(fd, "POST /api/cmd HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nX-Rig-Token: " + tok
                     + "\r\nContent-Length: " + std::to_string(body.size()) + "\r\n\r\n" + body.substr(0, 5));
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     sendAll(fd, body.substr(5));
@@ -409,12 +414,16 @@ TEST_SUITE("hostkit-remote-server") {
     std::vector<int> fds;
     for (int i = 0; i < 4; ++i) fds.push_back(connectTo(f.port()));
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    // skeptic-2 F8: the 5th from the same IP takes the oldest idle one's place instead of being refused
     const int fifth = connectTo(f.port());
     sendAll(fifth, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
-    CHECK(readAll(fifth, 800).empty());  // closed without a reply
+    CHECK(status(readAll(fifth, 1500)) == 200);
     close(fifth);
-    // the 4 idle ones are dropped after httpMs; then a request works again
-    for (int fd : fds) CHECK(readAll(fd, 1500).empty());
+    CHECK(readAll(fds[0], 300).empty());  // the oldest was closed
+    // the rest say nothing: dropped after the first-byte deadline (3 s), not httpMs
+    const std::int64_t t0 = nowMs();
+    for (std::size_t i = 1; i < fds.size(); ++i) CHECK(readAll(fds[i], 5000).empty());
+    CHECK(nowMs() - t0 < 4500);
     for (int fd : fds) close(fd);
     CHECK(status(get(f.port(), "/")) == 200);
   }

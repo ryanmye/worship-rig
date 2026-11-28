@@ -9,7 +9,8 @@
 <meta name="referrer" content="no-referrer">
 <title>Worship Rig Remote</title>
 <!--
-  The browser remote (D34; native/docs/lanes/REMOTE.md §2.5). Served by the Mac app (rig_remote, native/core/src/hostkit)
+  The browser remote (D34; native/docs/lanes/REMOTE.md §2.5). Served by the Mac app (rig_remote,
+  native/core/src/hostkit)
   on the local network. One file: ES5 script and plain CSS, no modules, no build step, no web fonts, nothing loaded
   from anywhere else (the server's CSP allows only this file's inline script and style). Targets: Safari on iOS 12
   reliably, iOS 7 best effort, Android Chrome 50+. Song and snapshot names come from the Mac and are only ever set
@@ -21,7 +22,8 @@ html, body { margin: 0; padding: 0; background: #101114; color: #eceae4; height:
 body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 17px;
   -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: rgba(0,0,0,0); -webkit-user-select: none;
   user-select: none; }
-.wrap { max-width: 480px; margin: 0 auto; padding: 12px 14px 20px; box-sizing: border-box; -webkit-box-sizing: border-box; }
+.wrap { max-width: 480px; margin: 0 auto; padding: 12px 14px 20px; box-sizing: border-box;
+  -webkit-box-sizing: border-box; }
 .hidden { display: none; }
 h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #9a978f;
   margin: 4px 0 14px; }
@@ -143,7 +145,7 @@ p.help { font-size: 15px; color: #9a978f; line-height: 1.45; }
     x.open(method, path, true);
     var t = getToken();
     if (t) x.setRequestHeader('X-Rig-Token', t);
-    if (body !== null) x.setRequestHeader('Content-Type', 'text/plain');
+    if (body !== null) x.setRequestHeader('Content-Type', 'application/json'); // the server takes JSON only
     x.onreadystatechange = function () {
       if (x.readyState !== 4) return;
       var data = null;
@@ -183,6 +185,10 @@ p.help { font-size: 15px; color: #9a978f; line-height: 1.45; }
         setText($('pairNote'), 'Too many tries. Wait ' + (after || '60') + ' seconds' +
           (err === 'paused' ? ', then use the new code on the Mac.' : '.'));
       } else if (err === 'bad-code-format') setText($('pairNote'), 'The code is 6 digits.');
+      else if (err === 'pairing-closed') {
+        setText($('pairNote'), 'Pairing is closed. On the Mac, press New code in Settings › Mac › Remote, '
+          + 'then try again.');
+      }
       else if (st === 0) setText($('pairNote'), 'Can’t reach the Mac. Is the phone on the same Wi-Fi?');
       else setText($('pairNote'), 'Pairing failed (' + st + ').');
     });
@@ -234,7 +240,9 @@ p.help { font-size: 15px; color: #9a978f; line-height: 1.45; }
   }
 
   function connected() {
-    if (view && view.ready && view.audio && view.audio !== 'running') status('Connected · audio ' + view.audio, 'warn');
+    if (view && view.ready && view.audio && view.audio !== 'running') {
+      status('Connected · audio ' + view.audio, 'warn');
+    }
     else if (view && view.ready) status(mode === 'ws' ? 'Connected' : 'Connected (slow mode)', 'ok');
   }
 
@@ -305,7 +313,12 @@ p.help { font-size: 15px; color: #9a978f; line-height: 1.45; }
     if (stopped) return;
     if (!window.WebSocket || wsFails >= 2) return startPolling();
     var s;
-    try { s = new window.WebSocket('ws://' + window.location.host + '/ws'); } catch (e) { wsFails = 2; return startPolling(); }
+    try {
+      s = new window.WebSocket('ws://' + window.location.host + '/ws');
+    } catch (e) {
+      wsFails = 2;
+      return startPolling();
+    }
     ws = s;
     s.authed = false;
     s.onopen = function () { s.send(JSON.stringify({ auth: getToken() })); };
@@ -397,7 +410,8 @@ p.help { font-size: 15px; color: #9a978f; line-height: 1.45; }
     pair(c);
   });
   $('code').addEventListener('keyup', function (e) {
-    if ((e.keyCode === 13 || ($('code').value || '').replace(/\D/g, '').length === 6) && !hasClass($('pair'), 'hidden')) {
+    var digits = ($('code').value || '').replace(/\D/g, '');
+    if ((e.keyCode === 13 || digits.length === 6) && !hasClass($('pair'), 'hidden')) {
       var c = ($('code').value || '').replace(/\D/g, '');
       if (c.length === 6) pair(c);
     }
@@ -405,7 +419,8 @@ p.help { font-size: 15px; color: #9a978f; line-height: 1.45; }
 
   // a page hidden for a while (phone locked) comes back with a fresh connection
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible' && getToken() && !hasClass($('main'), 'hidden') && !ws && mode === 'ws') {
+    var back = document.visibilityState === 'visible' && getToken() && !hasClass($('main'), 'hidden');
+    if (back && !ws && mode === 'ws') {
       if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
       openWs();
     }
