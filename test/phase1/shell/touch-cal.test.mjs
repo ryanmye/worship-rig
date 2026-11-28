@@ -118,12 +118,13 @@ test('the on-screen and computer keys use the @computer curve (computer keys = v
   const { engine, ctl, doc } = await setup([], store);
   engine.clear();
   ctl.perform.noteOn(60, 50);
-  ctl.perform.noteOn(62, 0.4); // rounds to 0 → 1 raw → 0.4 out → silent
+  ctl.perform.noteOn(62, 0.4); // rounds to 0 → 1 raw → 0.4 out → velocity 1 (touch-skeptic F1: only 0 out is silent)
   key(doc, 'keydown', { code: 'KeyD' }); // E4 (C4 is held by the on-screen note)
   const got = engine.of('noteOn');
   assert.equal(got[0][2], 20);
-  assert.equal(got.length, 2, 'the near-zero on-screen note is silent');
-  assert.equal(got[1][2], Math.round(20 + (80 * 50) / 77), 'computer key: 100 through the curve');
+  assert.equal(got.length, 3, 'the near-zero on-screen note still sounds');
+  assert.deepEqual(got[1], ['noteOn', 62, 1]);
+  assert.equal(got[2][2], Math.round(20 + (80 * 50) / 77), 'computer key: 100 through the curve');
   ctl.dispose();
 });
 
@@ -162,4 +163,39 @@ test('store: velocity curves validated (refused on set, dropped on load), migrat
   const text = store.exportJSON();
   assert.doesNotMatch(text, /Roland|"velocity"/, 'device-local: not in a library export');
   store.dispose();
+});
+
+test('touch-skeptic: a silent note under the pedal, across keyboards and on re-strike leaves nothing held', async () => {
+  const store = makeStore();
+  store.set('settings.midiInputId', 'all');
+  store.setKeyboard(FP10, { velocity: CURVE }); // velocity 1 → 0 out → silent
+  const { engine, midi, ctl } = await setup([port('f', FP10), port('k', OTHER)], store);
+  const cc = (id, n, v) => midi._inject([0xb0, n, v], 0, id);
+  engine.clear();
+  cc('f', 64, 127); // pedal down
+  on(midi, 'f', 60, 1);
+  off(midi, 'f', 60);
+  on(midi, 'f', 60, 1); // re-strike, still silent
+  on(midi, 'f', 60, 1); // duplicate note-on without a note-off
+  off(midi, 'f', 60);
+  cc('f', 64, 0);
+  assert.deepEqual(engine.of('noteOn'), [], 'nothing sounded');
+  assert.deepEqual(engine.of('noteOff'), [], 'no note-off without its note-on');
+  // the same note held on the other keyboard: the FP-10's silent strike and release do not cut it
+  engine.clear();
+  on(midi, 'k', 62, 80);
+  on(midi, 'f', 62, 1);
+  off(midi, 'f', 62);
+  assert.equal(engine.of('noteOn').length, 1);
+  assert.deepEqual(engine.of('noteOff'), []);
+  off(midi, 'k', 62);
+  assert.deepEqual(engine.of('noteOff').map((c) => c[1]), [62]);
+  // a sounding note held while the curve changes to one where it would be silent still gets its note-off
+  engine.clear();
+  on(midi, 'f', 64, 40);
+  store.setKeyboard(FP10, { velocity: { in: [0, 127], out: [0, 0] } });
+  await tick();
+  off(midi, 'f', 64);
+  assert.deepEqual(engine.of('noteOff').map((c) => c[1]), [64]);
+  ctl.dispose();
 });

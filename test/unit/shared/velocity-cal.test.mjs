@@ -106,6 +106,10 @@ test('presets: Linear plus the old named curves as points (light = soft v^0.6, h
     // within 0.8 velocity of the old curve everywhere (piecewise-linear through 10 samples of it)
     for (let v = 1; v <= 127; v++) near(C.calAt(c, v), T.touchAt(touch, v) * 127, 0.8, `${k} @ ${v}`);
   }
+  // touch-skeptic F1: only an output of exactly 0 is silent; Heavy plays its softest keys (the old 'hard' did)
+  const heavy = C.compileCurve(C.CAL_PRESETS.heavy);
+  for (let v = 1; v <= 127; v++) assert.ok(C.calVelocity(heavy, v) >= 1, `heavy @ ${v} sounds`);
+  assert.equal(C.calVelocity(C.compileCurve({ in: [0, 127], out: [0, 1] }), 1), 1, '0.008 out plays velocity 1');
   const fixed = C.compileCurve(C.CAL_PRESETS.fixed);
   for (const v of [1, 64, 127]) assert.equal(C.calVelocity(fixed, v), 100);
   assert.equal(C.presetOfCurve({ in: [0, 127], out: [0, 126] }), null);

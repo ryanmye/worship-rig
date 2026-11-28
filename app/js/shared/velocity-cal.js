@@ -142,13 +142,16 @@ export function calAt(c, vel) {
 }
 
 /**
- * The whole velocity the engine gets for a key velocity: 0 = a silent note (not sent), else 1..127.
+ * The whole velocity the engine gets for a key velocity: 0 = a silent note (not sent), else 1..127. Only an output
+ * of exactly 0 is silent (Pianoteq's rule): a small positive output plays velocity 1, never rounds down to silence
+ * (touch-skeptic F1: the Heavy preset turned key velocities 1..3 silent, where the old 'hard' curve played them).
  * @param {CompiledCal} c
  * @param {number} vel
  * @returns {number}
  */
 export function calVelocity(c, vel) {
-  return Math.min(VEL_MAX, Math.max(0, Math.round(calAt(c, vel))));
+  const y = calAt(c, vel);
+  return y > 0 ? Math.min(VEL_MAX, Math.max(1, Math.round(y))) : 0;
 }
 
 /**
