@@ -8,6 +8,8 @@
 //     the controller re-prepares and commits the current song from the library (localStorage survives the crash).
 //     A loop of crashes (3 in 60 s) stops at a static page with a Reload link instead of reloading forever.
 //  3. Every main-frame commit (lane N0, NMA review O5): panic + rec stop for whatever the previous page held.
+//  4. Files (lane N3, B2): a main-frame blob: / data: load is cancelled, an <a download> becomes a WKDownload
+//     (RigFiles), and <input type=file> gets NSOpenPanel on macOS (runOpenPanelWith).
 import Foundation
 import WebKit
 #if os(macOS)
@@ -33,9 +35,24 @@ final class RigNavigationDelegate: NSObject, WKNavigationDelegate, WKUIDelegate 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url else { return decisionHandler(.cancel) }
-        switch url.scheme?.lowercased() ?? "" {
-        case RigSchemeHandler.scheme, "about", "blob", "data":
+        let scheme = url.scheme?.lowercased() ?? ""
+        let local = scheme == RigSchemeHandler.scheme || scheme == "blob" || scheme == "data"
+        // Lane N3 (B2, NATIVE-GAPS finding 8, n0-skeptic O1): an <a download> the page's listener (native-shell
+        // 30-files.js) did not take over becomes a WKDownload (RigFiles: a temp file at once, then the save panel),
+        // never a page load
+        if local && navigationAction.shouldPerformDownload { return decisionHandler(.download) }
+        switch scheme {
+        case RigSchemeHandler.scheme, "about":
             decisionHandler(.allow)
+        case "blob", "data":
+            // a main-frame (or new-window) load of a blob: / data: URL would replace the UI, and its commit sends
+            // panic + rec stop (pageDidCommit), ending a recording; frames inside the page may still use them
+            if navigationAction.targetFrame?.isMainFrame ?? true {
+                NSLog("rig: cancelled a page load of a %@: URL", scheme)
+                decisionHandler(.cancel)
+            } else {
+                decisionHandler(.allow)
+            }
         case "http", "https", "mailto":
             // a user click or window.open; never load it in this view
             RigExternal.open(url)
@@ -45,6 +62,21 @@ final class RigNavigationDelegate: NSObject, WKNavigationDelegate, WKUIDelegate 
             decisionHandler(.cancel)
         }
     }
+
+    /// Lane N3: the `.download` answer above hands the download over here; RigFiles is its delegate.
+    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+        host?.files.adopt(download)
+    }
+
+    #if os(macOS)
+    /// Lane N3 (B2, LaneR F2): <input type=file> (Settings › Import…, Edit's Import…, the chart's Import file, pad
+    /// files). Without this WKWebView on macOS shows no panel at all. The iPad shows WebKit's own picker.
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        guard let files = host?.files else { return completionHandler(nil) }
+        files.runOpenPanel(parameters, completionHandler: completionHandler)
+    }
+    #endif
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         let now = Date()
@@ -69,6 +101,7 @@ final class RigNavigationDelegate: NSObject, WKNavigationDelegate, WKUIDelegate 
     /// Lane N0 (NMA review O5): the old page is gone once a main-frame navigation commits; release what it held in
     /// the core (RigHost.pageDidCommit: panic + rec stop), whatever replaced it (a reload, the crash page, the UI).
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        host?.selfTest?.pageCommitted?(webView.url)
         host?.pageDidCommit()
     }
 

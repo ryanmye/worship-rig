@@ -4,11 +4,11 @@
 //   core event callback (control thread) --> pending batch --main--> window.__rigNative.receive([...])
 //   core --rig_host vtable--> RigAudio (AUHAL/RemoteIO, C render callback) and RigMIDI (CoreMIDI)
 //
-//   page JS --webkit.messageHandlers.rigShell {m}--> RigShellRouter --> RigLibrary / RigInfo  (window.rig, lane N0:
-//            the JS is app/js/native-shell/*.js, injected at document start by RigShellScripts)
+//   page JS --webkit.messageHandlers.rigShell {m}--> RigShellRouter --> RigLibrary / RigInfo / RigFiles
+//            (window.rig, lane N0: the JS is app/js/native-shell/*.js, injected at document start by RigShellScripts)
 //
 // What this deliberately does not do yet (native/docs/lanes/NATIVE-GAPS.md lanes N1-N9): menu bar, hotkeys, the rest
-// of window.rig (backupNow / latestBackup / onMenu / getInfo exist), importer, pads, update check.
+// of window.rig (backupNow / latestBackup / onMenu / getInfo / saveText exist), importer, pads, update check.
 import Foundation
 import SwiftUI
 import WebKit
@@ -20,6 +20,8 @@ final class RigHost: NSObject, ObservableObject {
     private let bridge: RigBridgeHandler
     private let navigation: RigNavigationDelegate
     let library: RigLibrary
+    /// window.rig.saveText, WKDownloads and the open panel (lane N3, RigFiles.swift).
+    let files: RigFiles
     /// window.rig's message handler (`rigShell`); WeakReplyHandler holds it weakly, so the host keeps it.
     private let shellRouter: RigShellRouter
     private(set) var audio: RigAudio!
@@ -51,14 +53,17 @@ final class RigHost: NSObject, ObservableObject {
         let bridgeHandler = RigBridgeHandler()
         let navDelegate = RigNavigationDelegate()
         let libraryHandler = RigLibrary()
+        let filesHandler = RigFiles()
         let router = RigShellRouter()
         router.register(libraryHandler)
         router.register(RigInfo())
+        router.register(filesHandler)
         shellRouter = router
         scheme = schemeHandler
         bridge = bridgeHandler
         navigation = navDelegate
         library = libraryHandler
+        files = filesHandler
         conf.setURLSchemeHandler(schemeHandler, forURLScheme: RigSchemeHandler.scheme)
         let ucc = WKUserContentController()
         if let hooks = selfTest {
@@ -96,6 +101,7 @@ final class RigHost: NSObject, ObservableObject {
         bridge.host = self
         navigation.host = self
         library.host = self
+        files.host = self
         RigPaths.ensureDirectories()
         audio = RigAudio(host: self)
         midi = RigMIDI(host: self)

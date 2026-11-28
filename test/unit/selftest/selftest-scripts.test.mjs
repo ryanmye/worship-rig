@@ -80,7 +80,7 @@ function fakeWindow({ handler = true } = {}) {
 }
 
 test('the Swift file has no interpolation or escapes inside the JS (raw strings only)', () => {
-  for (const name of ['pageHook', 'bootProbe', 'importProbe', 'packsProbe', 'shellProbe']) {
+  for (const name of ['pageHook', 'bootProbe', 'importProbe', 'packsProbe', 'shellProbe', 'filesProbe']) {
     const body = rawString(name);
     assert.ok(!body.includes('"""'), name);
     const compile = () => (name === 'pageHook' ? new Function('window', body)
@@ -316,3 +316,47 @@ test('packsProbe (lane N1): its pack files are valid songs; Rescan, Song bank an
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+test('filesProbe (lane N3): records, saves through saveText, clicks an in-page and a detached <a download>, tries a '
+  + 'blob: page load, then stops the recording', async () => {
+  let rec = false;
+  const saves = [];
+  const clicks = [];
+  const { win } = loadShell({
+    handlers: { saveFile: (b) => { saves.push(b); return { saved: true, name: b.name, path: `/tmp/Saves/${b.name}` }; } },
+    pre: (w) => {
+      w.addEventListener = () => {};
+      w.URL = URL;
+      w.Blob = Blob;
+      w.location = { href: 'rig://app/index.html' };
+    },
+  });
+  win.__rig = { controller: { record: async () => { rec = !rec; return { ok: true }; } } };
+  win.__rigShell.recording = () => rec;
+  const body = { append: (a) => { a.inPage = true; }, contains: () => false };
+  const document = {
+    body,
+    createElement: (tag) => {
+      const a = { tag, inPage: false, remove() { this.inPage = false; } };
+      a.click = () => clicks.push({ tag, href: a.href, download: a.download, inPage: a.inPage });
+      return a;
+    },
+  };
+  const run = new AsyncFunction('window', 'document', 'timeoutMs', rawString('filesProbe'));
+  const out = JSON.parse(await run(win, document, 3000));
+  assert.equal(out.probeError, undefined, out.probeError);
+  assert.equal(out.recStarted, true);
+  assert.equal(out.stillRecording, true, 'the fake page never navigated');
+  assert.equal(rec, false, 'the probe stops its recording');
+  assert.equal(out.text, 'N3 self-test é ü — \u{1f4a1}\n{"schema":2}\n');
+  assert.deepEqual(saves.map((b) => [b.m, b.name, b.text]), [['saveFile', 'N3 self-test é.json', out.text]]);
+  assert.deepEqual(out.save, { saved: true, name: 'N3 self-test é.json', path: '/tmp/Saves/N3 self-test é.json' });
+  assert.deepEqual(clicks.map((c) => [c.tag, c.download, c.inPage, /^blob:/.test(c.href)]),
+    [['a', 'N3 click.json', true, true], ['a', 'N3 download.json', false, true]]);
+  assert.match(out.href1, /^blob:/, 'it tried a plain blob: page load (Swift cancels it; the step checks webView.url)');
+  assert.equal(out.samePage, true);
+  // the names the Swift step reads back
+  for (const n of ['N3 self-test \\u{e9}.json', 'N3 click.json', 'N3 download.json']) {
+    assert.ok(swift.includes(`appendingPathComponent("${n}")`), n);
+  }
+});

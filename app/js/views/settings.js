@@ -231,6 +231,9 @@ const setText = (e, t) => {
   if (e.textContent !== s) e.textContent = s;
 };
 function download(filename, text) {
+  // lane N3 (B2): the native app saves through its own panel; a blob: <a download> could navigate its WKWebView
+  const r = globalThis.rig;
+  if (r && r.shell === 'native' && typeof r.saveText === 'function') return r.saveText(filename, text);
   const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
   const a = h('a', { href: url, download: filename });
   a.style.display = 'none';

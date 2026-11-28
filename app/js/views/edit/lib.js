@@ -197,8 +197,14 @@ export function bpmFromTaps(taps) {
   if (!(iv > 0)) return null;
   return 60000 / iv;
 }
-/** Save text as a download (library / song export). */
+/**
+ * Save text as a download (library / song export). In the native app (lane N3, B2) through `rig.saveText`, the Mac's
+ * save panel / the iPad's Files picker: a blob: <a download> could navigate its WKWebView.
+ * @returns {Promise<object>|undefined} the native shell's reply, or undefined for a browser download
+ */
 export function download(filename, text) {
+  const r = globalThis.rig;
+  if (r && r.shell === 'native' && typeof r.saveText === 'function') return r.saveText(filename, text);
   const blob = new Blob([text], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = h('a', { href: url, download: filename, style: { display: 'none' } });

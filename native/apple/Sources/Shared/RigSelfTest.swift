@@ -24,6 +24,10 @@
 //              packs written under <temp>/Samples (built from the current song by `packsProbe`, names with spaces
 //              and non-ASCII): /api/health says userPatches, controller.rescanPatchPacks takes the auto song into the
 //              library, the Song bank lists the 2 bank songs, Add to library works, no pack errors
+//   files      (lane N3, B2) with a recording running: rig.saveText and an <a download> blob: click both write the
+//              exact bytes into <temp>/Saves (RigFiles.saveDir: no panel); a plain blob: page load is cancelled; no
+//              main-frame commit, the same URL, the recording still running ("files-recording" is required only
+//              when the recording started). "files-download" (not required): a detached <a download> as a WKDownload
 //   midi       (not required) the CoreMIDI client was created
 //   webcontent the WebContent process did not terminate
 //   console    zero console.error / uncaught errors / unhandled rejections / resource or CSP errors on the page
@@ -45,6 +49,8 @@ import CoreMIDI
 /// and a nil hooks object (the normal app) cost nothing.
 final class RigSelfTestHooks {
     var pageFinished: ((URL?) -> Void)?
+    /// every main-frame commit (lane N3: an export must never cause one)
+    var pageCommitted: ((URL?) -> Void)?
     var pageFailed: ((String) -> Void)?
     var contentTerminated: (() -> Void)?
     /// a message body the page posted on `webkit.messageHandlers.rig` (object or array), before it goes to the core
@@ -112,6 +118,59 @@ enum RigSelfTestScripts {
         report('csp', String(ev.violatedDirective) + ' ' + String(ev.blockedURI));
       });
     })();
+    """#
+
+    /// callAsyncJavaScript body, argument `timeoutMs` (lane N3, B2): starts a recording, then saves through every
+    /// path an export can take: rig.saveText (the download() helpers), an <a download> blob: click (the page's
+    /// listener in native-shell 30-files.js), a detached <a download> (no click reaches the page: RigNavigation's
+    /// `.download`, a WKDownload) and a plain page load of a blob: URL (cancelled). The page must still be this page
+    /// and the recording still running afterwards (n0-skeptic O1). Returns a JSON string.
+    static let filesProbe = #"""
+    const out = {};
+    try {
+      const rig = window.__rig || {};
+      const shell = window.__rigShell || {};
+      const recording = () => !!(typeof shell.recording === 'function' && shell.recording());
+      const until = async (cond, ms) => {
+        const end = Date.now() + ms;
+        while (!cond() && Date.now() < end) await new Promise((r) => setTimeout(r, 50));
+        return cond();
+      };
+      out.href0 = String(window.location.href);
+      window.__n3Marker = 'still this page';
+      if (rig.controller && typeof rig.controller.record === 'function') {
+        try { await rig.controller.record(); } catch (e) { out.recError = String((e && e.message) || e); }
+      }
+      out.recStarted = await until(recording, Math.min(4000, timeoutMs));
+      out.text = 'N3 self-test \u00e9 \u00fc \u2014 \ud83d\udca1\n{"schema":2}\n';
+      const save = window.rig && typeof window.rig.saveText === 'function'
+        ? await window.rig.saveText('N3 self-test \u00e9.json', out.text) : { error: 'no rig.saveText' };
+      out.save = save;
+      const anchor = (name, inPage) => {
+        const url = window.URL.createObjectURL(new window.Blob([out.text], { type: 'application/json' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        if (inPage) document.body.append(a);
+        a.click();
+        if (inPage) a.remove();
+        setTimeout(() => window.URL.revokeObjectURL(url), 10000); // as the app's download() helpers
+      };
+      anchor('N3 click.json', true);
+      anchor('N3 download.json', false);
+      const page = window.URL.createObjectURL(new window.Blob(['<p>replaced</p>'], { type: 'text/html' }));
+      window.location.href = page;
+      await new Promise((r) => setTimeout(r, 1000));
+      out.href1 = String(window.location.href);
+      out.samePage = window.__n3Marker === 'still this page';
+      out.stillRecording = recording();
+      if (out.recStarted) {
+        try { await rig.controller.record(); } catch (e) { out.recStopError = String((e && e.message) || e); }
+      }
+    } catch (err) {
+      out.probeError = String((err && err.message) || err);
+    }
+    return JSON.stringify(out);
     """#
 
     /// callAsyncJavaScript body, arguments `phase`, `timeoutMs` (lane N1). phase 'export': the pack files to write
@@ -347,6 +406,8 @@ final class RigSelfTestRunner {
     private var pageErrorCount = 0
     private var httpErrors: [String] = []
     private var httpCount = 0
+    private var commits = 0 // main-frame commits (lane N3)
+    private var lastCommitURL: URL?
     private var patchRequests = 0 // rig://app/api/user-patches responses (lane N1: none while there is no pack)
     private let env = ProcessInfo.processInfo.environment
 
@@ -372,6 +433,10 @@ final class RigSelfTestRunner {
 
         hooks.pageFinished = { [weak self] url in if self?.finishedURL == nil { self?.finishedURL = url } }
         hooks.pageFailed = { [weak self] err in if self?.loadError == nil { self?.loadError = err } }
+        hooks.pageCommitted = { [weak self] url in
+            self?.commits += 1
+            self?.lastCommitURL = url
+        }
         hooks.contentTerminated = { [weak self] in self?.terminated += 1 }
         hooks.outgoing = { [weak self] body in self?.sawOutgoing(body) }
         hooks.incoming = { [weak self] batch in self?.sawIncoming(batch) }
@@ -396,6 +461,7 @@ final class RigSelfTestRunner {
                      host.engine != nil ? String(cString: rig_version_string()) : "rig_create failed (see stderr)")
         report.set("host", hostInfo())
         guard host.engine != nil else { return finish() }
+        host.files.saveDir = tmp.appendingPathComponent("Saves", isDirectory: true) // lane N3: never a panel here
 
         // WKWebView needs a window to run like a visible page (timers, rAF); this one is transparent and ignores the
         // mouse unless RIG_SELFTEST_SHOW=1. On-screen rather than off-screen: an off-screen window counts as occluded,
@@ -628,12 +694,12 @@ final class RigSelfTestRunner {
     private func stepPacks() {
         let t = Date()
         let before = patchRequests
-        guard let root = RigPaths.userSampleRoots.first else { return stepEnd() }
+        guard let root = RigPaths.userSampleRoots.first else { return stepFiles() }
         js(RigSelfTestScripts.packsProbe, ["phase": "export", "timeoutMs": 10000]) { [self] d, err in
             guard let files = d?["files"] as? [String: String] else {
                 let why = err ?? String(describing: d ?? [:])
                 report.check("packs", false, ms: ms(since: t), "export probe failed: \(why)")
-                return stepEnd()
+                return stepFiles()
             }
             do {
                 for (rel, text) in files {
@@ -645,7 +711,7 @@ final class RigSelfTestRunner {
             } catch {
                 report.check("packs", false, ms: ms(since: t),
                              "could not write the packs under \(root.path): \(error.localizedDescription)")
-                return stepEnd()
+                return stepFiles()
             }
             js(RigSelfTestScripts.packsProbe, ["phase": "check", "timeoutMs": 10000]) { [self] d, err in
                 let probe: [String: Any] = d ?? ["error": err ?? "?"]
@@ -663,6 +729,54 @@ final class RigSelfTestRunner {
                              + "\(d?["songs"] ?? "?") pack songs, \(bank) in the Song bank, auto song in library "
                              + "\(d?["autoInLibrary"] ?? "?"), Add to library \(d?["addOk"] ?? "?"), "
                              + "\(errs.count) error(s)\(first)")
+                stepFiles()
+            }
+        }
+    }
+
+    /// Lane N3 (B2, n0-skeptic O1): exports during a recording never load a page; the saved bytes are exact.
+    private func stepFiles() {
+        let t = Date()
+        guard let dir = host.files.saveDir else { return stepEnd() }
+        let commits0 = commits
+        let url0 = host.webView.url
+        js(RigSelfTestScripts.filesProbe, ["timeoutMs": 8000]) { [self] d, err in
+            // the WKDownload lands asynchronously: give it a moment
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [self] in
+                let probe: [String: Any] = d ?? ["error": err ?? "?"]
+                let text = d?["text"] as? String ?? ""
+                let want = Data(text.utf8)
+                let saved = (try? Data(contentsOf: dir.appendingPathComponent("N3 self-test \u{e9}.json"))) ?? Data()
+                let clicked = (try? Data(contentsOf: dir.appendingPathComponent("N3 click.json"))) ?? Data()
+                let downloaded = (try? Data(contentsOf: dir.appendingPathComponent("N3 download.json"))) ?? Data()
+                let names = ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).sorted()
+                let sameURL: Bool = host.webView.url == url0
+                let noCommit: Bool = commits == commits0
+                let samePage: Bool = (d?["samePage"] as? Bool) == true
+                let saveOK: Bool = !want.isEmpty && saved == want
+                let clickOK: Bool = !want.isEmpty && clicked == want
+                let ok = saveOK && clickOK && sameURL && noCommit && samePage
+                let n = commits - commits0
+                let urlNow: String = host.webView.url?.absoluteString ?? "nil"
+                let info: [String: Any] = ["dir": dir.path, "files": names, "commits": n, "url": urlNow,
+                                           "lastCommit": lastCommitURL?.absoluteString ?? "nil", "probe": probe]
+                report.set("files", info)
+                // one interpolation per literal: long chains of optional / ternary terms are slow to type-check
+                let saveWord: String = saveOK ? "exact bytes" : "missing or different"
+                let clickWord: String = clickOK ? "exact bytes" : "missing or different"
+                let urlWord: String = sameURL ? "unchanged" : "changed to \(urlNow)"
+                var detail = "saveText \(saveWord), <a download> click \(clickWord), \(n) commit(s)"
+                detail += ", URL \(urlWord), same page \(samePage), files \(names)"
+                report.check("files", ok, ms: ms(since: t), detail)
+                let started: Bool = (d?["recStarted"] as? Bool) == true
+                let still: Bool = (d?["stillRecording"] as? Bool) == true
+                let recErr: String = (d?["recError"] as? String) ?? "no error"
+                let stillWord: String = still ? "kept running" : "STOPPED"
+                let recDetail: String = started ? "the recording \(stillWord) through the exports"
+                                                : "no recording started (\(recErr)): not checked"
+                report.check("files-recording", started && still, required: started, recDetail)
+                report.check("files-download", !want.isEmpty && downloaded == want, required: false,
+                             "a detached <a download> as a WKDownload: \(downloaded.count) of \(want.count) bytes")
                 stepEnd()
             }
         }

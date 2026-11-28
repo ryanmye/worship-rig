@@ -148,7 +148,7 @@ test('Swift side: the router loads this folder with this separator; every call()
   assert.ok(router.includes('window.__rigShellConfig = '), 'the config line');
   const js = shellFiles().map((f) => fs.readFileSync(path.join(SHELL_DIR, f), 'utf8')).join('\n');
   const called = [...js.matchAll(/shell\.call\('([A-Za-z]+)'/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(called)].sort(), ['backupNow', 'getInfo', 'latestBackup']);
+  assert.deepEqual([...new Set(called)].sort(), ['backupNow', 'getInfo', 'latestBackup', 'saveFile']);
   const swift = fs.readdirSync(SWIFT_DIR).filter((f) => f.endsWith('.swift'))
     .map((f) => fs.readFileSync(path.join(SWIFT_DIR, f), 'utf8')).join('\n');
   const declared = [...swift.matchAll(/let methods(?:: \[String\])? = \[([^\]]*)\]/g)]
