@@ -159,6 +159,17 @@ test('Song bank from My Samples on the native core (rig-devhost): no pack, Resca
     await until(() => !document.querySelector('[data-testid="settings-open-bank"]')?.disabled);
     assert.equal(await page.textContent(tid('settings-bank-note')), '2 ready-made songs from your packs');
     await until((p) => document.querySelector('.st-samples-path')?.textContent === `Folder: ${p}`, samples);
+    // n1-skeptic: My Samples is on (userSamples: true) with no instruments: the text reads sensibly, and Rescan
+    // (controller.rescanUserSamples → the manifest + engine.reloadManifests, then the packs) makes no failing request
+    assert.equal(await page.textContent('.st-samples-status'), 'No sample instruments yet.');
+    assert.equal(await page.isHidden('.st-samples-note'), true, 'no "isn’t turned on here" note');
+    const manifests = reqs.filter((x) => x === '/api/user-samples/manifest.json').length;
+    await page.click('.st-samples-rescan');
+    await until((n) => !document.querySelector('.st-samples-rescan')?.disabled
+      && document.querySelector('.st-samples-status')?.textContent === 'No sample instruments yet.', null);
+    await page.waitForTimeout(300);
+    assert.ok(reqs.filter((x) => x === '/api/user-samples/manifest.json').length > manifests, 'Rescan read the manifest');
+    assert.equal(await page.isVisible('.st-samples-reload'), false, 'no Reload: the bridge reloads live');
     await ev(() => window.__rig.ctx.closeSettings());
     await page.waitForTimeout(500);
     assert.deepEqual(errors, []);

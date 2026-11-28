@@ -1,9 +1,11 @@
 // The patch-pack scanner: a port of server.js scanUserPatches / hasUserPatches and their helpers (listPackDirs,
 // packSongFiles, readPackJson, checkPatchEntry, userRefsOf, deeperThan, within), lane N1. Same caps, messages,
-// order and output; rig_hostkit.h is its C surface. Divergences (documented in the N1 report, measured by
-// test/unit/hostkit/parity.test.mjs): the text inside "not valid JSON (...)" and a bad pack.json's message are
-// hostkit's own wording (V8's SyntaxError texts are not reproduced); a FIFO or device named pack.json reads as empty
-// (server.js would block on it); names are ordered by a model of ICU (js_text.h jsLocaleCompare).
+// order and output, error texts included (V8's SyntaxError wording, libuv's fs error texts); rig_hostkit.h is its C
+// surface. Divergences (the N1 report; test/unit/hostkit/parity.test.mjs measures the rest byte for byte): a FIFO or
+// device named pack.json reads as empty (server.js would block on it); names are ordered by a model of ICU (js_text.h
+// jsLocaleCompare: exact on realistic names, a few inversions on exotic code points); a file that grows between its
+// stat and its read is read up to 16 MB (server.js reads all of it). n1-skeptic F1: this comment said the SyntaxError
+// texts were not reproduced; they are (commit 54b7883).
 #pragma once
 #include <string>
 #include <unordered_set>

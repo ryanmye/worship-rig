@@ -605,8 +605,11 @@ final class RigSelfTestRunner {
                 let bank = (d?["bankSongs"] as? NSNumber)?.intValue ?? -1
                 let errs = d?["errors"] as? [Any] ?? ["?"]
                 let first = errs.first.map { ": \($0)" } ?? ""
-                let ok = before == 0 && (d?["userPatches"] as? Bool) == true && bank == 2
-                    && (d?["autoInLibrary"] as? Bool) == true && (d?["addOk"] as? Bool) == true && errs.isEmpty
+                // n1-skeptic: one Bool per term (a long chain of Optional == literal terms is slow to type-check)
+                let flagged = (d?["userPatches"] as? Bool) ?? false
+                let inLibrary = (d?["autoInLibrary"] as? Bool) ?? false
+                let added = (d?["addOk"] as? Bool) ?? false
+                let ok: Bool = before == 0 && flagged && bank == 2 && inLibrary && added && errs.isEmpty
                 report.check("packs", ok, ms: ms(since: t),
                              "\(before) pack request(s) before any pack; then userPatches \(d?["userPatches"] ?? "?"), "
                              + "\(d?["songs"] ?? "?") pack songs, \(bank) in the Song bank, auto song in library "
