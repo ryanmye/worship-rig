@@ -650,6 +650,61 @@ export async function runV6({ browser, createServer, ROOT, SHOTS, results }) {
       }
     });
 
+    // TOUCH (D43): Keyboards & MIDI in the v6 Settings: Dynamics in dB and the calibration editor (the same nodes as
+    // today's Settings, restyled), found by search, readable in the colour-blind modes and on a Day theme
+    await T('TOUCH: Dynamics (dB) and the calibration editor in the v6 Settings: search, paste, colour-blind, Day',
+      async () => {
+        await open('sound');
+        for (const q of ['dynamics', 'pianoteq', 'calibrate']) {
+          await page.fill('[data-testid="settings-search"]', q);
+          await until(() => window.__rig.views.settings.v6.hits.some((x) => x.cat === 'keyboards'), null, 5000);
+        }
+        await page.keyboard.press('Escape');
+        await until(() => window.__rig.views.settings.v6.query === '');
+        await cat('keyboards');
+        assert.equal(await ev(() => !!document.querySelector('.v6-st [data-testid="setting-dynamic-range"]')), true);
+        await page.locator('[data-testid="setting-dynamic-range"]').fill('45');
+        await until(() => window.__rig.store.get().settings.dynamicRange === 4.5);
+        assert.equal(await page.textContent('[data-testid="dynamic-range-value"]'), '45 dB');
+        const row = '.st-kbs [data-keyboard="@computer"]';
+        await page.click(`${row} .st-kb-touch`);
+        await until((r) => !document.querySelector(`${r} .st-kb-edit`).hidden, row);
+        const FP10 = 'Velocity = [0, 1, 18, 32, 50, 108, 127; 0, 0, 30, 57, 84, 127, 127]';
+        await page.fill(`${row} [data-testid="cal-text"]`, FP10);
+        await page.click(`${row} .st-cal-use`);
+        await until(() => window.__rig.store.get().settings.keyboards?.['@computer']?.velocity?.in.length === 7);
+        const look = () => ev((r) => {
+          const pt = getComputedStyle(document.querySelector(`${r} .st-cal-pt`));
+          const g = document.querySelector(`${r} .st-cal-graph`).getBoundingClientRect();
+          return { fill: pt.fill, stroke: pt.stroke, w: Math.round(g.width) };
+        }, row);
+        const dark = await look();
+        assert.ok(dark.w >= 200, `the graph has room (${dark.w} px)`);
+        for (const cvd of ['rg', 'by']) {
+          await ev((c) => window.__rig.store.set('settings.cvd', c), cvd);
+          await until((c) => document.documentElement.classList.contains(`cvd-${c}`), cvd);
+          const l = await look();
+          assert.notEqual(l.stroke, 'none', `points keep their ring (${cvd})`);
+          assert.notEqual(l.fill, 'none');
+        }
+        await page.locator(`${row} .st-kb-edit`).scrollIntoViewIfNeeded();
+        await page.locator('.st-kbs').screenshot({ path: path.join(OUT, 'v6-keyboards-calibrate-cvd-by.png') });
+        await ev(() => window.__rig.store.set('settings.cvd', null));
+        await ev(() => window.__rig.store.set('settings.theme', 'daylight-day'));
+        await until(() => document.documentElement.dataset.theme === 'daylight-day');
+        const day = await look();
+        assert.notEqual(day.stroke, dark.stroke, 'the ring follows the theme (--text)');
+        await page.locator('.st-kbs').screenshot({ path: path.join(OUT, 'v6-keyboards-calibrate-day.png') });
+        await ev(() => window.__rig.store.set('settings.theme', 'sanctuary'));
+        await until(() => document.documentElement.dataset.theme === 'sanctuary');
+        await page.locator('.st-kbs').screenshot({ path: path.join(OUT, 'v6-keyboards-calibrate.png') });
+        await page.click(`${row} .st-kb-std`);
+        await ev(() => window.__rig.store.set('settings.dynamicRange', null));
+        await until(() => !('keyboards' in window.__rig.store.get().settings));
+        await page.click(`${row} .st-kb-touch`);
+        await close();
+      });
+
   } finally {
     await T('zero console.error', async () => {
       assert.deepEqual(errors, []);

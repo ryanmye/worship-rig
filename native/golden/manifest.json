@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "generator": "tools/golden/render.mjs",
- "generatedAt": "2026-11-21T06:22:56.209Z",
+ "generatedAt": "2026-11-28T04:14:29.483Z",
  "chromium": "157.0.8103.78",
  "chromiumPin": {
   "version": "157.0.8103.78",
@@ -35,9 +35,9 @@
  },
  "measures": "tools/golden/analysis.mjs (definitions in its header and native/golden/README.md)",
  "lastRun": {
-  "fixtures": 4,
+  "fixtures": 5,
   "repeat": 2,
-  "seconds": 11.4,
+  "seconds": 30.8,
   "cpus": 2
  },
  "stimuli": {
@@ -159,41 +159,38 @@
  "pcm": {
   "dir": "pcm",
   "format": "WAV 32-bit float at the file rate + JSON sidecar {source, frames, rate, channels, sha256}",
-  "files": 63,
-  "totalBytes": 130157414,
+  "files": 69,
+  "totalBytes": 162642210,
   "committedBytes": 2207860,
   "commitCapBytes": 2500000,
   "regenerate": "node tools/golden/pcm.mjs",
-  "seconds": 7.2
+  "seconds": 7.8
  },
  "tiers": {
-  "exact": 104,
+  "exact": 109,
   "statistical": 8,
-  "exactIfPrngPorted": 39,
+  "exactIfPrngPorted": 3,
   "statisticalBandsDb": {
    "min": 1.5,
-   "max": 16.4
+   "max": 8.45
   },
   "statisticalEnvCorr": {
-   "min": 0.73,
+   "min": 0.844,
    "max": 0.95
   },
   "statisticalRmsDb": {
    "min": 1,
-   "max": 3.55
+   "max": 1.49
   },
   "widestBands": {
-   "id": "auto-slot-level",
-   "v": 16.4
+   "id": "fx-row-sweep",
+   "v": 8.45
   },
   "lowestEnvCorr": {
-   "id": "scene-glide",
-   "v": 0.73
+   "id": "lofi-tape-sine",
+   "v": 0.844
   },
-  "envelopeCheckOff": [
-   "drone-freeze-dry",
-   "drone-freeze-wet"
-  ],
+  "envelopeCheckOff": [],
   "note": "ARCHITECTURE 8.2 states bands 1.5 dB / envelope 0.95 for the whole tier; the real per-fixture values are fixtures[].tolerance (see native/golden/README.md, Honest tiers)"
  },
  "fixtures": [
@@ -47731,6 +47728,3858 @@
    },
    "repeatEnvCorr": 1,
    "repeatBandsDb": 0.004784
+  },
+  {
+   "id": "dyn-range-salamander-piano",
+   "kind": "dynamics",
+   "classification": "exact",
+   "exactIfPrngPorted": false,
+   "smoke": false,
+   "addedBy": "TOUCH",
+   "chromium": "157.0.8103.78",
+   "file": "out/dyn-range-salamander-piano.wav",
+   "sha256": "18bcff4f529312c9eeeb7ded781d2ac74f12a0c4a343fc682707a5423a75a873",
+   "sampleRate": 44100,
+   "channels": 2,
+   "frames": 374850,
+   "seconds": 8.5,
+   "peak": 6.55802,
+   "peakDb": 16.34,
+   "rms": 0.540488,
+   "rmsDb": -5.344,
+   "bandsDb": [
+    -48.52,
+    -51.36,
+    -49.57,
+    -48.76,
+    -56.59,
+    -27.06,
+    -19.56,
+    -39.77,
+    -44.78,
+    -30.6,
+    -21.82,
+    -30.78,
+    -33.55,
+    -17.65,
+    -31.13,
+    -38.18,
+    -34.99,
+    -32.83,
+    -39.66,
+    -35.04,
+    -40.75,
+    -38.39,
+    -52.84,
+    -65.31,
+    -58.78,
+    -76.55,
+    -86.22,
+    -99.52,
+    -113.8,
+    -116.5
+   ],
+   "repeatMaxAbsDiff": 4.76837158203125e-7,
+   "renderMs": 7373,
+   "tolerance": {
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 1.5,
+     "bandRangeDb": 50,
+     "envCorr": 0.95,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
+   },
+   "chromiumNodes": [
+    "mp3-decode+resample (decodeAudioData)",
+    "AudioBufferSourceNode playbackRate"
+   ],
+   "randomness": {
+    "prng": "mulberry32",
+    "hash": "FNV-1a",
+    "engineSeed": 1,
+    "streams": []
+   },
+   "fixture": {
+    "seed": 1,
+    "addedBy": "TOUCH",
+    "id": "dyn-range-salamander-piano",
+    "kind": "dynamics",
+    "seconds": 8.5,
+    "setup": {
+     "patch": {
+      "slots": [
+       {
+        "instrument": {
+         "type": "sampler",
+         "id": "salamander-piano"
+        },
+        "gain": 1
+       },
+       null,
+       null,
+       null
+      ]
+     },
+     "tap": "slot0.pan",
+     "dynamicRange": 6
+    },
+    "events": [
+     {
+      "t": 0.1,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 30
+     },
+     {
+      "t": 0.7,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 0.9,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 120
+     },
+     {
+      "t": 1.5,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 1.7,
+      "type": "noteOn",
+      "note": 43,
+      "vel": 30
+     },
+     {
+      "t": 2.3,
+      "type": "noteOff",
+      "note": 43
+     },
+     {
+      "t": 2.5,
+      "type": "noteOn",
+      "note": 43,
+      "vel": 120
+     },
+     {
+      "t": 3.1,
+      "type": "noteOff",
+      "note": 43
+     },
+     {
+      "t": 3.4,
+      "type": "pedal",
+      "down": true
+     },
+     {
+      "t": 3.5,
+      "type": "noteOn",
+      "note": 64,
+      "vel": 80
+     },
+     {
+      "t": 3.8,
+      "type": "noteOff",
+      "note": 64
+     },
+     {
+      "t": 5.5,
+      "type": "pedal",
+      "down": false
+     },
+     {
+      "t": 6,
+      "type": "noteOn",
+      "note": 55,
+      "vel": 75
+     },
+     {
+      "t": 7,
+      "type": "noteOff",
+      "note": 55
+     },
+     {
+      "t": 6,
+      "type": "noteOn",
+      "note": 59,
+      "vel": 75
+     },
+     {
+      "t": 7,
+      "type": "noteOff",
+      "note": 59
+     },
+     {
+      "t": 6,
+      "type": "noteOn",
+      "note": 62,
+      "vel": 75
+     },
+     {
+      "t": 7,
+      "type": "noteOff",
+      "note": 62
+     }
+    ]
+   },
+   "resolved": {
+    "patch": {
+     "slots": [
+      {
+       "instrument": {
+        "type": "sampler",
+        "id": "salamander-piano"
+       },
+       "gain": 1,
+       "pan": 0,
+       "octave": 0,
+       "transpose": 0,
+       "lowNote": 0,
+       "highNote": 127,
+       "sustain": true,
+       "bendEnabled": false,
+       "mono": "off",
+       "velocityCurve": "normal",
+       "sends": {
+        "reverb": 0.25,
+        "delay": 0.1,
+        "chorus": 0
+       },
+       "params": {},
+       "width": 1,
+       "eq": {},
+       "release": null,
+       "pedalHold": "natural"
+      },
+      null,
+      null,
+      null
+     ],
+     "fx": {
+      "reverb": {
+       "size": 0.5,
+       "damp": 0.5,
+       "predelay": 0.02,
+       "returnGain": 1
+      },
+      "delay": {
+       "time": 0.375,
+       "feedback": 0.35,
+       "pingpong": false,
+       "tone": 0.5,
+       "sync": "off",
+       "returnGain": 1
+      },
+      "chorus": {
+       "rate": 0.4,
+       "depth": 0.5,
+       "returnGain": 1
+      },
+      "lofi": {
+       "amount": 0,
+       "wow": 0.5,
+       "flutter": 0.5,
+       "crackle": 0.3,
+       "bits": 0.5,
+       "tone": 0.5,
+       "saturation": 0.5
+      },
+      "eq": {
+       "low": 0,
+       "mid": 0,
+       "high": 0
+      },
+      "comp": {
+       "amount": 0
+      },
+      "master": {
+       "volume": 0.5011872336272722
+      }
+     },
+     "modWheel": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "expression": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "volume": {
+      "target": "master.volume"
+     },
+     "bend": {
+      "mode": "pitch",
+      "range": 2
+     },
+     "swell": {
+      "seconds": 8
+     }
+    },
+    "routing": {
+     "modWheel": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "expression": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "volume": {
+      "target": "master.volume"
+     },
+     "bend": {
+      "mode": "pitch",
+      "range": 2
+     },
+     "swell": {
+      "seconds": 8
+     }
+    },
+    "trims": {
+     "synth": {
+      "warm-pad": 3.5,
+      "glass-pad": 3.3,
+      "strings": 3.4,
+      "sub-bass": 5.8,
+      "soft-keys": 1.3,
+      "bell": 2.8,
+      "drone-osc": 2.8,
+      "supersaw-pad": 0,
+      "juno-pad": 0,
+      "shimmer-pad": 0,
+      "dx-epiano": 0,
+      "pluck": 0,
+      "poly-stab": 0,
+      "analog-brass": 0,
+      "square-lead": 0,
+      "808-sub": 0,
+      "synth-bass": 0
+     },
+     "organ": {
+      "gospel": 4.4,
+      "soft-pad": 3.6,
+      "full": 2.3,
+      "church": 6.1
+     },
+     "droneTrim": -8.5
+    },
+    "slots": [
+     {
+      "ref": {
+       "type": "sampler",
+       "id": "salamander-piano"
+      },
+      "params": {},
+      "widthDefault": 0.8,
+      "fallback": false
+     },
+     null,
+     null,
+     null
+    ],
+    "stimulus": null,
+    "stats": {
+     "voices": 0,
+     "nodes": 140,
+     "retiring": 0,
+     "decodedMB": 370,
+     "pinnedMB": 0,
+     "referencedMB": 370,
+     "capMB": 700,
+     "sounding": 0,
+     "pedaled": 0,
+     "timers": 0,
+     "lowResource": false,
+     "slotLevelTaps": 0,
+     "reverbUnits": 1,
+     "reverbQuietWaiting": 0,
+     "fxAsleep": [],
+     "droneFrozen": false,
+     "droneLoopSec": null,
+     "droneRenderMs": null,
+     "droneRenders": 0,
+     "droneFreezeMB": 0,
+     "droneSeam": null,
+     "droneFreezePending": false,
+     "droneFreezeReused": 0,
+     "droneRenderMaxStepMs": null,
+     "audioSleep": "awake",
+     "click": {
+      "running": false,
+      "counting": false,
+      "bpm": null,
+      "sig": "4/4",
+      "output": "main",
+      "level": 0.6,
+      "record": false,
+      "downbeat": null,
+      "live": 0,
+      "pumps": 0,
+      "pumpMs": 0,
+      "ticks": 0,
+      "late": 0,
+      "pulses": 0,
+      "startedAt": null
+     },
+     "lastWake": null
+    },
+    "samplesUsed": [
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C4.mp3",
+      "url": "/samples/salamander-piano/v14/C4.mp3",
+      "frames": 667280,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.00798185941043084,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.360448162946537,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Gb2.mp3#max=30",
+      "url": "/samples/salamander-piano/v14/Gb2.mp3",
+      "frames": 881712,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.006507936507936508,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 2.1289494452562945,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v4/C4.mp3",
+      "url": "/samples/salamander-piano/v4/C4.mp3",
+      "frames": 682520,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.011814058956916099,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.5205249253561346,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v4/Gb2.mp3#max=30",
+      "url": "/samples/salamander-piano/v4/Gb2.mp3",
+      "frames": 837158,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.009659863945578231,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.9297355087960892,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v9/C4.mp3",
+      "url": "/samples/salamander-piano/v9/C4.mp3",
+      "frames": 682978,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.010861678004535148,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.5210228588904964,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v9/Eb4.mp3#max=30",
+      "url": "/samples/salamander-piano/v9/Eb4.mp3",
+      "frames": 612948,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.009138321995464853,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.4127366750497936,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v9/Gb3.mp3",
+      "url": "/samples/salamander-piano/v9/Gb3.mp3",
+      "frames": 654583,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.009523809523809525,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 4.211862878431041,
+       "mid": 1.149722800103658,
+       "side": 0.8963471605097417
+      }
+     }
+    ],
+    "rngCalls": {},
+    "reverbKey": "5|0.5|44100"
+   },
+   "issues": [],
+   "tier": {
+    "class": "exact",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
+   },
+   "needsPcm": true,
+   "pcm": {
+    "required": true,
+    "decoder": "Chromium decodeAudioData",
+    "files": [
+     {
+      "url": "/samples/salamander-piano/v14/C4.mp3",
+      "engine": {
+       "frames": 667280,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.00798185941043084,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.360448162946537,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C4.mp3",
+      "sourceSha256": "3fe1bdabfed60b41ca06e656b7afda9249e1322fdd85689671a17f400f3c84a1",
+      "sourceBytes": 303885,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 726675,
+      "sha256": "2254ba9f9e418d15d532ac702f8d3288a6f6533b18f72b14150dc8faabf3fbaf",
+      "bytes": 5813458,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C4.wav",
+      "sidecar": "pcm/salamander-piano/v14/C4.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/Gb2.mp3",
+      "engine": {
+       "frames": 881712,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.006507936507936508,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 2.1289494452562945,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/Gb2.mp3",
+      "sourceSha256": "21a2ebcbf8f7c4016c5e03434e4eca3b564bdcbf05841d131e346fcf5770666f",
+      "sourceBytes": 401325,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 960000,
+      "sha256": "94e51c9ed24dd41e381b1ef6749b750dc6c5d2f52a65d121bb0fb5834cbdb7d1",
+      "bytes": 7680058,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/Gb2.wav",
+      "sidecar": "pcm/salamander-piano/v14/Gb2.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v4/C4.mp3",
+      "engine": {
+       "frames": 682520,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.011814058956916099,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.5205249253561346,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v4/C4.mp3",
+      "sourceSha256": "89f9d5b3b2c995ee9763800e2820792f0ad5514d026ad39db0eb287a63d9a83a",
+      "sourceBytes": 311085,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 743446,
+      "sha256": "6d5c7c4ed6e30ea562ccef6e2edff300a5fe136ed3e9141347b5aa183def671b",
+      "bytes": 5947626,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v4/C4.wav",
+      "sidecar": "pcm/salamander-piano/v4/C4.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v4/Gb2.mp3",
+      "engine": {
+       "frames": 837158,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.009659863945578231,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.9297355087960892,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v4/Gb2.mp3",
+      "sourceSha256": "bb589c5371113c7f15c6ef6328e92a67f72d37ecfb33c31c7901ff02adc19b21",
+      "sourceBytes": 381165,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 911657,
+      "sha256": "88b9b495a0cfdfe017d95438b47debc3fa523b9fa73f699a062d7b4fd9918c89",
+      "bytes": 7293314,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v4/Gb2.wav",
+      "sidecar": "pcm/salamander-piano/v4/Gb2.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v9/C4.mp3",
+      "engine": {
+       "frames": 682978,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.010861678004535148,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.5210228588904964,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v9/C4.mp3",
+      "sourceSha256": "e628a774857443a56cbf552361d16300ff70d3045e26f3c4a6af42dcd37306da",
+      "sourceBytes": 311085,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 743899,
+      "sha256": "1f0b2b2cb0975068933705c2d8575003cba10138d44e1c99c21dc6044690f4d8",
+      "bytes": 5951250,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v9/C4.wav",
+      "sidecar": "pcm/salamander-piano/v9/C4.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v9/Eb4.mp3",
+      "engine": {
+       "frames": 612948,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.009138321995464853,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.4127366750497936,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v9/Eb4.mp3",
+      "sourceSha256": "e4e75a4094a2d8921a07bad812f347ef2a91d8e37c2024d69d16ff94d4b1299e",
+      "sourceBytes": 279405,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 667594,
+      "sha256": "33202febf031dd3e917277f86e76f42e4c16b4bb40404b410d1ceebf99b38cdf",
+      "bytes": 5340810,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v9/Eb4.wav",
+      "sidecar": "pcm/salamander-piano/v9/Eb4.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v9/Gb3.mp3",
+      "engine": {
+       "frames": 654583,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.009523809523809525,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 4.211862878431041,
+        "mid": 1.149722800103658,
+        "side": 0.8963471605097417
+       }
+      },
+      "source": "app/samples/salamander-piano/v9/Gb3.mp3",
+      "sourceSha256": "54445d28c48835f725862e9f78f12b9c5f35aeb604c46cee694a547b0d7b4884",
+      "sourceBytes": 298125,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 712929,
+      "sha256": "8f8fd0c9a5a718808620703fa4237af71ad66b25a90d61e5681a923e2a6c4d8f",
+      "bytes": 5703490,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v9/Gb3.wav",
+      "sidecar": "pcm/salamander-piano/v9/Gb3.json",
+      "committed": false
+     }
+    ]
+   },
+   "repeatEnvCorr": 1,
+   "repeatBandsDb": 0.004984
+  },
+  {
+   "id": "dyn-range-ep-rhodes",
+   "kind": "dynamics",
+   "classification": "exact",
+   "exactIfPrngPorted": false,
+   "smoke": false,
+   "addedBy": "TOUCH",
+   "chromium": "157.0.8103.78",
+   "file": "out/dyn-range-ep-rhodes.wav",
+   "sha256": "c66c2b24e66abe3c2ba29fdbacbd5fc96e19321f88c1667f5c5a7d3d2b5789d9",
+   "sampleRate": 44100,
+   "channels": 2,
+   "frames": 374850,
+   "seconds": 8.5,
+   "peak": 1.48559,
+   "peakDb": 3.438,
+   "rms": 0.207851,
+   "rmsDb": -13.64,
+   "bandsDb": [
+    -64.77,
+    -61.34,
+    -59.65,
+    -58.15,
+    -57.09,
+    -35.99,
+    -27.3,
+    -50.01,
+    -50.83,
+    -27.92,
+    -25.92,
+    -28.56,
+    -48.39,
+    -35.62,
+    -43.17,
+    -40.07,
+    -50.76,
+    -66.75,
+    -70.41,
+    -66.69,
+    -74.21,
+    -87.37,
+    -83.29,
+    -82.58,
+    -104,
+    -116.3,
+    -131.5,
+    -132.7,
+    -141.5,
+    -151.9
+   ],
+   "repeatMaxAbsDiff": 2.2351741790771484e-8,
+   "renderMs": 2236,
+   "tolerance": {
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 1.5,
+     "bandRangeDb": 50,
+     "envCorr": 0.95,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
+   },
+   "chromiumNodes": [
+    "mp3-decode+resample (decodeAudioData)",
+    "AudioBufferSourceNode playbackRate"
+   ],
+   "randomness": {
+    "prng": "mulberry32",
+    "hash": "FNV-1a",
+    "engineSeed": 1,
+    "streams": []
+   },
+   "fixture": {
+    "seed": 1,
+    "addedBy": "TOUCH",
+    "id": "dyn-range-ep-rhodes",
+    "kind": "dynamics",
+    "seconds": 8.5,
+    "setup": {
+     "patch": {
+      "slots": [
+       {
+        "instrument": {
+         "type": "sampler",
+         "id": "ep-rhodes"
+        },
+        "gain": 1
+       },
+       null,
+       null,
+       null
+      ]
+     },
+     "tap": "slot0.pan",
+     "dynamicRange": 6
+    },
+    "events": [
+     {
+      "t": 0.1,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 30
+     },
+     {
+      "t": 0.7,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 0.9,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 120
+     },
+     {
+      "t": 1.5,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 1.7,
+      "type": "noteOn",
+      "note": 43,
+      "vel": 30
+     },
+     {
+      "t": 2.3,
+      "type": "noteOff",
+      "note": 43
+     },
+     {
+      "t": 2.5,
+      "type": "noteOn",
+      "note": 43,
+      "vel": 120
+     },
+     {
+      "t": 3.1,
+      "type": "noteOff",
+      "note": 43
+     },
+     {
+      "t": 3.4,
+      "type": "pedal",
+      "down": true
+     },
+     {
+      "t": 3.5,
+      "type": "noteOn",
+      "note": 64,
+      "vel": 80
+     },
+     {
+      "t": 3.8,
+      "type": "noteOff",
+      "note": 64
+     },
+     {
+      "t": 5.5,
+      "type": "pedal",
+      "down": false
+     },
+     {
+      "t": 6,
+      "type": "noteOn",
+      "note": 55,
+      "vel": 75
+     },
+     {
+      "t": 7,
+      "type": "noteOff",
+      "note": 55
+     },
+     {
+      "t": 6,
+      "type": "noteOn",
+      "note": 59,
+      "vel": 75
+     },
+     {
+      "t": 7,
+      "type": "noteOff",
+      "note": 59
+     },
+     {
+      "t": 6,
+      "type": "noteOn",
+      "note": 62,
+      "vel": 75
+     },
+     {
+      "t": 7,
+      "type": "noteOff",
+      "note": 62
+     }
+    ]
+   },
+   "resolved": {
+    "patch": {
+     "slots": [
+      {
+       "instrument": {
+        "type": "sampler",
+        "id": "ep-rhodes"
+       },
+       "gain": 1,
+       "pan": 0,
+       "octave": 0,
+       "transpose": 0,
+       "lowNote": 0,
+       "highNote": 127,
+       "sustain": true,
+       "bendEnabled": false,
+       "mono": "off",
+       "velocityCurve": "normal",
+       "sends": {
+        "reverb": 0.25,
+        "delay": 0.1,
+        "chorus": 0
+       },
+       "params": {},
+       "width": 1,
+       "eq": {},
+       "release": null,
+       "pedalHold": "natural"
+      },
+      null,
+      null,
+      null
+     ],
+     "fx": {
+      "reverb": {
+       "size": 0.5,
+       "damp": 0.5,
+       "predelay": 0.02,
+       "returnGain": 1
+      },
+      "delay": {
+       "time": 0.375,
+       "feedback": 0.35,
+       "pingpong": false,
+       "tone": 0.5,
+       "sync": "off",
+       "returnGain": 1
+      },
+      "chorus": {
+       "rate": 0.4,
+       "depth": 0.5,
+       "returnGain": 1
+      },
+      "lofi": {
+       "amount": 0,
+       "wow": 0.5,
+       "flutter": 0.5,
+       "crackle": 0.3,
+       "bits": 0.5,
+       "tone": 0.5,
+       "saturation": 0.5
+      },
+      "eq": {
+       "low": 0,
+       "mid": 0,
+       "high": 0
+      },
+      "comp": {
+       "amount": 0
+      },
+      "master": {
+       "volume": 0.5011872336272722
+      }
+     },
+     "modWheel": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "expression": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "volume": {
+      "target": "master.volume"
+     },
+     "bend": {
+      "mode": "pitch",
+      "range": 2
+     },
+     "swell": {
+      "seconds": 8
+     }
+    },
+    "routing": {
+     "modWheel": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "expression": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "volume": {
+      "target": "master.volume"
+     },
+     "bend": {
+      "mode": "pitch",
+      "range": 2
+     },
+     "swell": {
+      "seconds": 8
+     }
+    },
+    "trims": {
+     "synth": {
+      "warm-pad": 3.5,
+      "glass-pad": 3.3,
+      "strings": 3.4,
+      "sub-bass": 5.8,
+      "soft-keys": 1.3,
+      "bell": 2.8,
+      "drone-osc": 2.8,
+      "supersaw-pad": 0,
+      "juno-pad": 0,
+      "shimmer-pad": 0,
+      "dx-epiano": 0,
+      "pluck": 0,
+      "poly-stab": 0,
+      "analog-brass": 0,
+      "square-lead": 0,
+      "808-sub": 0,
+      "synth-bass": 0
+     },
+     "organ": {
+      "gospel": 4.4,
+      "soft-pad": 3.6,
+      "full": 2.3,
+      "church": 6.1
+     },
+     "droneTrim": -8.5
+    },
+    "slots": [
+     {
+      "ref": {
+       "type": "sampler",
+       "id": "ep-rhodes"
+      },
+      "params": {},
+      "widthDefault": 1,
+      "fallback": false
+     },
+     null,
+     null,
+     null
+    ],
+    "stimulus": null,
+    "stats": {
+     "voices": 0,
+     "nodes": 140,
+     "retiring": 0,
+     "decodedMB": 42.1,
+     "pinnedMB": 0,
+     "referencedMB": 42.1,
+     "capMB": 700,
+     "sounding": 0,
+     "pedaled": 0,
+     "timers": 0,
+     "lowResource": false,
+     "slotLevelTaps": 0,
+     "reverbUnits": 1,
+     "reverbQuietWaiting": 0,
+     "fxAsleep": [],
+     "droneFrozen": false,
+     "droneLoopSec": null,
+     "droneRenderMs": null,
+     "droneRenders": 0,
+     "droneFreezeMB": 0,
+     "droneSeam": null,
+     "droneFreezePending": false,
+     "droneFreezeReused": 0,
+     "droneRenderMaxStepMs": null,
+     "audioSleep": "awake",
+     "click": {
+      "running": false,
+      "counting": false,
+      "bpm": null,
+      "sig": "4/4",
+      "output": "main",
+      "level": 0.6,
+      "record": false,
+      "downbeat": null,
+      "live": 0,
+      "pumps": 0,
+      "pumpMs": 0,
+      "ticks": 0,
+      "late": 0,
+      "pulses": 0,
+      "startedAt": null
+     },
+     "lastWake": null
+    },
+    "samplesUsed": [
+     {
+      "key": "http://127.0.0.1:37593/samples/ep-rhodes/B3.mp3",
+      "url": "/samples/ep-rhodes/B3.mp3",
+      "frames": 137984,
+      "rate": 44100,
+      "channels": 1,
+      "dualMono": true,
+      "onsetTrimSec": 0,
+      "capped": false,
+      "monoFix": null
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/ep-rhodes/C4.mp3",
+      "url": "/samples/ep-rhodes/C4.mp3",
+      "frames": 137984,
+      "rate": 44100,
+      "channels": 1,
+      "dualMono": true,
+      "onsetTrimSec": 0,
+      "capped": false,
+      "monoFix": null
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/ep-rhodes/D4.mp3",
+      "url": "/samples/ep-rhodes/D4.mp3",
+      "frames": 137984,
+      "rate": 44100,
+      "channels": 1,
+      "dualMono": true,
+      "onsetTrimSec": 0,
+      "capped": false,
+      "monoFix": null
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/ep-rhodes/E4.mp3",
+      "url": "/samples/ep-rhodes/E4.mp3",
+      "frames": 137984,
+      "rate": 44100,
+      "channels": 1,
+      "dualMono": true,
+      "onsetTrimSec": 0,
+      "capped": false,
+      "monoFix": null
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/ep-rhodes/G2.mp3",
+      "url": "/samples/ep-rhodes/G2.mp3",
+      "frames": 137936,
+      "rate": 44100,
+      "channels": 1,
+      "dualMono": true,
+      "onsetTrimSec": 0.0010884353741496598,
+      "capped": false,
+      "monoFix": null
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/ep-rhodes/G3.mp3",
+      "url": "/samples/ep-rhodes/G3.mp3",
+      "frames": 137984,
+      "rate": 44100,
+      "channels": 1,
+      "dualMono": true,
+      "onsetTrimSec": 0,
+      "capped": false,
+      "monoFix": null
+     }
+    ],
+    "rngCalls": {},
+    "reverbKey": "5|0.5|44100"
+   },
+   "issues": [],
+   "tier": {
+    "class": "exact",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
+   },
+   "needsPcm": true,
+   "pcm": {
+    "required": true,
+    "decoder": "Chromium decodeAudioData",
+    "files": [
+     {
+      "url": "/samples/ep-rhodes/B3.mp3",
+      "engine": {
+       "frames": 137984,
+       "rate": 44100,
+       "channels": 1,
+       "dualMono": true,
+       "onsetTrimSec": 0,
+       "capped": false,
+       "monoFix": null
+      },
+      "source": "app/samples/ep-rhodes/B3.mp3",
+      "sourceSha256": "81c19ca4bc554085056258f688c66cded667bf7a834b84597b1c10e244fcfd39",
+      "sourceBytes": 14659,
+      "rate": 44100,
+      "channels": 2,
+      "frames": 137984,
+      "sha256": "14c6b0655b61273f84221a10c7445a3006ec08948c5099b930672a9378fb8c28",
+      "bytes": 1103930,
+      "engineRate": 44100,
+      "resampledByEngine": false,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/ep-rhodes/B3.wav",
+      "sidecar": "pcm/ep-rhodes/B3.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/ep-rhodes/C4.mp3",
+      "engine": {
+       "frames": 137984,
+       "rate": 44100,
+       "channels": 1,
+       "dualMono": true,
+       "onsetTrimSec": 0,
+       "capped": false,
+       "monoFix": null
+      },
+      "source": "app/samples/ep-rhodes/C4.mp3",
+      "sourceSha256": "962801a2a7dd1705f5e657aefd07d65232a72c2b80e7204f51db230b0f51593c",
+      "sourceBytes": 15154,
+      "rate": 44100,
+      "channels": 2,
+      "frames": 137984,
+      "sha256": "bf07efc54380aea1f830c82deeb9f06d5fb0410f1376757976211191ad6096c2",
+      "bytes": 1103930,
+      "engineRate": 44100,
+      "resampledByEngine": false,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/ep-rhodes/C4.wav",
+      "sidecar": "pcm/ep-rhodes/C4.json",
+      "committed": true
+     },
+     {
+      "url": "/samples/ep-rhodes/D4.mp3",
+      "engine": {
+       "frames": 137984,
+       "rate": 44100,
+       "channels": 1,
+       "dualMono": true,
+       "onsetTrimSec": 0,
+       "capped": false,
+       "monoFix": null
+      },
+      "source": "app/samples/ep-rhodes/D4.mp3",
+      "sourceSha256": "2660bfb4bf247ab8e19b8df1c385d7b469c4b5e4dac16d31f08f74ccf4a05ab5",
+      "sourceBytes": 16012,
+      "rate": 44100,
+      "channels": 2,
+      "frames": 137984,
+      "sha256": "90ff601a938bba51e48dd3c081da59c9877084065e6e8ae7977764d890e999fd",
+      "bytes": 1103930,
+      "engineRate": 44100,
+      "resampledByEngine": false,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/ep-rhodes/D4.wav",
+      "sidecar": "pcm/ep-rhodes/D4.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/ep-rhodes/E4.mp3",
+      "engine": {
+       "frames": 137984,
+       "rate": 44100,
+       "channels": 1,
+       "dualMono": true,
+       "onsetTrimSec": 0,
+       "capped": false,
+       "monoFix": null
+      },
+      "source": "app/samples/ep-rhodes/E4.mp3",
+      "sourceSha256": "d996c315a08899b7f7e02cd5e2c8cff0b10411dc0f91ec83555f7c947f68ff6f",
+      "sourceBytes": 18015,
+      "rate": 44100,
+      "channels": 2,
+      "frames": 137984,
+      "sha256": "2e50ac60012d2fe22be67fd97290dfc0af804137ebd4faf96e09d87fc59e2fa4",
+      "bytes": 1103930,
+      "engineRate": 44100,
+      "resampledByEngine": false,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/ep-rhodes/E4.wav",
+      "sidecar": "pcm/ep-rhodes/E4.json",
+      "committed": true
+     },
+     {
+      "url": "/samples/ep-rhodes/G2.mp3",
+      "engine": {
+       "frames": 137936,
+       "rate": 44100,
+       "channels": 1,
+       "dualMono": true,
+       "onsetTrimSec": 0.0010884353741496598,
+       "capped": false,
+       "monoFix": null
+      },
+      "source": "app/samples/ep-rhodes/G2.mp3",
+      "sourceSha256": "e320b5041ac062c341ccef3d5528aed1534f4335d4b7f89235419a4e16d29f2c",
+      "sourceBytes": 17946,
+      "rate": 44100,
+      "channels": 2,
+      "frames": 137984,
+      "sha256": "7d05d3e71a9a0f229c8d408cdb2c61aeb8f043870a93844bc4b35098b8770fe3",
+      "bytes": 1103930,
+      "engineRate": 44100,
+      "resampledByEngine": false,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/ep-rhodes/G2.wav",
+      "sidecar": "pcm/ep-rhodes/G2.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/ep-rhodes/G3.mp3",
+      "engine": {
+       "frames": 137984,
+       "rate": 44100,
+       "channels": 1,
+       "dualMono": true,
+       "onsetTrimSec": 0,
+       "capped": false,
+       "monoFix": null
+      },
+      "source": "app/samples/ep-rhodes/G3.mp3",
+      "sourceSha256": "06ec697e7d734e9ca22f5f93df99b1c802248fca1d32f522d7850cc081d571df",
+      "sourceBytes": 16583,
+      "rate": 44100,
+      "channels": 2,
+      "frames": 137984,
+      "sha256": "1c501cb82b616256078de5381aeb98461aacdf8a26b40dbc7461bf52372918bb",
+      "bytes": 1103930,
+      "engineRate": 44100,
+      "resampledByEngine": false,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/ep-rhodes/G3.wav",
+      "sidecar": "pcm/ep-rhodes/G3.json",
+      "committed": false
+     }
+    ]
+   },
+   "repeatEnvCorr": 1,
+   "repeatBandsDb": 0.004982
+  },
+  {
+   "id": "dyn-peak-r1",
+   "kind": "dynamics",
+   "classification": "exact",
+   "exactIfPrngPorted": false,
+   "smoke": false,
+   "addedBy": "TOUCH",
+   "chromium": "157.0.8103.78",
+   "file": "out/dyn-peak-r1.wav",
+   "sha256": "a5776d0c7aa2d82d941971b452af720f388b2a28b009ce0a95b5f8d690fe766f",
+   "sampleRate": 44100,
+   "channels": 2,
+   "frames": 220500,
+   "seconds": 5,
+   "peak": 0.8681,
+   "peakDb": -1.229,
+   "rms": 0.162938,
+   "rmsDb": -15.76,
+   "bandsDb": [
+    -60.27,
+    -63.53,
+    -63.22,
+    -58.9,
+    -53.88,
+    -51.25,
+    -50.04,
+    -33.22,
+    -54.59,
+    -44.85,
+    -34.39,
+    -36.47,
+    -37.14,
+    -29.11,
+    -36.7,
+    -38.22,
+    -39.67,
+    -39.39,
+    -40.86,
+    -43.93,
+    -44.64,
+    -46.27,
+    -57.78,
+    -67.46,
+    -68.39,
+    -74.66,
+    -85.03,
+    -101.2,
+    -114.6,
+    -119.6
+   ],
+   "repeatMaxAbsDiff": 4.76837158203125e-7,
+   "renderMs": 6904,
+   "tolerance": {
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 1.5,
+     "bandRangeDb": 50,
+     "envCorr": 0.95,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
+   },
+   "chromiumNodes": [
+    "mp3-decode+resample (decodeAudioData)",
+    "AudioBufferSourceNode playbackRate",
+    "DynamicsCompressorNode (catcher)",
+    "WaveShaperNode (soft clip)"
+   ],
+   "randomness": {
+    "prng": "mulberry32",
+    "hash": "FNV-1a",
+    "engineSeed": 1,
+    "streams": []
+   },
+   "fixture": {
+    "seed": 1,
+    "addedBy": "TOUCH",
+    "id": "dyn-peak-r1",
+    "kind": "dynamics",
+    "seconds": 5,
+    "needsPcm": true,
+    "setup": {
+     "patch": {
+      "slots": [
+       {
+        "instrument": {
+         "type": "sampler",
+         "id": "salamander-piano"
+        },
+        "gain": 1,
+        "sends": {
+         "reverb": 0,
+         "delay": 0,
+         "chorus": 0
+        }
+       },
+       null,
+       null,
+       null
+      ]
+     },
+     "dynamicRange": 1,
+     "tap": "out"
+    },
+    "events": [
+     {
+      "t": 0.1,
+      "type": "noteOn",
+      "note": 36,
+      "vel": 127
+     },
+     {
+      "t": 0.11,
+      "type": "noteOn",
+      "note": 48,
+      "vel": 127
+     },
+     {
+      "t": 0.12,
+      "type": "noteOn",
+      "note": 55,
+      "vel": 127
+     },
+     {
+      "t": 0.13,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 127
+     },
+     {
+      "t": 0.14,
+      "type": "noteOn",
+      "note": 64,
+      "vel": 127
+     },
+     {
+      "t": 0.15,
+      "type": "noteOn",
+      "note": 67,
+      "vel": 127
+     },
+     {
+      "t": 0.16,
+      "type": "noteOn",
+      "note": 72,
+      "vel": 127
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 36
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 48
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 55
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 64
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 67
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 72
+     },
+     {
+      "t": 1.6,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 110
+     },
+     {
+      "t": 2.8,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 3.1,
+      "type": "noteOn",
+      "note": 36,
+      "vel": 127
+     },
+     {
+      "t": 3.11,
+      "type": "noteOn",
+      "note": 48,
+      "vel": 127
+     },
+     {
+      "t": 3.12,
+      "type": "noteOn",
+      "note": 55,
+      "vel": 127
+     },
+     {
+      "t": 3.13,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 127
+     },
+     {
+      "t": 3.14,
+      "type": "noteOn",
+      "note": 64,
+      "vel": 127
+     },
+     {
+      "t": 3.15,
+      "type": "noteOn",
+      "note": 67,
+      "vel": 127
+     },
+     {
+      "t": 3.16,
+      "type": "noteOn",
+      "note": 72,
+      "vel": 127
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 36
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 48
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 55
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 64
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 67
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 72
+     }
+    ]
+   },
+   "resolved": {
+    "patch": {
+     "slots": [
+      {
+       "instrument": {
+        "type": "sampler",
+        "id": "salamander-piano"
+       },
+       "gain": 1,
+       "pan": 0,
+       "octave": 0,
+       "transpose": 0,
+       "lowNote": 0,
+       "highNote": 127,
+       "sustain": true,
+       "bendEnabled": false,
+       "mono": "off",
+       "velocityCurve": "normal",
+       "sends": {
+        "reverb": 0,
+        "delay": 0,
+        "chorus": 0
+       },
+       "params": {},
+       "width": 1,
+       "eq": {},
+       "release": null,
+       "pedalHold": "natural"
+      },
+      null,
+      null,
+      null
+     ],
+     "fx": {
+      "reverb": {
+       "size": 0.5,
+       "damp": 0.5,
+       "predelay": 0.02,
+       "returnGain": 1
+      },
+      "delay": {
+       "time": 0.375,
+       "feedback": 0.35,
+       "pingpong": false,
+       "tone": 0.5,
+       "sync": "off",
+       "returnGain": 1
+      },
+      "chorus": {
+       "rate": 0.4,
+       "depth": 0.5,
+       "returnGain": 1
+      },
+      "lofi": {
+       "amount": 0,
+       "wow": 0.5,
+       "flutter": 0.5,
+       "crackle": 0.3,
+       "bits": 0.5,
+       "tone": 0.5,
+       "saturation": 0.5
+      },
+      "eq": {
+       "low": 0,
+       "mid": 0,
+       "high": 0
+      },
+      "comp": {
+       "amount": 0
+      },
+      "master": {
+       "volume": 0.5011872336272722
+      }
+     },
+     "modWheel": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "expression": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "volume": {
+      "target": "master.volume"
+     },
+     "bend": {
+      "mode": "pitch",
+      "range": 2
+     },
+     "swell": {
+      "seconds": 8
+     }
+    },
+    "routing": {
+     "modWheel": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "expression": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "volume": {
+      "target": "master.volume"
+     },
+     "bend": {
+      "mode": "pitch",
+      "range": 2
+     },
+     "swell": {
+      "seconds": 8
+     }
+    },
+    "trims": {
+     "synth": {
+      "warm-pad": 3.5,
+      "glass-pad": 3.3,
+      "strings": 3.4,
+      "sub-bass": 5.8,
+      "soft-keys": 1.3,
+      "bell": 2.8,
+      "drone-osc": 2.8,
+      "supersaw-pad": 0,
+      "juno-pad": 0,
+      "shimmer-pad": 0,
+      "dx-epiano": 0,
+      "pluck": 0,
+      "poly-stab": 0,
+      "analog-brass": 0,
+      "square-lead": 0,
+      "808-sub": 0,
+      "synth-bass": 0
+     },
+     "organ": {
+      "gospel": 4.4,
+      "soft-pad": 3.6,
+      "full": 2.3,
+      "church": 6.1
+     },
+     "droneTrim": -8.5
+    },
+    "slots": [
+     {
+      "ref": {
+       "type": "sampler",
+       "id": "salamander-piano"
+      },
+      "params": {},
+      "widthDefault": 0.8,
+      "fallback": false
+     },
+     null,
+     null,
+     null
+    ],
+    "stimulus": null,
+    "stats": {
+     "voices": 7,
+     "nodes": 154,
+     "retiring": 0,
+     "decodedMB": 370,
+     "pinnedMB": 0,
+     "referencedMB": 370,
+     "capMB": 700,
+     "sounding": 0,
+     "pedaled": 0,
+     "timers": 0,
+     "lowResource": false,
+     "slotLevelTaps": 0,
+     "reverbUnits": 1,
+     "reverbQuietWaiting": 0,
+     "fxAsleep": [],
+     "droneFrozen": false,
+     "droneLoopSec": null,
+     "droneRenderMs": null,
+     "droneRenders": 0,
+     "droneFreezeMB": 0,
+     "droneSeam": null,
+     "droneFreezePending": false,
+     "droneFreezeReused": 0,
+     "droneRenderMaxStepMs": null,
+     "audioSleep": "awake",
+     "click": {
+      "running": false,
+      "counting": false,
+      "bpm": null,
+      "sig": "4/4",
+      "output": "main",
+      "level": 0.6,
+      "record": false,
+      "downbeat": null,
+      "live": 0,
+      "pumps": 0,
+      "pumpMs": 0,
+      "ticks": 0,
+      "late": 0,
+      "pulses": 0,
+      "startedAt": null
+     },
+     "lastWake": null
+    },
+    "samplesUsed": [
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C2.mp3#max=30",
+      "url": "/samples/salamander-piano/v14/C2.mp3",
+      "frames": 881891,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.0024489795918367346,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 2.456137164930575,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C3.mp3",
+      "url": "/samples/salamander-piano/v14/C3.mp3",
+      "frames": 643565,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.010430839002267574,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.6454284174752998,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C4.mp3",
+      "url": "/samples/salamander-piano/v14/C4.mp3",
+      "frames": 667280,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.00798185941043084,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.360448162946537,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C5.mp3",
+      "url": "/samples/salamander-piano/v14/C5.mp3",
+      "frames": 415808,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.006439909297052154,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 7.980996482248301,
+       "mid": 1.774393035138914,
+       "side": 0.7702263732494528
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Eb4.mp3#max=30",
+      "url": "/samples/salamander-piano/v14/Eb4.mp3",
+      "frames": 535416,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.009047619047619047,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.4298833157422564,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Gb3.mp3",
+      "url": "/samples/salamander-piano/v14/Gb3.mp3",
+      "frames": 638795,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.005873015873015873,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 4.2333869542020786,
+       "mid": 1.1525754045985264,
+       "side": 0.8949970874279013
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Gb4.mp3#max=30",
+      "url": "/samples/salamander-piano/v14/Gb4.mp3",
+      "frames": 613382,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.00598639455782313,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.0070926010427068,
+       "mid": 1,
+       "side": 1
+      }
+     }
+    ],
+    "rngCalls": {},
+    "reverbKey": "5|0.5|44100"
+   },
+   "issues": [],
+   "tier": {
+    "class": "exact",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
+   },
+   "needsPcm": true,
+   "pcm": {
+    "required": true,
+    "decoder": "Chromium decodeAudioData",
+    "files": [
+     {
+      "url": "/samples/salamander-piano/v14/C2.mp3",
+      "engine": {
+       "frames": 881891,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.0024489795918367346,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 2.456137164930575,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C2.mp3",
+      "sourceSha256": "a24acbb42a104f485201b2dbd520c0bfc516e8024d3c285f0966cc5c6face589",
+      "sourceBytes": 401325,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 960000,
+      "sha256": "68d4ed99527c04d17184273743f87db8ecc74f3b80acf424f02943935f58edf5",
+      "bytes": 7680058,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C2.wav",
+      "sidecar": "pcm/salamander-piano/v14/C2.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/C3.mp3",
+      "engine": {
+       "frames": 643565,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.010430839002267574,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.6454284174752998,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C3.mp3",
+      "sourceSha256": "89a28dccef9f8e605aa8e04e1dbe7a864b0f75f3f601cc330dc9fd888243428a",
+      "sourceBytes": 293325,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 700980,
+      "sha256": "950df69037271dd68400e6e26a34ea45b7ea2b711b2595d8660f5d3506f20bf3",
+      "bytes": 5607898,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C3.wav",
+      "sidecar": "pcm/salamander-piano/v14/C3.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/C4.mp3",
+      "engine": {
+       "frames": 667280,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.00798185941043084,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.360448162946537,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C4.mp3",
+      "sourceSha256": "3fe1bdabfed60b41ca06e656b7afda9249e1322fdd85689671a17f400f3c84a1",
+      "sourceBytes": 303885,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 726675,
+      "sha256": "2254ba9f9e418d15d532ac702f8d3288a6f6533b18f72b14150dc8faabf3fbaf",
+      "bytes": 5813458,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C4.wav",
+      "sidecar": "pcm/salamander-piano/v14/C4.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/C5.mp3",
+      "engine": {
+       "frames": 415808,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.006439909297052154,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 7.980996482248301,
+        "mid": 1.774393035138914,
+        "side": 0.7702263732494528
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C5.mp3",
+      "sourceSha256": "5aa6910506fa722eb73432cf5ab2aa2aec56aaf2d4359d0978b8ee558021df78",
+      "sourceBytes": 190125,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 452890,
+      "sha256": "b849654456efda0d166bbf279ecd63b633b0ddf5fdc34e83dffb03b347a410a2",
+      "bytes": 3623178,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C5.wav",
+      "sidecar": "pcm/salamander-piano/v14/C5.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/Eb4.mp3",
+      "engine": {
+       "frames": 535416,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.009047619047619047,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.4298833157422564,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/Eb4.mp3",
+      "sourceSha256": "8daf37a252c4990971f61cbc62d699c46d162e4490e2487e281f104e5f199060",
+      "sourceBytes": 244365,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 583201,
+      "sha256": "19f3831f8b97088a9d06bc52b2ae8f43f91114ba42901a29f3d7c41a04c3f534",
+      "bytes": 4665666,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/Eb4.wav",
+      "sidecar": "pcm/salamander-piano/v14/Eb4.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/Gb3.mp3",
+      "engine": {
+       "frames": 638795,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.005873015873015873,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 4.2333869542020786,
+        "mid": 1.1525754045985264,
+        "side": 0.8949970874279013
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/Gb3.mp3",
+      "sourceSha256": "ea4b336cf0d9b69d613932f5a1b4b8ccfb1d164eceb6d9d945835a4110820ccd",
+      "sourceBytes": 290925,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 695570,
+      "sha256": "7aed419721877ebc678180b2b30d52944c035c58117b9cbcb89362092c278618",
+      "bytes": 5564618,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/Gb3.wav",
+      "sidecar": "pcm/salamander-piano/v14/Gb3.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/Gb4.mp3",
+      "engine": {
+       "frames": 613382,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.00598639455782313,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.0070926010427068,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/Gb4.mp3",
+      "sourceSha256": "b1cb416f8e3359c920180045fdffbf125a9d50461605e518c94299b7b020dbac",
+      "sourceBytes": 279405,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 667915,
+      "sha256": "a504c091ae449c2af75c62e93fecf575c484bda27a65f0564c0d2f77231942e2",
+      "bytes": 5343378,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/Gb4.wav",
+      "sidecar": "pcm/salamander-piano/v14/Gb4.json",
+      "committed": false
+     }
+    ]
+   },
+   "repeatEnvCorr": 1,
+   "repeatBandsDb": 0.004799
+  },
+  {
+   "id": "dyn-peak-r3",
+   "kind": "dynamics",
+   "classification": "exact",
+   "exactIfPrngPorted": false,
+   "smoke": false,
+   "addedBy": "TOUCH",
+   "chromium": "157.0.8103.78",
+   "file": "out/dyn-peak-r3.wav",
+   "sha256": "2b72b0a7efc3dfa8e9e929d2e77c5add85bde7c26ed41e10d2069acb6bfbdad7",
+   "sampleRate": 44100,
+   "channels": 2,
+   "frames": 220500,
+   "seconds": 5,
+   "peak": 0.905018,
+   "peakDb": -0.8669,
+   "rms": 0.207478,
+   "rmsDb": -13.66,
+   "bandsDb": [
+    -58.21,
+    -62.17,
+    -61.38,
+    -55.61,
+    -50.27,
+    -49.11,
+    -47.91,
+    -31.52,
+    -53.04,
+    -43.6,
+    -32.64,
+    -34.76,
+    -34.87,
+    -26.96,
+    -34.23,
+    -36.41,
+    -37.23,
+    -37.19,
+    -38.82,
+    -41.78,
+    -43.35,
+    -45.05,
+    -56.47,
+    -65.95,
+    -67.09,
+    -73.74,
+    -84.08,
+    -99.83,
+    -111.6,
+    -117.5
+   ],
+   "repeatMaxAbsDiff": 4.76837158203125e-7,
+   "renderMs": 6868,
+   "tolerance": {
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 1.5,
+     "bandRangeDb": 50,
+     "envCorr": 0.95,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
+   },
+   "chromiumNodes": [
+    "mp3-decode+resample (decodeAudioData)",
+    "AudioBufferSourceNode playbackRate",
+    "DynamicsCompressorNode (catcher)",
+    "WaveShaperNode (soft clip)"
+   ],
+   "randomness": {
+    "prng": "mulberry32",
+    "hash": "FNV-1a",
+    "engineSeed": 1,
+    "streams": []
+   },
+   "fixture": {
+    "seed": 1,
+    "addedBy": "TOUCH",
+    "id": "dyn-peak-r3",
+    "kind": "dynamics",
+    "seconds": 5,
+    "needsPcm": true,
+    "setup": {
+     "patch": {
+      "slots": [
+       {
+        "instrument": {
+         "type": "sampler",
+         "id": "salamander-piano"
+        },
+        "gain": 1,
+        "sends": {
+         "reverb": 0,
+         "delay": 0,
+         "chorus": 0
+        }
+       },
+       null,
+       null,
+       null
+      ]
+     },
+     "dynamicRange": 3,
+     "tap": "out"
+    },
+    "events": [
+     {
+      "t": 0.1,
+      "type": "noteOn",
+      "note": 36,
+      "vel": 127
+     },
+     {
+      "t": 0.11,
+      "type": "noteOn",
+      "note": 48,
+      "vel": 127
+     },
+     {
+      "t": 0.12,
+      "type": "noteOn",
+      "note": 55,
+      "vel": 127
+     },
+     {
+      "t": 0.13,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 127
+     },
+     {
+      "t": 0.14,
+      "type": "noteOn",
+      "note": 64,
+      "vel": 127
+     },
+     {
+      "t": 0.15,
+      "type": "noteOn",
+      "note": 67,
+      "vel": 127
+     },
+     {
+      "t": 0.16,
+      "type": "noteOn",
+      "note": 72,
+      "vel": 127
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 36
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 48
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 55
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 64
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 67
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 72
+     },
+     {
+      "t": 1.6,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 110
+     },
+     {
+      "t": 2.8,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 3.1,
+      "type": "noteOn",
+      "note": 36,
+      "vel": 127
+     },
+     {
+      "t": 3.11,
+      "type": "noteOn",
+      "note": 48,
+      "vel": 127
+     },
+     {
+      "t": 3.12,
+      "type": "noteOn",
+      "note": 55,
+      "vel": 127
+     },
+     {
+      "t": 3.13,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 127
+     },
+     {
+      "t": 3.14,
+      "type": "noteOn",
+      "note": 64,
+      "vel": 127
+     },
+     {
+      "t": 3.15,
+      "type": "noteOn",
+      "note": 67,
+      "vel": 127
+     },
+     {
+      "t": 3.16,
+      "type": "noteOn",
+      "note": 72,
+      "vel": 127
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 36
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 48
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 55
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 64
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 67
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 72
+     }
+    ]
+   },
+   "resolved": {
+    "patch": {
+     "slots": [
+      {
+       "instrument": {
+        "type": "sampler",
+        "id": "salamander-piano"
+       },
+       "gain": 1,
+       "pan": 0,
+       "octave": 0,
+       "transpose": 0,
+       "lowNote": 0,
+       "highNote": 127,
+       "sustain": true,
+       "bendEnabled": false,
+       "mono": "off",
+       "velocityCurve": "normal",
+       "sends": {
+        "reverb": 0,
+        "delay": 0,
+        "chorus": 0
+       },
+       "params": {},
+       "width": 1,
+       "eq": {},
+       "release": null,
+       "pedalHold": "natural"
+      },
+      null,
+      null,
+      null
+     ],
+     "fx": {
+      "reverb": {
+       "size": 0.5,
+       "damp": 0.5,
+       "predelay": 0.02,
+       "returnGain": 1
+      },
+      "delay": {
+       "time": 0.375,
+       "feedback": 0.35,
+       "pingpong": false,
+       "tone": 0.5,
+       "sync": "off",
+       "returnGain": 1
+      },
+      "chorus": {
+       "rate": 0.4,
+       "depth": 0.5,
+       "returnGain": 1
+      },
+      "lofi": {
+       "amount": 0,
+       "wow": 0.5,
+       "flutter": 0.5,
+       "crackle": 0.3,
+       "bits": 0.5,
+       "tone": 0.5,
+       "saturation": 0.5
+      },
+      "eq": {
+       "low": 0,
+       "mid": 0,
+       "high": 0
+      },
+      "comp": {
+       "amount": 0
+      },
+      "master": {
+       "volume": 0.5011872336272722
+      }
+     },
+     "modWheel": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "expression": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "volume": {
+      "target": "master.volume"
+     },
+     "bend": {
+      "mode": "pitch",
+      "range": 2
+     },
+     "swell": {
+      "seconds": 8
+     }
+    },
+    "routing": {
+     "modWheel": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "expression": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "volume": {
+      "target": "master.volume"
+     },
+     "bend": {
+      "mode": "pitch",
+      "range": 2
+     },
+     "swell": {
+      "seconds": 8
+     }
+    },
+    "trims": {
+     "synth": {
+      "warm-pad": 3.5,
+      "glass-pad": 3.3,
+      "strings": 3.4,
+      "sub-bass": 5.8,
+      "soft-keys": 1.3,
+      "bell": 2.8,
+      "drone-osc": 2.8,
+      "supersaw-pad": 0,
+      "juno-pad": 0,
+      "shimmer-pad": 0,
+      "dx-epiano": 0,
+      "pluck": 0,
+      "poly-stab": 0,
+      "analog-brass": 0,
+      "square-lead": 0,
+      "808-sub": 0,
+      "synth-bass": 0
+     },
+     "organ": {
+      "gospel": 4.4,
+      "soft-pad": 3.6,
+      "full": 2.3,
+      "church": 6.1
+     },
+     "droneTrim": -8.5
+    },
+    "slots": [
+     {
+      "ref": {
+       "type": "sampler",
+       "id": "salamander-piano"
+      },
+      "params": {},
+      "widthDefault": 0.8,
+      "fallback": false
+     },
+     null,
+     null,
+     null
+    ],
+    "stimulus": null,
+    "stats": {
+     "voices": 7,
+     "nodes": 154,
+     "retiring": 0,
+     "decodedMB": 370,
+     "pinnedMB": 0,
+     "referencedMB": 370,
+     "capMB": 700,
+     "sounding": 0,
+     "pedaled": 0,
+     "timers": 0,
+     "lowResource": false,
+     "slotLevelTaps": 0,
+     "reverbUnits": 1,
+     "reverbQuietWaiting": 0,
+     "fxAsleep": [],
+     "droneFrozen": false,
+     "droneLoopSec": null,
+     "droneRenderMs": null,
+     "droneRenders": 0,
+     "droneFreezeMB": 0,
+     "droneSeam": null,
+     "droneFreezePending": false,
+     "droneFreezeReused": 0,
+     "droneRenderMaxStepMs": null,
+     "audioSleep": "awake",
+     "click": {
+      "running": false,
+      "counting": false,
+      "bpm": null,
+      "sig": "4/4",
+      "output": "main",
+      "level": 0.6,
+      "record": false,
+      "downbeat": null,
+      "live": 0,
+      "pumps": 0,
+      "pumpMs": 0,
+      "ticks": 0,
+      "late": 0,
+      "pulses": 0,
+      "startedAt": null
+     },
+     "lastWake": null
+    },
+    "samplesUsed": [
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C2.mp3#max=30",
+      "url": "/samples/salamander-piano/v14/C2.mp3",
+      "frames": 881891,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.0024489795918367346,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 2.456137164930575,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C3.mp3",
+      "url": "/samples/salamander-piano/v14/C3.mp3",
+      "frames": 643565,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.010430839002267574,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.6454284174752998,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C4.mp3",
+      "url": "/samples/salamander-piano/v14/C4.mp3",
+      "frames": 667280,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.00798185941043084,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.360448162946537,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C5.mp3",
+      "url": "/samples/salamander-piano/v14/C5.mp3",
+      "frames": 415808,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.006439909297052154,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 7.980996482248301,
+       "mid": 1.774393035138914,
+       "side": 0.7702263732494528
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Eb4.mp3#max=30",
+      "url": "/samples/salamander-piano/v14/Eb4.mp3",
+      "frames": 535416,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.009047619047619047,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.4298833157422564,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Gb3.mp3",
+      "url": "/samples/salamander-piano/v14/Gb3.mp3",
+      "frames": 638795,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.005873015873015873,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 4.2333869542020786,
+       "mid": 1.1525754045985264,
+       "side": 0.8949970874279013
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Gb4.mp3#max=30",
+      "url": "/samples/salamander-piano/v14/Gb4.mp3",
+      "frames": 613382,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.00598639455782313,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.0070926010427068,
+       "mid": 1,
+       "side": 1
+      }
+     }
+    ],
+    "rngCalls": {},
+    "reverbKey": "5|0.5|44100"
+   },
+   "issues": [],
+   "tier": {
+    "class": "exact",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
+   },
+   "needsPcm": true,
+   "pcm": {
+    "required": true,
+    "decoder": "Chromium decodeAudioData",
+    "files": [
+     {
+      "url": "/samples/salamander-piano/v14/C2.mp3",
+      "engine": {
+       "frames": 881891,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.0024489795918367346,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 2.456137164930575,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C2.mp3",
+      "sourceSha256": "a24acbb42a104f485201b2dbd520c0bfc516e8024d3c285f0966cc5c6face589",
+      "sourceBytes": 401325,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 960000,
+      "sha256": "68d4ed99527c04d17184273743f87db8ecc74f3b80acf424f02943935f58edf5",
+      "bytes": 7680058,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C2.wav",
+      "sidecar": "pcm/salamander-piano/v14/C2.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/C3.mp3",
+      "engine": {
+       "frames": 643565,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.010430839002267574,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.6454284174752998,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C3.mp3",
+      "sourceSha256": "89a28dccef9f8e605aa8e04e1dbe7a864b0f75f3f601cc330dc9fd888243428a",
+      "sourceBytes": 293325,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 700980,
+      "sha256": "950df69037271dd68400e6e26a34ea45b7ea2b711b2595d8660f5d3506f20bf3",
+      "bytes": 5607898,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C3.wav",
+      "sidecar": "pcm/salamander-piano/v14/C3.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/C4.mp3",
+      "engine": {
+       "frames": 667280,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.00798185941043084,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.360448162946537,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C4.mp3",
+      "sourceSha256": "3fe1bdabfed60b41ca06e656b7afda9249e1322fdd85689671a17f400f3c84a1",
+      "sourceBytes": 303885,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 726675,
+      "sha256": "2254ba9f9e418d15d532ac702f8d3288a6f6533b18f72b14150dc8faabf3fbaf",
+      "bytes": 5813458,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C4.wav",
+      "sidecar": "pcm/salamander-piano/v14/C4.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/C5.mp3",
+      "engine": {
+       "frames": 415808,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.006439909297052154,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 7.980996482248301,
+        "mid": 1.774393035138914,
+        "side": 0.7702263732494528
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C5.mp3",
+      "sourceSha256": "5aa6910506fa722eb73432cf5ab2aa2aec56aaf2d4359d0978b8ee558021df78",
+      "sourceBytes": 190125,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 452890,
+      "sha256": "b849654456efda0d166bbf279ecd63b633b0ddf5fdc34e83dffb03b347a410a2",
+      "bytes": 3623178,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C5.wav",
+      "sidecar": "pcm/salamander-piano/v14/C5.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/Eb4.mp3",
+      "engine": {
+       "frames": 535416,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.009047619047619047,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.4298833157422564,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/Eb4.mp3",
+      "sourceSha256": "8daf37a252c4990971f61cbc62d699c46d162e4490e2487e281f104e5f199060",
+      "sourceBytes": 244365,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 583201,
+      "sha256": "19f3831f8b97088a9d06bc52b2ae8f43f91114ba42901a29f3d7c41a04c3f534",
+      "bytes": 4665666,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/Eb4.wav",
+      "sidecar": "pcm/salamander-piano/v14/Eb4.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/Gb3.mp3",
+      "engine": {
+       "frames": 638795,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.005873015873015873,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 4.2333869542020786,
+        "mid": 1.1525754045985264,
+        "side": 0.8949970874279013
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/Gb3.mp3",
+      "sourceSha256": "ea4b336cf0d9b69d613932f5a1b4b8ccfb1d164eceb6d9d945835a4110820ccd",
+      "sourceBytes": 290925,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 695570,
+      "sha256": "7aed419721877ebc678180b2b30d52944c035c58117b9cbcb89362092c278618",
+      "bytes": 5564618,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/Gb3.wav",
+      "sidecar": "pcm/salamander-piano/v14/Gb3.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/Gb4.mp3",
+      "engine": {
+       "frames": 613382,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.00598639455782313,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.0070926010427068,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/Gb4.mp3",
+      "sourceSha256": "b1cb416f8e3359c920180045fdffbf125a9d50461605e518c94299b7b020dbac",
+      "sourceBytes": 279405,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 667915,
+      "sha256": "a504c091ae449c2af75c62e93fecf575c484bda27a65f0564c0d2f77231942e2",
+      "bytes": 5343378,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/Gb4.wav",
+      "sidecar": "pcm/salamander-piano/v14/Gb4.json",
+      "committed": false
+     }
+    ]
+   },
+   "repeatEnvCorr": 1,
+   "repeatBandsDb": 0.00496
+  },
+  {
+   "id": "dyn-peak-r6",
+   "kind": "dynamics",
+   "classification": "exact",
+   "exactIfPrngPorted": false,
+   "smoke": false,
+   "addedBy": "TOUCH",
+   "chromium": "157.0.8103.78",
+   "file": "out/dyn-peak-r6.wav",
+   "sha256": "c0f98e6d4ce7e88d0fac3294b42558bf6e1fdb6e5d4ab848b13c51bb4d7a371c",
+   "sampleRate": 44100,
+   "channels": 2,
+   "frames": 220500,
+   "seconds": 5,
+   "peak": 0.938109,
+   "peakDb": -0.5549,
+   "rms": 0.258163,
+   "rmsDb": -11.76,
+   "bandsDb": [
+    -56.26,
+    -60.81,
+    -59.52,
+    -52.59,
+    -47.11,
+    -47.49,
+    -46.83,
+    -30.14,
+    -51.67,
+    -42.28,
+    -30.43,
+    -33.07,
+    -32.73,
+    -25.2,
+    -31.85,
+    -34.76,
+    -35.23,
+    -35.04,
+    -37.1,
+    -39.6,
+    -42.05,
+    -43.71,
+    -55.06,
+    -64.3,
+    -65.69,
+    -72.61,
+    -82.91,
+    -97.69,
+    -107.8,
+    -114.6
+   ],
+   "repeatMaxAbsDiff": 4.76837158203125e-7,
+   "renderMs": 6609,
+   "tolerance": {
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "bandRangeDb": 60,
+    "envCorr": 0.999,
+    "envLagMs": 0,
+    "rmsDb": 0.1,
+    "fallback": {
+     "bandsDb": 1.5,
+     "bandRangeDb": 50,
+     "envCorr": 0.95,
+     "envLagMs": 10,
+     "rmsDb": 1
+    }
+   },
+   "chromiumNodes": [
+    "mp3-decode+resample (decodeAudioData)",
+    "AudioBufferSourceNode playbackRate",
+    "DynamicsCompressorNode (catcher)",
+    "WaveShaperNode (soft clip)"
+   ],
+   "randomness": {
+    "prng": "mulberry32",
+    "hash": "FNV-1a",
+    "engineSeed": 1,
+    "streams": []
+   },
+   "fixture": {
+    "seed": 1,
+    "addedBy": "TOUCH",
+    "id": "dyn-peak-r6",
+    "kind": "dynamics",
+    "seconds": 5,
+    "needsPcm": true,
+    "setup": {
+     "patch": {
+      "slots": [
+       {
+        "instrument": {
+         "type": "sampler",
+         "id": "salamander-piano"
+        },
+        "gain": 1,
+        "sends": {
+         "reverb": 0,
+         "delay": 0,
+         "chorus": 0
+        }
+       },
+       null,
+       null,
+       null
+      ]
+     },
+     "dynamicRange": 6,
+     "tap": "out"
+    },
+    "events": [
+     {
+      "t": 0.1,
+      "type": "noteOn",
+      "note": 36,
+      "vel": 127
+     },
+     {
+      "t": 0.11,
+      "type": "noteOn",
+      "note": 48,
+      "vel": 127
+     },
+     {
+      "t": 0.12,
+      "type": "noteOn",
+      "note": 55,
+      "vel": 127
+     },
+     {
+      "t": 0.13,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 127
+     },
+     {
+      "t": 0.14,
+      "type": "noteOn",
+      "note": 64,
+      "vel": 127
+     },
+     {
+      "t": 0.15,
+      "type": "noteOn",
+      "note": 67,
+      "vel": 127
+     },
+     {
+      "t": 0.16,
+      "type": "noteOn",
+      "note": 72,
+      "vel": 127
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 36
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 48
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 55
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 64
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 67
+     },
+     {
+      "t": 1.3,
+      "type": "noteOff",
+      "note": 72
+     },
+     {
+      "t": 1.6,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 110
+     },
+     {
+      "t": 2.8,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 3.1,
+      "type": "noteOn",
+      "note": 36,
+      "vel": 127
+     },
+     {
+      "t": 3.11,
+      "type": "noteOn",
+      "note": 48,
+      "vel": 127
+     },
+     {
+      "t": 3.12,
+      "type": "noteOn",
+      "note": 55,
+      "vel": 127
+     },
+     {
+      "t": 3.13,
+      "type": "noteOn",
+      "note": 60,
+      "vel": 127
+     },
+     {
+      "t": 3.14,
+      "type": "noteOn",
+      "note": 64,
+      "vel": 127
+     },
+     {
+      "t": 3.15,
+      "type": "noteOn",
+      "note": 67,
+      "vel": 127
+     },
+     {
+      "t": 3.16,
+      "type": "noteOn",
+      "note": 72,
+      "vel": 127
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 36
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 48
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 55
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 60
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 64
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 67
+     },
+     {
+      "t": 4.3,
+      "type": "noteOff",
+      "note": 72
+     }
+    ]
+   },
+   "resolved": {
+    "patch": {
+     "slots": [
+      {
+       "instrument": {
+        "type": "sampler",
+        "id": "salamander-piano"
+       },
+       "gain": 1,
+       "pan": 0,
+       "octave": 0,
+       "transpose": 0,
+       "lowNote": 0,
+       "highNote": 127,
+       "sustain": true,
+       "bendEnabled": false,
+       "mono": "off",
+       "velocityCurve": "normal",
+       "sends": {
+        "reverb": 0,
+        "delay": 0,
+        "chorus": 0
+       },
+       "params": {},
+       "width": 1,
+       "eq": {},
+       "release": null,
+       "pedalHold": "natural"
+      },
+      null,
+      null,
+      null
+     ],
+     "fx": {
+      "reverb": {
+       "size": 0.5,
+       "damp": 0.5,
+       "predelay": 0.02,
+       "returnGain": 1
+      },
+      "delay": {
+       "time": 0.375,
+       "feedback": 0.35,
+       "pingpong": false,
+       "tone": 0.5,
+       "sync": "off",
+       "returnGain": 1
+      },
+      "chorus": {
+       "rate": 0.4,
+       "depth": 0.5,
+       "returnGain": 1
+      },
+      "lofi": {
+       "amount": 0,
+       "wow": 0.5,
+       "flutter": 0.5,
+       "crackle": 0.3,
+       "bits": 0.5,
+       "tone": 0.5,
+       "saturation": 0.5
+      },
+      "eq": {
+       "low": 0,
+       "mid": 0,
+       "high": 0
+      },
+      "comp": {
+       "amount": 0
+      },
+      "master": {
+       "volume": 0.5011872336272722
+      }
+     },
+     "modWheel": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "expression": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "volume": {
+      "target": "master.volume"
+     },
+     "bend": {
+      "mode": "pitch",
+      "range": 2
+     },
+     "swell": {
+      "seconds": 8
+     }
+    },
+    "routing": {
+     "modWheel": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "expression": {
+      "target": "slots.1.gain",
+      "min": 0,
+      "max": 1
+     },
+     "volume": {
+      "target": "master.volume"
+     },
+     "bend": {
+      "mode": "pitch",
+      "range": 2
+     },
+     "swell": {
+      "seconds": 8
+     }
+    },
+    "trims": {
+     "synth": {
+      "warm-pad": 3.5,
+      "glass-pad": 3.3,
+      "strings": 3.4,
+      "sub-bass": 5.8,
+      "soft-keys": 1.3,
+      "bell": 2.8,
+      "drone-osc": 2.8,
+      "supersaw-pad": 0,
+      "juno-pad": 0,
+      "shimmer-pad": 0,
+      "dx-epiano": 0,
+      "pluck": 0,
+      "poly-stab": 0,
+      "analog-brass": 0,
+      "square-lead": 0,
+      "808-sub": 0,
+      "synth-bass": 0
+     },
+     "organ": {
+      "gospel": 4.4,
+      "soft-pad": 3.6,
+      "full": 2.3,
+      "church": 6.1
+     },
+     "droneTrim": -8.5
+    },
+    "slots": [
+     {
+      "ref": {
+       "type": "sampler",
+       "id": "salamander-piano"
+      },
+      "params": {},
+      "widthDefault": 0.8,
+      "fallback": false
+     },
+     null,
+     null,
+     null
+    ],
+    "stimulus": null,
+    "stats": {
+     "voices": 7,
+     "nodes": 154,
+     "retiring": 0,
+     "decodedMB": 370,
+     "pinnedMB": 0,
+     "referencedMB": 370,
+     "capMB": 700,
+     "sounding": 0,
+     "pedaled": 0,
+     "timers": 0,
+     "lowResource": false,
+     "slotLevelTaps": 0,
+     "reverbUnits": 1,
+     "reverbQuietWaiting": 0,
+     "fxAsleep": [],
+     "droneFrozen": false,
+     "droneLoopSec": null,
+     "droneRenderMs": null,
+     "droneRenders": 0,
+     "droneFreezeMB": 0,
+     "droneSeam": null,
+     "droneFreezePending": false,
+     "droneFreezeReused": 0,
+     "droneRenderMaxStepMs": null,
+     "audioSleep": "awake",
+     "click": {
+      "running": false,
+      "counting": false,
+      "bpm": null,
+      "sig": "4/4",
+      "output": "main",
+      "level": 0.6,
+      "record": false,
+      "downbeat": null,
+      "live": 0,
+      "pumps": 0,
+      "pumpMs": 0,
+      "ticks": 0,
+      "late": 0,
+      "pulses": 0,
+      "startedAt": null
+     },
+     "lastWake": null
+    },
+    "samplesUsed": [
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C2.mp3#max=30",
+      "url": "/samples/salamander-piano/v14/C2.mp3",
+      "frames": 881891,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.0024489795918367346,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 2.456137164930575,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C3.mp3",
+      "url": "/samples/salamander-piano/v14/C3.mp3",
+      "frames": 643565,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.010430839002267574,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.6454284174752998,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C4.mp3",
+      "url": "/samples/salamander-piano/v14/C4.mp3",
+      "frames": 667280,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.00798185941043084,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.360448162946537,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/C5.mp3",
+      "url": "/samples/salamander-piano/v14/C5.mp3",
+      "frames": 415808,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.006439909297052154,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 7.980996482248301,
+       "mid": 1.774393035138914,
+       "side": 0.7702263732494528
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Eb4.mp3#max=30",
+      "url": "/samples/salamander-piano/v14/Eb4.mp3",
+      "frames": 535416,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.009047619047619047,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.4298833157422564,
+       "mid": 1,
+       "side": 1
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Gb3.mp3",
+      "url": "/samples/salamander-piano/v14/Gb3.mp3",
+      "frames": 638795,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.005873015873015873,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 4.2333869542020786,
+       "mid": 1.1525754045985264,
+       "side": 0.8949970874279013
+      }
+     },
+     {
+      "key": "http://127.0.0.1:37593/samples/salamander-piano/v14/Gb4.mp3#max=30",
+      "url": "/samples/salamander-piano/v14/Gb4.mp3",
+      "frames": 613382,
+      "rate": 44100,
+      "channels": 2,
+      "dualMono": false,
+      "onsetTrimSec": 0.00598639455782313,
+      "capped": false,
+      "monoFix": {
+       "lossDb": 1.0070926010427068,
+       "mid": 1,
+       "side": 1
+      }
+     }
+    ],
+    "rngCalls": {},
+    "reverbKey": "5|0.5|44100"
+   },
+   "issues": [],
+   "tier": {
+    "class": "exact",
+    "maxAbsDiff": 0.0002,
+    "bandsDb": 0.25,
+    "envCorr": 0.999
+   },
+   "needsPcm": true,
+   "pcm": {
+    "required": true,
+    "decoder": "Chromium decodeAudioData",
+    "files": [
+     {
+      "url": "/samples/salamander-piano/v14/C2.mp3",
+      "engine": {
+       "frames": 881891,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.0024489795918367346,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 2.456137164930575,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C2.mp3",
+      "sourceSha256": "a24acbb42a104f485201b2dbd520c0bfc516e8024d3c285f0966cc5c6face589",
+      "sourceBytes": 401325,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 960000,
+      "sha256": "68d4ed99527c04d17184273743f87db8ecc74f3b80acf424f02943935f58edf5",
+      "bytes": 7680058,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C2.wav",
+      "sidecar": "pcm/salamander-piano/v14/C2.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/C3.mp3",
+      "engine": {
+       "frames": 643565,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.010430839002267574,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.6454284174752998,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C3.mp3",
+      "sourceSha256": "89a28dccef9f8e605aa8e04e1dbe7a864b0f75f3f601cc330dc9fd888243428a",
+      "sourceBytes": 293325,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 700980,
+      "sha256": "950df69037271dd68400e6e26a34ea45b7ea2b711b2595d8660f5d3506f20bf3",
+      "bytes": 5607898,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C3.wav",
+      "sidecar": "pcm/salamander-piano/v14/C3.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/C4.mp3",
+      "engine": {
+       "frames": 667280,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.00798185941043084,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.360448162946537,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C4.mp3",
+      "sourceSha256": "3fe1bdabfed60b41ca06e656b7afda9249e1322fdd85689671a17f400f3c84a1",
+      "sourceBytes": 303885,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 726675,
+      "sha256": "2254ba9f9e418d15d532ac702f8d3288a6f6533b18f72b14150dc8faabf3fbaf",
+      "bytes": 5813458,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C4.wav",
+      "sidecar": "pcm/salamander-piano/v14/C4.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/C5.mp3",
+      "engine": {
+       "frames": 415808,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.006439909297052154,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 7.980996482248301,
+        "mid": 1.774393035138914,
+        "side": 0.7702263732494528
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/C5.mp3",
+      "sourceSha256": "5aa6910506fa722eb73432cf5ab2aa2aec56aaf2d4359d0978b8ee558021df78",
+      "sourceBytes": 190125,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 452890,
+      "sha256": "b849654456efda0d166bbf279ecd63b633b0ddf5fdc34e83dffb03b347a410a2",
+      "bytes": 3623178,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/C5.wav",
+      "sidecar": "pcm/salamander-piano/v14/C5.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/Eb4.mp3",
+      "engine": {
+       "frames": 535416,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.009047619047619047,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.4298833157422564,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/Eb4.mp3",
+      "sourceSha256": "8daf37a252c4990971f61cbc62d699c46d162e4490e2487e281f104e5f199060",
+      "sourceBytes": 244365,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 583201,
+      "sha256": "19f3831f8b97088a9d06bc52b2ae8f43f91114ba42901a29f3d7c41a04c3f534",
+      "bytes": 4665666,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/Eb4.wav",
+      "sidecar": "pcm/salamander-piano/v14/Eb4.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/Gb3.mp3",
+      "engine": {
+       "frames": 638795,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.005873015873015873,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 4.2333869542020786,
+        "mid": 1.1525754045985264,
+        "side": 0.8949970874279013
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/Gb3.mp3",
+      "sourceSha256": "ea4b336cf0d9b69d613932f5a1b4b8ccfb1d164eceb6d9d945835a4110820ccd",
+      "sourceBytes": 290925,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 695570,
+      "sha256": "7aed419721877ebc678180b2b30d52944c035c58117b9cbcb89362092c278618",
+      "bytes": 5564618,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/Gb3.wav",
+      "sidecar": "pcm/salamander-piano/v14/Gb3.json",
+      "committed": false
+     },
+     {
+      "url": "/samples/salamander-piano/v14/Gb4.mp3",
+      "engine": {
+       "frames": 613382,
+       "rate": 44100,
+       "channels": 2,
+       "dualMono": false,
+       "onsetTrimSec": 0.00598639455782313,
+       "capped": false,
+       "monoFix": {
+        "lossDb": 1.0070926010427068,
+        "mid": 1,
+        "side": 1
+       }
+      },
+      "source": "app/samples/salamander-piano/v14/Gb4.mp3",
+      "sourceSha256": "b1cb416f8e3359c920180045fdffbf125a9d50461605e518c94299b7b020dbac",
+      "sourceBytes": 279405,
+      "rate": 48000,
+      "channels": 2,
+      "frames": 667915,
+      "sha256": "a504c091ae449c2af75c62e93fecf575c484bda27a65f0564c0d2f77231942e2",
+      "bytes": 5343378,
+      "engineRate": 44100,
+      "resampledByEngine": true,
+      "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)",
+      "wav": "pcm/salamander-piano/v14/Gb4.wav",
+      "sidecar": "pcm/salamander-piano/v14/Gb4.json",
+      "committed": false
+     }
+    ]
+   },
+   "repeatEnvCorr": 1,
+   "repeatBandsDb": 0.004536
   }
  ]
 }

@@ -450,91 +450,180 @@ async function runMode(mode, browser) {
       await until(() => /"velocitySens":"normal"/.test(localStorage.getItem('rig.v1') || ''), null, 5000);
     });
 
-    // v11-touch: Your keyboards — the on-screen keys row, the guided "play soft, then hard" fit (through the real
-    // controller.captureTouch), the curve reaching engine.noteOn as {touch}, Back to standard, Remember / Forget
-    await T('settings: Your keyboards — fit the on-screen keys to a soft/hard touch, use it, remember / forget', async () => {
-      await cat('keyboards');
-      const row = '.st-kbs [data-keyboard="@computer"]';
-      await until((r) => !!document.querySelector(r), row);
-      assert.match(await page.textContent(`${row} .st-kb-name`), /On-screen & computer keys/);
-      assert.match(await page.textContent(`${row} .st-kb-sum`), /Standard touch/);
-      assert.equal(await ev(() => 'keyboards' in window.__rig.store.get().settings), false, 'nothing saved by default');
-      await page.click(`${row} .st-kb-touch`);
-      await until((r) => !document.querySelector(`${r} .st-kb-edit`).hidden, row);
-      // T3: the diagram's reference diagonal is a theme token, not white-on-paper
-      assert.equal(await ev((r) => getComputedStyle(document.querySelector(`${r} .st-kb-ref`)).stroke !== 'none', row), true);
-      const play = (vels) => ev(async (vs) => {
-        let n = 48;
-        for (const v of vs) {
-          window.__rig.controller.perform.noteOn(n, v);
-          window.__rig.controller.perform.noteOff(n);
-          n += 1;
-          await new Promise((r) => setTimeout(r, 20));
+    // v11-touch / TOUCH (D43): Your keyboards — the on-screen keys row: Dynamics in dB, the calibration editor (paste /
+    // copy Pianoteq's text, numbers, drag, keys, presets, live readout + histogram, the five-step assistant through the
+    // real controller.captureTouch), the curve reaching engine.noteOn, Back to standard, Remember / Forget
+    await T('settings: Your keyboards — Dynamics in dB; calibrate the on-screen keys (paste, edit, drag, assistant)',
+      async () => {
+        await cat('keyboards');
+        const row = '.st-kbs [data-keyboard="@computer"]';
+        const S = () => ev(() => window.__rig.store.get().settings);
+        const curveOf = () => ev(() => window.__rig.store.get().settings.keyboards?.['@computer']?.velocity ?? null);
+        await until((r) => !!document.querySelector(r), row);
+        assert.match(await page.textContent(`${row} .st-kb-name`), /On-screen & computer keys/);
+        assert.match(await page.textContent(`${row} .st-kb-sum`), /Standard touch/);
+        assert.equal('keyboards' in await S(), false, 'nothing saved by default');
+        // Dynamics: dB on screen, the multiplier in the store (10 dB = 1 = absent; 60 dB = 6)
+        const dyn = '[data-testid="setting-dynamic-range"]';
+        assert.equal(await page.textContent('[data-testid="dynamic-range-value"]'), '10 dB');
+        await page.locator(dyn).fill('60');
+        await until(() => window.__rig.store.get().settings.dynamicRange === 6);
+        assert.equal(await page.textContent('[data-testid="dynamic-range-value"]'), '60 dB');
+        const span = await page.textContent('[data-testid="dynamic-range-span"]');
+        assert.match(span, /Other sampled sounds: 72 dB \(their most\)/);
+        assert.match(span, /up to \+12\.5 dB/);
+        await page.locator(dyn).fill('35.5');
+        await until(() => window.__rig.store.get().settings.dynamicRange === 3.55);
+        await page.locator(dyn).fill('10');
+        await until(() => !('dynamicRange' in window.__rig.store.get().settings));
+        // the editor opens without saving anything
+        await page.click(`${row} .st-kb-touch`);
+        await until((r) => !document.querySelector(`${r} .st-kb-edit`).hidden, row);
+        const refStroke = await ev((r) => getComputedStyle(document.querySelector(`${r} .st-kb-ref`)).stroke, row);
+        assert.notEqual(refStroke, 'none', 'T3: the reference diagonal is a theme token');
+        assert.match(await page.textContent(`${row} [data-testid="cal-readout"]`), /Play a key/);
+        assert.equal(await curveOf(), null);
+        const play = (vels) => ev(async (vs) => {
+          let n = 48;
+          for (const v of vs) {
+            window.__rig.controller.perform.noteOn(n, v);
+            window.__rig.controller.perform.noteOff(n);
+            n = n >= 70 ? 48 : n + 1;
+            await new Promise((r) => setTimeout(r, 15));
+          }
+        }, vels);
+        // live readout + histogram (Standard touch = linear here)
+        await play([50]);
+        await until((r) => document.querySelector(`${r} [data-testid="cal-readout"]`).dataset.raw === '50', row);
+        assert.match(await page.textContent(`${row} [data-testid="cal-readout"]`), /50 → plays 50/);
+        assert.equal(await ev((r) => document.querySelector(`${r} .st-cal-hist`).dataset.count, row), '1');
+        // paste a community curve in Pianoteq's format: its points are saved, and the text reads back the same
+        const FP10 = 'Velocity = [0, 1, 18, 32, 50, 108, 127; 0, 0, 30, 57, 84, 127, 127]';
+        await page.fill(`${row} [data-testid="cal-text"]`, FP10);
+        await page.click(`${row} .st-cal-use`);
+        await until(() => !!window.__rig.store.get().settings.keyboards?.['@computer']?.velocity);
+        assert.deepEqual(await curveOf(), { in: [0, 1, 18, 32, 50, 108, 127], out: [0, 0, 30, 57, 84, 127, 127] });
+        assert.equal(await page.inputValue(`${row} [data-testid="cal-text"]`), FP10);
+        await until((r) => /Own curve · 7 points/.test(document.querySelector(`${r} .st-kb-sum`).textContent), row);
+        assert.equal(await page.locator(`${row} .st-cal-pt`).count(), 7);
+        // played notes reach the engine with the calibrated velocity, on the linear curve (no {touch}); 1 is silent
+        const calls = await ev(() => {
+          const e = window.__rig.engine;
+          const orig = e.noteOn;
+          const got = [];
+          e.noteOn = function (...a) {
+            got.push([a[1], !!(a[2] && a[2].touch)]);
+            return orig.apply(this, a);
+          };
+          for (const [n, v] of [[72, 40], [73, 1]]) {
+            window.__rig.controller.perform.noteOn(n, v);
+            window.__rig.controller.perform.noteOff(n);
+          }
+          e.noteOn = orig;
+          return got;
+        });
+        assert.deepEqual(calls, [[69, false]], '40 → 57 + 27 · 8 / 18 = 69; velocity 1 plays nothing');
+        await until((r) => /40 → plays 69|1 → silent/.test(document.querySelector(`${r} [data-testid="cal-readout"]`)
+          .textContent), row);
+        // bad input is refused with a reason and changes nothing
+        const before = await curveOf();
+        await page.fill(`${row} [data-testid="cal-text"]`, 'Velocity = [0, 80, 40; 0, 64, 127]');
+        await page.click(`${row} .st-cal-use`);
+        const status = (re) => until(([r, src]) => new RegExp(src).test(document.querySelector(
+          `${r} [data-testid="cal-status"]`).textContent), [row, re]);
+        await status('must rise');
+        assert.deepEqual(await curveOf(), before);
+        const num = (i, k) => `${row} .st-cal-num[data-cal="${k}"][data-i="${i}"]`;
+        await page.fill(num(3, 'out'), '20'); // below point 3's 30: a harder key can't play quieter
+        await page.locator(num(3, 'out')).dispatchEvent('change');
+        await status('quieter');
+        assert.equal(await page.getAttribute(num(3, 'out'), 'aria-invalid'), 'true');
+        assert.deepEqual(await curveOf(), before);
+        await page.fill(num(3, 'out'), '50');
+        await page.locator(num(3, 'out')).dispatchEvent('change');
+        await until(() => window.__rig.store.get().settings.keyboards['@computer'].velocity.out[3] === 50);
+        // the arrow keys on a focused point (up = louder), Delete removes it
+        await page.locator(`${row} .st-cal-pt[data-i="4"]`).focus();
+        await page.keyboard.press('ArrowUp');
+        await until(() => window.__rig.store.get().settings.keyboards['@computer'].velocity.out[4] === 85);
+        await page.keyboard.press('Delete');
+        await until(() => window.__rig.store.get().settings.keyboards['@computer'].velocity.in.length === 6);
+        // drag a point with the mouse: up raises it (saved on release), never past its neighbours
+        const pt = page.locator(`${row} .st-cal-pt[data-i="3"]`);
+        await pt.scrollIntoViewIfNeeded();
+        const box = await pt.boundingBox();
+        const y0 = (await curveOf()).out[3];
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(box.x + box.width / 2, box.y - 30, { steps: 4 });
+        await page.mouse.up();
+        await until((y) => window.__rig.store.get().settings.keyboards['@computer'].velocity.out[3] > y, y0);
+        const dragged = await curveOf();
+        assert.ok(dragged.out[3] <= dragged.out[4], 'monotone after a drag');
+        // Add point: the widest gap; presets: Linear (pressed)
+        await page.click(`${row} .st-cal-add`);
+        await until(() => window.__rig.store.get().settings.keyboards['@computer'].velocity.in.length === 7);
+        await page.click(`${row} .st-cal-preset[data-preset="linear"]`);
+        await until(() => window.__rig.store.get().settings.keyboards['@computer'].velocity.in.length === 2);
+        assert.equal(await page.getAttribute(`${row} .st-cal-preset[data-preset="linear"]`, 'aria-pressed'), 'true');
+        assert.match(await page.textContent(`${row} .st-kb-sum`), /Own curve · Linear/);
+        // the five-step assistant: the computer keys' one strength cannot be fitted …
+        await page.click(`${row} .st-cal-start`);
+        for (const step of ['silence', 'p', 'mp', 'f', 'fff']) {
+          await until(([r, s]) => document.querySelector(`${r} .st-kb-prompt`)?.dataset.step === s, [row, step]);
+          await play([100, 100, 100, 100, 100, 100]);
         }
-      }, vels);
-      // the computer keys play at one strength: soft = hard → a plain "nothing to fit" message
-      await page.click(`${row} .st-kb-fitbtn`);
-      await until((r) => document.querySelector(`${r} .st-kb-prompt`)?.dataset.step === 'soft', row);
-      await play([100, 100, 100, 100, 100, 100]);
-      await until((r) => document.querySelector(`${r} .st-kb-prompt`)?.dataset.step === 'hard', row);
-      await play([100, 100, 100, 100, 100, 100]);
-      await until((r) => document.querySelector(`${r} .st-kb-result`)?.dataset.result === 'same', row);
-      // again with the on-screen keys' range (higher on a key = softer)
-      await page.click(`${row} .st-kb-again`);
-      await play([24, 26, 22, 25, 23, 24]);
-      await play([96, 100, 98, 97, 99, 98]);
-      await until((r) => document.querySelector(`${r} .st-kb-result`)?.dataset.result === 'ok', row);
-      assert.match(await page.textContent(`${row} .st-kb-result`), /around 24, hard around 98/);
-      assert.match(await page.textContent(`${row} .st-kb-result`), /play at about 15% and full volume/, 'FIT_SOFT_TARGET');
-      // screenshot pass 2026-11-20: btn()'s {class} used to replace the tag's .ed-btn, leaving native grey buttons
-      const unstyled = await ev((r) => [...document.querySelectorAll(`.st-kbs button`)]
-        .filter((b) => !b.classList.contains('ed-btn')).map((b) => b.className), row);
-      assert.deepEqual(unstyled, [], 'every Your keyboards button keeps .ed-btn');
-      await page.locator('.st-kbs').scrollIntoViewIfNeeded();
-      await page.locator('.st-kbs').screenshot({ path: path.join(SHOTS, `${mode}-keyboards-fit.png`) });
-      await page.click(`${row} .st-kb-use`);
-      await until(() => !!window.__rig.store.get().settings.keyboards?.['@computer']?.touch);
-      const t = await ev(() => window.__rig.store.get().settings.keyboards['@computer'].touch);
-      assert.equal(t.top, 98);
-      // soft 24 of full-at-98 lands on FIT_SOFT_TARGET (0.15, Ryan Q5)
-      assert.ok(Math.abs(Math.pow(24 / 98, t.shape) - 0.15) < 0.01, `soft notes land on 15 % (${t.shape})`);
-      await until((r) => /Own touch/.test(document.querySelector(`${r} .st-kb-sum`).textContent), row);
-      // played notes now carry the curve; the velocity is raw (the Touch setting no longer applies to these keys)
-      const call = await ev(() => {
-        const e = window.__rig.engine;
-        const orig = e.noteOn;
-        let got = null;
-        e.noteOn = function (...a) {
-          got = [a[1], !!(a[2] && a[2].touch)];
-          return orig.apply(this, a);
-        };
-        window.__rig.controller.perform.noteOn(72, 40);
-        window.__rig.controller.perform.noteOff(72);
-        e.noteOn = orig;
-        return got;
+        await until((r) => document.querySelector(`${r} .st-kb-result`)?.dataset.result === 'same', row);
+        // … a real spread is: medians 6 / 30 / 48 / 80 / 104 → 0 / 32 / 48 / 96 / 120, full from 111
+        await page.click(`${row} .st-cal-again`);
+        for (const v of [6, 30, 48, 80, 104]) await play([v - 1, v, v + 1, v - 1, v, v + 1]);
+        await until((r) => document.querySelector(`${r} .st-kb-result`)?.dataset.result === 'ok', row);
+        const msg = await page.textContent(`${row} .st-kb-result`);
+        assert.match(msg, /silence 6, p 30, mp 48, f 80, fff 104/);
+        assert.match(msg, /0 \/ 32 \/ 48 \/ 96 \/ 120, with full level from 111/);
+        assert.equal(await page.locator(`${row} .st-cal-marks rect`).count(), 5, 'the five medians are marked');
+        const unstyled = await ev(() => [...document.querySelectorAll('.st-kbs button')]
+          .filter((b) => !b.classList.contains('ed-btn')).map((b) => b.className));
+        assert.deepEqual(unstyled, [], 'every Your keyboards button keeps .ed-btn');
+        await page.locator(`${row} .st-kb-edit`).scrollIntoViewIfNeeded();
+        await page.locator('.st-kbs').screenshot({ path: path.join(SHOTS, `${mode}-keyboards-calibrate.png`) });
+        await page.click(`${row} .st-cal-fituse`);
+        await until(() => window.__rig.store.get().settings.keyboards['@computer'].velocity.in.length === 7);
+        assert.deepEqual(await curveOf(), { in: [0, 6, 30, 48, 80, 104, 111], out: [0, 0, 32, 48, 96, 120, 127] });
+        await page.locator('.st-kbs').screenshot({ path: path.join(SHOTS, `${mode}-keyboards-curve.png`) });
+        // an older {shape,min,max,top} curve still plays as it did; the editor shows it as points without saving
+        await ev(() => window.__rig.store.setKeyboard('@computer', { velocity: null, touch: { shape: 2 } }));
+        await until((r) => /Own touch · Heavy/.test(document.querySelector(`${r} .st-kb-sum`).textContent), row);
+        assert.match(await page.textContent(`${row} .st-cal-origin`), /older touch curve/);
+        assert.equal(await curveOf(), null);
+        const old = await ev(() => {
+          const e = window.__rig.engine;
+          const orig = e.noteOn;
+          let got = null;
+          e.noteOn = function (...a) {
+            got = [a[1], !!(a[2] && a[2].touch)];
+            return orig.apply(this, a);
+          };
+          window.__rig.controller.perform.noteOn(72, 40);
+          window.__rig.controller.perform.noteOff(72);
+          e.noteOn = orig;
+          return got;
+        });
+        assert.deepEqual(old, [40, true], 'v11-touch: raw velocity + {touch}');
+        await page.click(`${row} .st-kb-std`);
+        await until(() => !('keyboards' in window.__rig.store.get().settings));
+        // a saved MIDI keyboard that is not plugged in: Remember toggles, Forget drops it
+        await ev(() => window.__rig.store.setKeyboard('Test Board 61', { remember: true }));
+        const tb = '.st-kbs [data-keyboard="Test Board 61"]';
+        await until((r) => !!document.querySelector(r), tb);
+        assert.match(await page.textContent(`${tb} .st-kb-state`), /not connected/);
+        assert.equal(await page.getAttribute(`${tb} .st-kb-remember`, 'aria-pressed'), 'true');
+        assert.deepEqual(await ev(() => window.__rig.midi.remembered), ['Test Board 61']);
+        await page.click(`${tb} .st-kb-forget`);
+        await until((r) => !document.querySelector(r), tb);
+        assert.deepEqual(await ev(() => window.__rig.midi.remembered), []);
+        await page.click(`${row} .st-kb-touch`); // close the editor again
       });
-      assert.deepEqual(call, [40, true]);
-      // a slider edit writes the whole curve; Back to standard removes it
-      await ev((r) => {
-        const i = document.querySelector(`${r} input[data-touch="min"]`);
-        i.value = '0.2';
-        i.dispatchEvent(new Event('input', { bubbles: true }));
-      }, row);
-      await until(() => window.__rig.store.get().settings.keyboards['@computer'].touch.min === 0.2);
-      await page.click(`${row} .st-kb-std`);
-      await until(() => !('keyboards' in window.__rig.store.get().settings));
-      // a saved MIDI keyboard that is not plugged in: Remember toggles, Forget drops it
-      await ev(() => window.__rig.store.setKeyboard('Test Board 61', { remember: true }));
-      const tb = '.st-kbs [data-keyboard="Test Board 61"]';
-      await until((r) => !!document.querySelector(r), tb);
-      assert.match(await page.textContent(`${tb} .st-kb-state`), /not connected/);
-      assert.equal(await page.getAttribute(`${tb} .st-kb-remember`, 'aria-pressed'), 'true');
-      assert.deepEqual(await ev(() => window.__rig.midi.remembered), ['Test Board 61']);
-      await page.click(`${tb} .st-kb-forget`);
-      await until((r) => !document.querySelector(r), tb);
-      assert.deepEqual(await ev(() => window.__rig.midi.remembered), []);
-      await page.click(`${row} .st-kb-touch`); // close the editor again
-    });
 
     await T('settings: MIDI Learn refuses the sustain pedal with a plain message', async () => {
       await cat('keyboards');

@@ -235,11 +235,14 @@ export async function runBridge({ browser, createServer, ROOT, SHOTS, results })
       assert.deepEqual(await cfg(), [], 'absent = 1 = the core default: nothing sent at start-up');
       await ev(() => window.__rig.ctx.openSettings({ section: 'keyboards' }));
       await until(() => window.__rig.views.settings.category === 'keyboards');
-      await page.locator('[data-testid="setting-dynamic-range"]').fill('2'); // the slider's input event
+      // TOUCH (D43): the slider is in dB (10 dB per 1×): 20 dB → 2; 60 dB → 6, the new cap, which the mock keeps
+      await page.locator('[data-testid="setting-dynamic-range"]').fill('20'); // the slider's input event
       await until(() => globalThis.__bridgeMock.dynamicRange === 2);
+      await page.locator('[data-testid="setting-dynamic-range"]').fill('60');
+      await until(() => globalThis.__bridgeMock.dynamicRange === 6);
       await ev(() => window.__rig.store.set('settings.dynamicRange', null)); // back to today's sound
       await until(() => globalThis.__bridgeMock.dynamicRange === 1);
-      assert.deepEqual(await cfg(), [2, 1]);
+      assert.deepEqual(await cfg(), [2, 6, 1]);
       await close();
     });
 

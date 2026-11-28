@@ -1,0 +1,13 @@
+{
+ "source": "app/samples/salamander-piano/v14/Gb4.mp3",
+ "sourceSha256": "b1cb416f8e3359c920180045fdffbf125a9d50461605e518c94299b7b020dbac",
+ "sourceBytes": 279405,
+ "rate": 48000,
+ "channels": 2,
+ "frames": 667915,
+ "sha256": "a504c091ae449c2af75c62e93fecf575c484bda27a65f0564c0d2f77231942e2",
+ "bytes": 5343378,
+ "engineRate": 44100,
+ "resampledByEngine": true,
+ "decoder": "Chromium decodeAudioData (OfflineAudioContext at the file rate, no resampling)"
+}

@@ -50,6 +50,7 @@ setup.tap         recorded node, default 'out'
 setup.inject      {stimulus, at, gain = 1, start}: stimuli/<stimulus>.wav started at `start` s into node `at`
 setup.drone       {mode:'synth', gain, brightness, movement, width, fade, key:{pc, minor}}
 setup.tempo / timeSig / click{level} / transpose / keyContext{pc, minor} / wheel{mod, expr}
+setup.dynamicRange settings.dynamicRange (TOUCH, D43): engine.setDynamicRange / config {dynamicRange} before the song
 events[]          {t, type, …} issued in time order, each with when = t (seconds from render start):
   noteOn {note, vel, touch?}   noteOff {note}   pedal {down}   cc {cc, value}  (1 mod, 11 expr, 7 volume, 64 pedal)
   wheel {source, value, glide?}   bend {value}   param {path, value, glide?}   droneKey {pc, minor, fade?}

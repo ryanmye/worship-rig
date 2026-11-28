@@ -115,6 +115,8 @@ export const OPS = [
   ['velocityCurve soft / hard / fixed / custom', (f) => anySlot(f,
     (s) => s.velocityCurve && s.velocityCurve !== 'normal')],
   ['per-note touch override', (f) => has(f, 'noteOn', (e) => e.touch)],
+  // TOUCH (D43): settings.dynamicRange past the old cap of 3 (setup.dynamicRange → setDynamicRange / config)
+  ['setDynamicRange (settings.dynamicRange > 1)', (f) => (f.setup?.dynamicRange ?? 1) > 1],
   ['instrument: synth', (f) => anySlot(f, (s) => s.instrument.type === 'synth')],
   ['instrument: organ', (f) => anySlot(f, (s) => s.instrument.type === 'organ')],
   ['instrument: sampler', (f) => anySlot(f, (s) => s.instrument.type === 'sampler')],

@@ -1,0 +1,7 @@
+# TOUCH (DECISIONS D43): settings.dynamicRange past the old cap of 3 (setup.dynamicRange): the velocityDb law at
+# range 6 before the master (dyn-range-*), and loud piano chords through the master ceiling at 1 / 3 / 6 (dyn-peak-r*).
+dyn-range-salamander-piano
+dyn-range-ep-rhodes
+dyn-peak-r1
+dyn-peak-r3
+dyn-peak-r6
