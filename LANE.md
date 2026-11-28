@@ -110,4 +110,5 @@ No GPL code anywhere in app/ or native/. The only LGPL question is js_tanh.cpp.
    on origin 9ac004f).
 
 ### Gates
-GATES_PLACEHOLDER
+`node tools/cloud/gates.mjs unit,shell-unit` on 1bbd9c5 (tree 1bbd9c5d37e4, clean): unit PASS 23 s,
+shell-unit PASS 28 s. Also PASS on the pre-rebase tree baa8095. No browser suites (light lane).
