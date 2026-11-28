@@ -599,3 +599,14 @@ Answers to the U1 builder's questions (UI6-U1 review O1/O2):
   (D30, iOS 15 floor); (4) Lane P sound-pack build scripts (no audio in git, no uploads); (5) Windows WebView2 shell.
 - Unchanged: D13 — FX steps 2–4 change the web engine (the golden oracle) and still wait for the 2.0 release; and
   anything that needs hardware Claude can't reach (a Windows PC, an iPhone, Ryan's App Store account) waits for Ryan.
+
+## D37: 2.0 ships as a website download only; no App Store for now (Ryan, 2026-11-28)
+- The Mac app: the ad-hoc signed zip / dmg from release-native (N10) on the website / GitHub Releases, like 1.x
+  (macOS asks "Open Anyway" on first launch). No Apple Developer Program membership ($99/yr) for now, so no
+  notarization, no TestFlight, no App Store.
+- Consequences (mine, tier 2): no App Sandbox work, no bundle-ID changes, the update check stays. The iPad app (and
+  later the iPhone remote) can't be installed from a website without a paid membership: Ryan installs it on his own
+  devices from Xcode with his free Apple Account (MAC_CHECK step 5); from memory such installs expire after about
+  7 days and need a re-install [U]. The browser remote (D34) needs no install at all.
+- Revisit universal purchase / the App Store after 2.0 if Ryan wants it (notes: universal purchase needs one bundle ID
+  across platforms; the Mac App Store needs App Sandbox, ~2–4 agent-days [E]).
