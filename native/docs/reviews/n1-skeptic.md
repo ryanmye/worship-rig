@@ -226,4 +226,5 @@ the end. Keep both. Once F2 was dropped, store.js, patch-packs.test.mjs and docs
 lane CAP, and docs/release-notes-2.0.md, MAC_CHECK.md and NATIVE-GAPS.md auto-merge.
 
 The gates above ran on tree 92908c98031d, which still had F2. Dropping it brings the three files back to the lane's
-text, and upstream CAP replaces them on merge. Re-run shell-unit (patch-packs) and ui-v6-bank on the merged tree.
+text, and upstream CAP replaces them on merge. Re-run on the final tree (b4fba256cb85, F2 dropped): shell-unit PASS (31 s), ui-v6-bank PASS (44 s). After the
+merge, re-run shell-unit, because upstream CAP owns patch-packs.test.mjs's cap tests.
