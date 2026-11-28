@@ -34,9 +34,9 @@ build_slice() {
   # a generator can only be chosen for a fresh build dir (CMake refuses to switch an existing one)
   if [ -n "${RIG_CMAKE_GENERATOR:-}" ] && [ ! -f "$dir/CMakeCache.txt" ]; then gen=(-G "$RIG_CMAKE_GENERATOR"); fi
   cmake -S "$core" -B "$dir" ${gen[@]+"${gen[@]}"} -DCMAKE_BUILD_TYPE=Release -DRIG_BUILD_TESTS=OFF "$@"
-  cmake --build "$dir" --target rig_core -j "$jobs"
+  cmake --build "$dir" --target rig_core rig_hostkit -j "$jobs"  # + lane N1 patch packs (rig_hostkit.h)
   mkdir -p "$out/lib-$name"
-  # rig_core + rig_third_party (+ anything else static it grew) -> one archive per slice
+  # rig_core + rig_hostkit + rig_third_party (+ anything else static it grew) -> one archive per slice
   local libs=() f
   while IFS= read -r f; do libs+=("$f"); done < <(find "$dir" -name '*.a' -not -name 'librig_fixture.a' | sort)
   [ "${#libs[@]}" -gt 0 ] || { echo "no static libraries under $dir" >&2; exit 1; }
