@@ -125,8 +125,11 @@ size rule). Try to break each, fix real defects with failing-first tests, write 
 
 ### Checklist
 - [x] rebase onto origin/v2-native (5c7ed2d; CONTRACT_CHANGES conflict: kept both)
-- [ ] read docs + diff
-- [ ] T1 review + probes (deadlock, nesting, exceptions, dispose, rate change, hold duration, release build hook)
+- [x] read docs + diff
+- [x] T1 review + probes (deadlock, nesting, exceptions, dispose, rate change, hold duration, release build hook):
+      env-gated instrumented binary (.probe/sk-instr.patch, .probe/bin/sk-gcc-instr; not committed): no-hold 3/3 FAIL
+      (0 adopted / 10 busy), hold 9/1; realtime hold durations n=39 p50 0.4 ms p99 11 ms (1108 ms = offline
+      prepare, worker null: no hold)
 - [ ] T1 TSan + ASan (new test + core3), 1000x loop on one compiler
 - [ ] T3 review + mutation repro (300 ms sleep), cost on loops, stats schema / bridge / MockNative
 - [ ] T2 review of every add path vs D9 + O4; double toast; views
@@ -135,4 +138,10 @@ size rule). Try to break each, fix real defects with failing-first tests, write 
 - [ ] review doc + final report
 
 ### Findings so far
-(none yet)
+- F1 (T3): Engine records a long iteration AFTER flush(): an event that iteration flushes (a reply closing a
+  checkLive window) can wake the reader before the record exists -> a held loop read as "the box". Fix: record
+  before flush; deterministic test (onControl sleep + read inside on_event).
+- F2 (T2): views/v6/song-menu.js "Keep it and add it to a setlist" (keepTrial) toasts r.error even when
+  r.notified: the library-full notice is toasted twice ("x2"). Settings / bank / banner were fixed, this one missed.
+- F3 (test): test_core3.cpp:593 `buildsPending == 0` right after the rate-change commit: 7/8 FAIL at load ~2-3
+  (values 4 == 0; no-hold variant 8/8): lane 1 (nice 10) still building the dropped 48 kHz job. Bounded wait.
