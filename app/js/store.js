@@ -1055,7 +1055,7 @@ export function createStore(opts = {}) {
       if (k === 'updateCheck') return typeof value === 'boolean' ? { segs, value } : null;
       if (k === 'dynamicRange') {
         if (value === null || value === undefined) return { segs, value: undefined };
-        const v = validDynRange(value); // a number, clamped to 1..3; 1 = absent (today's sound)
+        const v = validDynRange(value); // a number, clamped to DYN_RANGE (1..6); 1 = absent (today's sound)
         return v === null ? null : { segs, value: v === 1 ? undefined : v };
       }
       // v11-metronome: settings.click is set whole (normalised; empty = absent); midiClockOut is a name or null (off)

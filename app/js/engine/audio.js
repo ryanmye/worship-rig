@@ -1420,7 +1420,7 @@ export class AudioEngine extends EventTarget {
   /**
    * settings.dynamicRange (shared/touch-curve.js velocityDb): how far sampled instruments spread soft from loud.
    * Takes effect on the next note (held notes keep their gain). Synth and organ voices are unchanged.
-   * @param {number} range 1..3 (1 = the built-in spans)
+   * @param {number} range 1..6 (1 = the built-in spans; 1.1.2: was 1..3)
    * @returns {number} the range in use
    */
   setDynamicRange(range) {

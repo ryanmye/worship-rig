@@ -113,9 +113,16 @@ test('fitTouch 1.1.2: a spread of hard notes keeps headroom above the median (FP
   assert.equal(r.touch.top, 110, 'full at the hardest note, not the median 99');
   const c = T.compileTouch(r.touch);
   assert.ok(T.touchAt(c, 105) > T.touchAt(c, 99) && T.touchAt(c, 110) > T.touchAt(c, 105), 'harder is louder');
-  // never below the median (a set with one huge outlier low keeps the old behaviour)
+  // nearest rank: with 3..9 notes the 90th percentile is the hardest note; input order and junk don't matter
   const few = T.fitTouch([40, 40, 40], [120, 121, 122]);
   assert.equal(few.touch.top, 122);
+  assert.equal(T.fitTouch([40, 40, 40], [122, 'x', 120, 0, 121, 128]).touch.top, 122, 'unsorted, junk dropped');
+  assert.equal(T.fitTouch([40, 40, 40], [100, 100, 100, 100]).touch.top, 100, 'all equal = the old top');
+  assert.equal(T.fitTouch([40, 40, 40], [20, 100, 101, 102, 100, 101]).touch.top, 102, 'a low outlier changes nothing');
+  // a single accidental slam sets top (the cost of p90 over 6 notes; the result text then names it, see Settings)
+  assert.equal(T.fitTouch([40, 40, 40], [90, 91, 90, 92, 91, 127]).touch.top, 127);
+  // 10 notes: the 9th
+  assert.equal(T.fitTouch([40, 40, 40], [91, 92, 93, 94, 95, 96, 97, 98, 99, 100]).touch.top, 99);
 });
 
 test('fitTouch: too few notes or soft = hard is refused with a reason', () => {

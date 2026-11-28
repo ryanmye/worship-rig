@@ -6827,4 +6827,12 @@ slot…` (test 31): "Perform reads slot 3 once per clock frame or sleeps (0.25)"
   (the single-layer 24 dB) stop at 3× (72 dB, +12 dB top), as before.
 - No engine file changes (audio.js / sampler.js call the shared functions). Store clamp follows `validDynRange`.
 - 2.0 (v2-native) clamps `dynamicRange` to 1..3 in the native core until lane TOUCH (D43) lands; a 1.1.2 value above 3
-  plays at 3× there.
+  plays at 3× there. Its store (`validDynRange`, DYN_RANGE.max 3) also clamps on import, so the value is kept as 3.
+- **Open (v112-skeptic):** lane-touch's D43 law (249bf16, `r = min(range, 72 / spanDb)`) widens pianos symmetrically
+  around DYN_PIVOT past 3× (+12.5 dB at the top at 6×), not downwards only as here (+5 dB). Same 60 dB span, different
+  levels: ranges ≤ 3 agree bit for bit, ranges above 3 don't. Pick one law before TOUCH merges.
+- Settings › Your keyboards fit result: the hard median now plays just below full, so the line reads "…about 15% and
+  N%; your hardest (top) reach full volume" (still "…and full volume" when the hard notes are all equal).
+- Tests: `dynamic-range.test.mjs` compares velocityDb with a frozen copy of the 1.1.1 formula (`===`, v step 0.001,
+  ranges 1..3 step 0.01, spans 10 / 24) and checks no v is louder past 3× than at 3×; settings suite checks the Range
+  row at 6× (max, "pianos 60 dB, hardest +5.0 dB; … 72 dB, hardest +12.0 dB", "6.0×").

@@ -22,6 +22,25 @@ test('velocityDb: range 1 is the old formula; wider = quieter below the pivot, l
   assert.ok(Math.abs(velocityDb(1, 10, 6) - velocityDb(0, 10, 6) - 60) < 1e-9);
   assert.ok(velocityDb(0.15, 10, 6) < velocityDb(0.15, 10, 3), 'soft quieter past 3×');
   for (const v of [0, 0.3, DYN_PIVOT, 1]) assert.equal(velocityDb(v, 24, 6), velocityDb(v, 24, 3));
+  // 1.1.2 guards: ≤ 3× is bit for bit the 1.1.1 formula (same operation order); past 3× no v is louder than at 3×
+  const v111 = (v, s, r) => {
+    const base = -s * (1 - v);
+    return r === 1 ? base : base + s * (r - 1) * (v - DYN_PIVOT);
+  };
+  let diff = 0;
+  let louder = 0;
+  for (const span of [10, 24]) {
+    for (let i = 100; i <= 600; i++) {
+      const r = i / 100;
+      for (let k = 0; k <= 1000; k++) {
+        const v = k / 1000;
+        if (r <= 3 && velocityDb(v, span, r) !== v111(v, span, r)) diff++;
+        if (r > 3 && velocityDb(v, span, r) > velocityDb(v, span, 3)) louder++;
+      }
+    }
+  }
+  assert.equal(diff, 0, 'ranges ≤ 3 give exactly the 1.1.1 numbers');
+  assert.equal(louder, 0, 'past 3× nothing gets louder than at 3×');
   assert.equal(validDynRange(0.5), DYN_RANGE.min);
   assert.equal(validDynRange(9), DYN_RANGE.max);
   assert.equal(validDynRange(1.234), 1.23);

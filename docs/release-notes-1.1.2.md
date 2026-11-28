@@ -20,5 +20,5 @@ The Range slider (same place) now goes up to 6×, with more room on the quiet si
 Tip for Roland digital pianos: set the piano's own Key Touch to Light, then run Fit to my touch, then raise Range
 until soft playing is as quiet as you want.
 
-Worship Rig 2.0 reads the Range setting from a 1.1.2 backup; until 2.0 gets the wider range too, it plays a setting
-above 3× at 3×.
+Worship Rig 2.0 reads the Range setting from a 1.1.2 backup, but for now it goes up to 3×: a setting above 3× comes
+over as 3×.
