@@ -639,7 +639,9 @@ Tier 2 parts A and B above, then these 2.0 items. Report as in Tier 2 ("How to r
    - `pages.yml` deploys `docs/site/` on that push. Until the 2.0 release exists, the site's "Download for Mac"
      (`releases/latest/download/Worship-Rig-arm64.dmg`) still gives 1.1.1's Electron arm64 file under a page that
      says 2.0. So either release first from a tag on the merge commit and push `main` right after, or merge without
-     `docs/site/` and bring it in once the release is up.
+     `docs/site/` and bring it in once the release is up. If 2.0 goes out as a **pre-release** (U9 item 3), "latest"
+     stays 1.1.1 and so does that button: then point the site's two "Download for Mac" links at
+     `releases/download/v2.0.0/Worship-Rig-arm64.dmg` in the same push (site-install-skeptic O1).
 2. Tag: `git tag -a v2.0.0 -m "Worship Rig 2.0.0" <merge commit> && git push origin v2.0.0`. GitHub reads the
    workflows from the tagged commit, so tag a commit that has lane-n10's release.yml and release-native.yml (an older
    commit's release.yml would build Electron for any `v*` tag). The push runs `release-native` (build, self-test,
