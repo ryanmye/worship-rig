@@ -137,7 +137,7 @@ export class MockNative {
     this.bufferFrames = 128;
     this.grantFrames = null;
     this.droneFreeze = true; // D5 (config {droneFreeze}, default true)
-    this.dynamicRange = 1; // T12 O1 (config {dynamicRange}, 1..3, default 1)
+    this.dynamicRange = 1; // T12 O1 (config {dynamicRange}, 1..6 since TOUCH D43, default 1)
     this.meters = { rate: 4, slots: [], rta: false };
     this.click = { running: false, counting: false, bpm: null, sig: '4/4', output: 'main', level: 0.5, record: false,
       downbeat: null };

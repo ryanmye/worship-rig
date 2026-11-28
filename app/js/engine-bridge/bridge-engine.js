@@ -994,8 +994,8 @@ export class BridgeEngine extends EventTarget {
 
   /**
    * settings.dynamicRange (T12 O1; audio.js setDynamicRange): how far the sampled instruments spread soft from loud,
-   * 1..3 (1 = the built-in spans). Validated like the web engine (validDynRange; a non-number = 1) and sent as
-   * `config {dynamicRange}`; native clamps the same way and keeps it for samplers built later.
+   * 1..6 (TOUCH D43; 1 = the built-in spans). Validated like the web engine (validDynRange; a non-number = 1) and
+   * sent as `config {dynamicRange}`; native clamps the same way and keeps it for samplers built later.
    * @param {number} range
    * @returns {number} the range in use
    */
