@@ -18,7 +18,9 @@ worktrees, commits, logs and `/home/claude/*` survive. So everything that matter
    tree key is stable and the results survive.
 4. **Long probes write their output to files** under the worktree's `.probe/` (git-ignored by `.git/info/exclude`)
    or `/home/claude/scratch/<lane>/`, not only to the terminal.
-5. **Reports:** write the final report to `native/docs/reviews/<name>.md` (skeptic) or `LANE.md` (builder) and
+5. **Never use `git stash`.** The stash list is shared by every worktree of the repo: a `stash pop` with nothing
+   stashed applies another lane's old stash (it happened on lane-n0). Commit a `WIP:` instead.
+6. **Reports:** write the final report to `native/docs/reviews/<name>.md` (skeptic) or `LANE.md` (builder) and
    commit it before handing back, so a restart during the hand-back loses nothing.
 
 ## Orchestrator
