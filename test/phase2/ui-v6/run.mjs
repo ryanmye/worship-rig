@@ -103,6 +103,8 @@ const origin = `http://127.0.0.1:${info.port}`;
 const browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
 
 /** Boot a page on `base` (an origin, + `q`) with the probes; returns what the purity check compares. */
+/** TOUCH (D43): modules the branch loads at boot that a pre-D43 base lacks (the only intended request change). */
+const TOUCH_MODULES = ['/js/shared/velocity-cal.js', '/js/views/components/velocity-editor.js'];
 async function purityBoot(base, q = '') {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   await pinTheme(context, 'sanctuary');
@@ -139,7 +141,9 @@ async function purityBoot(base, q = '') {
         // so charts on can be compared.
         dom: [...document.body.querySelectorAll('*')].filter((e) => !e.closest('#toasts > *')
           && !e.closest('[data-testid="setting-row-esc-panics"], [data-testid="setting-row-ui-v6"], '
-            + '[data-testid="setting-row-cvd"], [data-testid="setting-row-chart-view"], [data-testid="chart-toggle"]'))
+            + '[data-testid="setting-row-cvd"], [data-testid="setting-row-chart-view"], [data-testid="chart-toggle"], '
+            // TOUCH (D43): Settings › Your keyboards (Dynamics in dB, the calibration editor) changed on purpose
+            + '[data-testid="settings-keyboards"]'))
           .map(shape).join('\n'),
         chart: [...document.querySelectorAll('[data-testid="chart-toggle"], [class*="chv-"], #perform-chart')]
           .map((e) => e.dataset.testid || e.id || e.className),
@@ -147,6 +151,8 @@ async function purityBoot(base, q = '') {
         rig: Object.keys(window.__rig).sort(),
       };
     });
+    // TOUCH (D43): the two modules it added (store / controller and Settings load them at boot, flag or not)
+    for (const m of TOUCH_MODULES) reqs.delete(m);
     return { ...r, reqs: [...reqs].sort() };
   } finally {
     await context.close();
