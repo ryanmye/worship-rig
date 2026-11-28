@@ -111,12 +111,14 @@ Tip: see `git log -1 lane-n3` (this report commit, docs only, on top of the gate
 - [x] Rebase: origin/v2-native is still cd377cf (the lane's base): nothing to rebase
 - [x] JS review + Chromium listener probe (/home/claude/scratch/n3/probe/out.json)
 - [x] Swift review (tree-sitter 0 ERROR nodes after the fixes)
-- [x] Fixes F1 (toast on {saved}), F2 (safeName bytes + suffix), F3 (iPad swipe dismiss), O-mid (auxclick), O-svg
+- [x] Fixes F1 (toast on {saved}), F2 (safeName bytes + suffix), F3 (iPad swipe dismiss), F4 (failed read → WebKit
+      download hand-off), O-mid (auxclick), O-svg
 - [ ] Gates (UI6_PURITY_BASE=origin/v2-native) on the fix tree
 - [ ] Report native/docs/reviews/n3-skeptic.md
 
 Findings so far: F1 toasts before the panel answers (fixed); F2 200-character cap is not a byte cap, cuts the
 suffix (fixed); F3 iPad picker swiped away may leave `busy` set forever [U] (fixed, belt); O-mid middle-click is
-`auxclick` (fixed); O-svg SVG anchor href (fixed); O-closed closed shadow roots / detached anchors not seen by the
+`auxclick` (fixed); O-svg SVG anchor href (fixed); F4 the listener prevents the default before knowing the
+blob read works (Q1): a failure saved nothing (fixed: detached-anchor hand-off to WKDownload); O-closed closed shadow roots / detached anchors not seen by the
 listener (Swift belt; app has neither); O-hidden a save sheet on a hidden window (menu-bar mode, N7) would be
 invisible with `busy` set.
