@@ -16,6 +16,7 @@
     "test": "node test/run-all.mjs --skip soak"
   },
   "devDependencies": {
+    "acorn": "^8.19.0",
     "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
     "playwright": "^1.56.0"

@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="format-detection" content="telephone=no">
+<meta name="referrer" content="no-referrer">
+<title>Worship Rig Remote</title>
+<!--
+  The browser remote (D34; native/docs/lanes/REMOTE.md §2.5). Served by the Mac app (rig_remote, native/core/src/hostkit)
+  on the local network. One file: ES5 script and plain CSS, no modules, no build step, no web fonts, nothing loaded
+  from anywhere else (the server's CSP allows only this file's inline script and style). Targets: Safari on iOS 12
+  reliably, iOS 7 best effort, Android Chrome 50+. Song and snapshot names come from the Mac and are only ever set
+  with textContent. WebSocket first; after two failed opens (or with no WebSocket) it polls /api/state instead.
+  test/phase2/remote checks it parses as ES5 and uses none of the newer APIs listed there.
+-->
+<style>
+html, body { margin: 0; padding: 0; background: #101114; color: #eceae4; height: 100%; }
+body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 17px;
+  -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: rgba(0,0,0,0); -webkit-user-select: none;
+  user-select: none; }
+.wrap { max-width: 480px; margin: 0 auto; padding: 12px 14px 20px; box-sizing: border-box; -webkit-box-sizing: border-box; }
+.hidden { display: none; }
+h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #9a978f;
+  margin: 4px 0 14px; }
+.status { font-size: 14px; color: #9a978f; min-height: 20px; margin: 0 0 10px; }
+.status.ok { color: #7fc98f; }
+.status.warn { color: #e5b567; }
+.status.bad { color: #ef7d6e; }
+.label { font-size: 13px; color: #9a978f; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 2px; }
+.song { font-size: 28px; font-weight: 700; line-height: 1.15; margin: 0 0 14px; word-wrap: break-word; }
+.snap { font-size: 21px; font-weight: 600; margin: 0 0 18px; word-wrap: break-word; }
+.row { overflow: hidden; margin: 0 0 12px; }
+.btn { display: block; float: left; width: 48.5%; box-sizing: border-box; -webkit-box-sizing: border-box;
+  margin: 0; padding: 0; height: 64px; line-height: 64px; text-align: center; font-size: 19px; font-weight: 600;
+  color: #eceae4; background: #24262c; border: 1px solid #3a3d45; border-radius: 12px; cursor: pointer;
+  -webkit-appearance: none; font-family: inherit; }
+.btn + .btn { margin-left: 3%; }
+.btn.wide { width: 100%; float: none; }
+.btn.on { background: #2f4a37; border-color: #4f7a5b; }
+.btn.down { background: #34373f; }
+.btn[disabled], .btn.dis { opacity: 0.35; }
+.panic { display: block; width: 100%; height: 84px; margin: 22px 0 0; font-size: 26px; font-weight: 800;
+  letter-spacing: 0.08em; color: #fff; background: #b3261e; border: 2px solid #e5544a; border-radius: 14px;
+  -webkit-appearance: none; font-family: inherit; cursor: pointer; }
+.panic.down { background: #8c1d17; }
+.note { font-size: 14px; color: #ef7d6e; min-height: 20px; margin: 10px 0 0; text-align: center; }
+.locked { font-size: 15px; color: #e5b567; text-align: center; margin: 0 0 12px; }
+input.code { display: block; width: 100%; box-sizing: border-box; -webkit-box-sizing: border-box; height: 60px;
+  font-size: 30px; letter-spacing: 0.3em; text-align: center; color: #eceae4; background: #1b1c21;
+  border: 1px solid #3a3d45; border-radius: 12px; margin: 0 0 12px; font-family: inherit; -webkit-appearance: none;
+  -webkit-user-select: text; user-select: text; }
+p.help { font-size: 15px; color: #9a978f; line-height: 1.45; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Worship Rig Remote</h1>
+
+  <div id="pair" class="hidden">
+    <p class="help">Enter the 6-digit code shown on the Mac in Settings › Remote.</p>
+    <input id="code" class="code" type="tel" maxlength="6" autocomplete="off" autocorrect="off" pattern="[0-9]*"
+      inputmode="numeric" aria-label="Pairing code">
+    <button id="pairBtn" class="btn wide" type="button">Pair</button>
+    <div id="pairNote" class="note" role="alert"></div>
+  </div>
+
+  <div id="main" class="hidden">
+    <div id="status" class="status" role="status"></div>
+    <div id="locked" class="locked hidden">Locked on the Mac: only PANIC works.</div>
+    <div class="label">Song</div>
+    <div id="song" class="song">—</div>
+    <div class="label">Snapshot</div>
+    <div id="snap" class="snap">—</div>
+    <div class="row">
+      <button id="prevSong" class="btn" type="button">◀ Song</button>
+      <button id="nextSong" class="btn" type="button">Song ▶</button>
+    </div>
+    <div class="row">
+      <button id="prevSnap" class="btn" type="button">◀ Snapshot</button>
+      <button id="nextSnap" class="btn" type="button">Snapshot ▶</button>
+    </div>
+    <div class="row">
+      <button id="drone" class="btn wide" type="button">Drone</button>
+    </div>
+    <button id="panic" class="panic" type="button">PANIC</button>
+    <div id="note" class="note" role="alert"></div>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var TOKEN_KEY = 'worship-rig.remote.token';
+  var memToken = null; // when localStorage throws (old private Safari)
+  var view = null; // the last {seq, ready, song, snapshot, snapshotN, snapshotCount, droneOn, locked, audio}
+  var ws = null;
+  var wsFails = 0; // opens in a row that never reached the auth reply
+  var mode = 'ws'; // 'ws' | 'poll'
+  var pollXhr = null;
+  var reconnectTimer = null;
+  var pingTimer = null;
+  var noteTimer = null;
+  var idCounter = 0;
+  var pending = {}; // id -> {cmd, tries}
+  var stopped = false;
+
+  function $(id) { return document.getElementById(id); }
+  function setText(el, s) { el.textContent = s; }
+  function hasClass(el, c) { return (' ' + el.className + ' ').indexOf(' ' + c + ' ') >= 0; }
+  function addClass(el, c) { if (!hasClass(el, c)) el.className = (el.className ? el.className + ' ' : '') + c; }
+  function removeClass(el, c) {
+    el.className = (' ' + el.className + ' ').replace(' ' + c + ' ', ' ').replace(/^\s+|\s+$/g, '');
+  }
+  function show(el, on) { if (on) removeClass(el, 'hidden'); else addClass(el, 'hidden'); }
+
+  function getToken() {
+    try { return window.localStorage.getItem(TOKEN_KEY) || memToken; } catch (e) { return memToken; }
+  }
+  function setToken(t) {
+    memToken = t;
+    try {
+      if (t) window.localStorage.setItem(TOKEN_KEY, t); else window.localStorage.removeItem(TOKEN_KEY);
+    } catch (e) { /* private browsing on old Safari: memory only */ }
+  }
+
+  function status(text, kind) {
+    var el = $('status');
+    setText(el, text);
+    el.className = 'status' + (kind ? ' ' + kind : '');
+  }
+  function note(text) {
+    var el = $('note');
+    setText(el, text);
+    if (noteTimer) clearTimeout(noteTimer);
+    if (text) noteTimer = setTimeout(function () { setText(el, ''); }, 4000);
+  }
+
+  // ---- HTTP (XMLHttpRequest: there is no fetch on iOS 7 / 9)
+  function request(method, path, body, cb) {
+    var x = new XMLHttpRequest();
+    x.open(method, path, true);
+    var t = getToken();
+    if (t) x.setRequestHeader('X-Rig-Token', t);
+    if (body !== null) x.setRequestHeader('Content-Type', 'text/plain');
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4) return;
+      var data = null;
+      try { data = JSON.parse(x.responseText); } catch (e) { data = null; }
+      cb(x.status, data, x);
+    };
+    x.send(body === null ? null : JSON.stringify(body));
+    return x;
+  }
+
+  // ---- pairing
+  function showPair(message) {
+    stopTransport();
+    show($('main'), false);
+    show($('pair'), true);
+    setText($('pairNote'), message || '');
+  }
+
+  var pairing = false;
+  function pair(code) {
+    if (pairing) return;
+    pairing = true;
+    setText($('pairNote'), 'Pairing…');
+    request('POST', '/api/pair', { code: code }, function (st, data, x) {
+      pairing = false;
+      if (st === 200 && data && data.token) {
+        setToken(data.token);
+        $('code').value = '';
+        setText($('pairNote'), '');
+        startMain();
+        return;
+      }
+      var err = data && data.error;
+      var after = x.getResponseHeader('Retry-After');
+      if (err === 'wrong-code') setText($('pairNote'), 'That code is not right. Check Settings › Remote on the Mac.');
+      else if (err === 'too-many-tries' || err === 'paused') {
+        setText($('pairNote'), 'Too many tries. Wait ' + (after || '60') + ' seconds' +
+          (err === 'paused' ? ', then use the new code on the Mac.' : '.'));
+      } else if (err === 'bad-code-format') setText($('pairNote'), 'The code is 6 digits.');
+      else if (st === 0) setText($('pairNote'), 'Can’t reach the Mac. Is the phone on the same Wi-Fi?');
+      else setText($('pairNote'), 'Pairing failed (' + st + ').');
+    });
+  }
+
+  function codeFromHash() {
+    var m = /(?:^#|&)p=(\d{6})(?:&|$)/.exec(window.location.hash || '');
+    if (!m) return null;
+    // the code must not stay in the address bar (or the history) once used
+    try {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      } else {
+        window.location.hash = '';
+      }
+    } catch (e) { window.location.hash = ''; }
+    return m[1];
+  }
+
+  // ---- the control screen
+  function render() {
+    var v = view;
+    if (!v || !v.ready) {
+      setText($('song'), '—');
+      setText($('snap'), '—');
+      status('Waiting for the Mac…', 'warn');
+    } else {
+      setText($('song'), v.song || 'No song');
+      var snap = '—';
+      if (v.snapshotCount > 0) {
+        snap = v.snapshotN === null || v.snapshotN === undefined ? 'Song levels' :
+          (v.snapshot || ('Scene ' + (v.snapshotN + 1)));
+      }
+      setText($('snap'), snap);
+      var drone = $('drone');
+      setText(drone, v.droneOn ? 'Drone: on' : 'Drone: off');
+      if (v.droneOn) addClass(drone, 'on'); else removeClass(drone, 'on');
+    }
+    var locked = !!(v && v.locked);
+    show($('locked'), locked);
+    var ids = ['prevSong', 'nextSong', 'prevSnap', 'nextSnap', 'drone'];
+    for (var i = 0; i < ids.length; i++) {
+      var b = $(ids[i]);
+      b.disabled = locked || !(v && v.ready);
+      if (ids[i] === 'prevSnap' || ids[i] === 'nextSnap') {
+        if (v && v.ready && !(v.snapshotCount > 0)) addClass(b, 'dis'); else removeClass(b, 'dis');
+      }
+    }
+  }
+
+  function connected() {
+    if (view && view.ready && view.audio && view.audio !== 'running') status('Connected · audio ' + view.audio, 'warn');
+    else if (view && view.ready) status(mode === 'ws' ? 'Connected' : 'Connected (slow mode)', 'ok');
+  }
+
+  function setView(v) {
+    if (!v || typeof v.seq !== 'number') return;
+    view = v;
+    render();
+    connected();
+  }
+
+  // ---- commands
+  function newId() {
+    idCounter += 1;
+    return (Math.floor(Math.random() * 2176782336)).toString(36) + '-' + idCounter.toString(36);
+  }
+
+  var ERRORS = {
+    locked: 'Locked on the Mac.',
+    'not-ready': 'The Mac isn’t ready yet.',
+    'rate-limited': 'Too fast: try again.',
+    'bad-command': 'The Mac didn’t understand that.'
+  };
+
+  function onAck(data) {
+    if (!data || !data.id || !pending[data.id]) return;
+    delete pending[data.id];
+    if (!data.ok) note(ERRORS[data.error] || 'Not done (' + data.error + ').');
+  }
+
+  function sendViaHttp(id) {
+    var p = pending[id];
+    if (!p) return;
+    p.tries += 1;
+    request('POST', '/api/cmd', { cmd: p.cmd, id: id }, function (st, data) {
+      if (st === 401) return showPair('This phone isn’t paired any more. Enter the code again.');
+      if (st === 200 && data) return onAck(data);
+      if (st === 429) { delete pending[id]; return note(ERRORS['rate-limited']); }
+      // no answer: the same id once more (the Mac runs an id once, so a retry can't do it twice)
+      if (pending[id] && pending[id].tries < 3) setTimeout(function () { sendViaHttp(id); }, 700);
+      else { delete pending[id]; note('Didn’t reach the Mac.'); }
+    });
+  }
+
+  function send(cmd) {
+    var id = newId();
+    pending[id] = { cmd: cmd, tries: 0 };
+    if (mode === 'ws' && ws && ws.readyState === 1 && ws.authed) {
+      try {
+        ws.send(JSON.stringify({ cmd: cmd, id: id }));
+        // an ack should come back at once; if not, the same id goes over HTTP
+        setTimeout(function () { if (pending[id] && pending[id].tries === 0) sendViaHttp(id); }, 1500);
+        return;
+      } catch (e) { /* fall through to HTTP */ }
+    }
+    sendViaHttp(id);
+  }
+
+  // ---- WebSocket
+  function stopTransport() {
+    stopped = true;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+    if (ws) { try { ws.onclose = null; ws.close(); } catch (e) { /* ignore */ } ws = null; }
+    if (pollXhr) { try { pollXhr.abort(); } catch (e2) { /* ignore */ } pollXhr = null; }
+  }
+
+  function openWs() {
+    if (stopped) return;
+    if (!window.WebSocket || wsFails >= 2) return startPolling();
+    var s;
+    try { s = new window.WebSocket('ws://' + window.location.host + '/ws'); } catch (e) { wsFails = 2; return startPolling(); }
+    ws = s;
+    s.authed = false;
+    s.onopen = function () { s.send(JSON.stringify({ auth: getToken() })); };
+    s.onmessage = function (ev) {
+      var data = null;
+      try { data = JSON.parse(ev.data); } catch (e) { return; }
+      if (!data) return;
+      if (typeof data.seq === 'number') {
+        if (!s.authed) { s.authed = true; wsFails = 0; }
+        setView(data);
+      } else if (data.id) {
+        onAck(data);
+      }
+    };
+    s.onclose = function (ev) {
+      if (ws !== s) return;
+      ws = null;
+      if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+      if (stopped) return;
+      if (ev && ev.code === 4001) return showPair('This phone isn’t paired any more. Enter the code again.');
+      if (!s.authed) wsFails += 1;
+      status('Reconnecting…', 'bad');
+      reconnectTimer = setTimeout(openWs, s.authed ? 1000 : 2000);
+    };
+    if (pingTimer) clearInterval(pingTimer);
+    pingTimer = setInterval(function () {
+      if (s.readyState === 1 && s.authed) { try { s.send('{"ping":1}'); } catch (e) { /* onclose follows */ } }
+    }, 20000);
+  }
+
+  // ---- polling (no WebSocket, or it keeps failing: some proxies and very old browsers)
+  function startPolling() {
+    if (stopped) return;
+    mode = 'poll';
+    poll();
+  }
+
+  function poll() {
+    if (stopped) return;
+    var since = view && view.ready ? '?since=' + view.seq : '';
+    pollXhr = request('GET', '/api/state' + since, null, function (st, data) {
+      pollXhr = null;
+      if (stopped) return;
+      if (st === 401) return showPair('This phone isn’t paired any more. Enter the code again.');
+      if (st === 200 && data) {
+        setView(data);
+        return poll();
+      }
+      status('Reconnecting…', 'bad');
+      reconnectTimer = setTimeout(poll, 2000);
+    });
+  }
+
+  function startMain() {
+    stopTransport();
+    stopped = false;
+    show($('pair'), false);
+    show($('main'), true);
+    view = null;
+    render();
+    status('Connecting…', 'warn');
+    if (mode === 'ws') openWs(); else startPolling();
+  }
+
+  // ---- taps: act on touchend (old iOS waits 300 ms for a click), and ignore the click that follows
+  function onTap(el, fn) {
+    var touched = false;
+    el.addEventListener('touchstart', function () { touched = true; addClass(el, 'down'); }, false);
+    el.addEventListener('touchcancel', function () { touched = false; removeClass(el, 'down'); }, false);
+    el.addEventListener('touchend', function (e) {
+      removeClass(el, 'down');
+      if (!touched) return;
+      touched = false;
+      e.preventDefault();
+      if (!el.disabled) fn();
+    }, false);
+    el.addEventListener('click', function () { if (!el.disabled) fn(); }, false);
+  }
+
+  onTap($('prevSong'), function () { send('prevSong'); });
+  onTap($('nextSong'), function () { send('nextSong'); });
+  onTap($('prevSnap'), function () { send('prevSnapshot'); });
+  onTap($('nextSnap'), function () { send('nextSnapshot'); });
+  onTap($('drone'), function () { send(view && view.droneOn ? 'droneOff' : 'droneOn'); });
+  onTap($('panic'), function () { send('panic'); });
+  onTap($('pairBtn'), function () {
+    var c = ($('code').value || '').replace(/\D/g, '');
+    if (c.length !== 6) return setText($('pairNote'), 'The code is 6 digits.');
+    pair(c);
+  });
+  $('code').addEventListener('keyup', function (e) {
+    if ((e.keyCode === 13 || ($('code').value || '').replace(/\D/g, '').length === 6) && !hasClass($('pair'), 'hidden')) {
+      var c = ($('code').value || '').replace(/\D/g, '');
+      if (c.length === 6) pair(c);
+    }
+  }, false);
+
+  // a page hidden for a while (phone locked) comes back with a fresh connection
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && getToken() && !hasClass($('main'), 'hidden') && !ws && mode === 'ws') {
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      openWs();
+    }
+  }, false);
+
+  var hashCode = codeFromHash();
+  if (hashCode) {
+    show($('pair'), true);
+    pair(hashCode);
+  } else if (getToken()) {
+    startMain();
+  } else {
+    showPair('');
+  }
+})();
+</script>
+</body>
+</html>

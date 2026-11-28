@@ -51,6 +51,8 @@ const SUITES = [
   { name: 'eq', groups: ['phase2'], cmd: [node, 'test/phase2/eq/run.mjs'], timeout: 10 * MIN },
   // menu-bar popover (app/mini.html) + the real app, two pages over BroadcastChannel (C7 menubar-B)
   { name: 'mini', groups: ['phase2'], cmd: [node, 'test/phase2/mini/run.mjs'], timeout: 10 * MIN },
+  // remote lane (D45): the browser remote page (ES5 checks + Chromium against rig-remote-dev, built on demand)
+  { name: 'remote', groups: ['phase2'], cmd: [node, 'test/phase2/remote/run.mjs'], timeout: 10 * MIN },
   // Chart view (D7, hidden): flag off = nothing; flag on = import, transpose follow, scroll, song switch; UI v6 U7b:
   // the chart in the v6 layout (v6.tests.mjs, ~2.5 min more on the 2-CPU box)
   { name: 'chart', groups: ['phase2'], cmd: [node, 'test/phase2/chart/run.mjs'], timeout: 9 * MIN },

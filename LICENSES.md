@@ -197,6 +197,7 @@ can be shipped inside a PolyForm Noncommercial app, provided the notices travel 
 | yyjson | `native/core/third_party/yyjson/` | MIT | `native/core/third_party/yyjson/LICENSE` |
 | QR Code generator (Project Nayuki, C++) | `native/core/third_party/qrcodegen/` | MIT | `native/core/third_party/qrcodegen/LICENSE` |
 | doctest (tests only, not shipped) | `native/core/third_party/doctest/` | MIT | `native/core/third_party/doctest/LICENSE.txt` |
+| acorn (tests only, not shipped: the remote page's ES5 check, an npm dev dependency) | `node_modules/acorn/` | MIT | `node_modules/acorn/LICENSE` |
 | miniaudio (Linux/Mac dev host only, not shipped) | `native/devhost/third_party/miniaudio/` | public domain (Unlicense) or MIT-0 | `native/devhost/third_party/miniaudio/LICENSE` |
 
 **Note on `js_tanh.cpp`:** glibc 2.39's `s_expm1.c` is fdlibm code under the Sun notice, with a one-line note
