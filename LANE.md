@@ -131,8 +131,11 @@ size rule). Try to break each, fix real defects with failing-first tests, write 
       (0 adopted / 10 busy), hold 9/1; realtime hold durations n=39 p50 0.4 ms p99 11 ms (1108 ms = offline
       prepare, worker null: no hold)
 - [ ] T1 TSan + ASan (new test + core3), 1000x loop on one compiler
-- [ ] T3 review + mutation repro (300 ms sleep), cost on loops, stats schema / bridge / MockNative
-- [ ] T2 review of every add path vs D9 + O4; double toast; views
+- [x] T3 review + mutation repro: builder's 300 ms prepare hold 3/3 FAIL (held 301 ms); hold in the reply's own
+      iteration 3/3 FAIL (the race of F1 lost rarely: reply() polls 1 ms). F1 fixed d7bbcdf. F3 fixed 56fdb32.
+- [x] T2 review of every add path vs D9 + O4; double toast; views. F2 fixed a68920c (ui-v6-bank case).
+      NOTE: playwright 1.56 wants chromium 1194, /opt/pw-browsers has 1243 only (box re-provisioned?): browser
+      suites run with PLAYWRIGHT_BROWSERS_PATH=/home/claude/scratch/core3f/pw-browsers (symlinks to 1243)
 - [ ] native gates: g++, clang-20 -Werror, ASan+UBSan, TSan; fixtures byte-identical
 - [ ] JS gates via gates.mjs
 - [ ] review doc + final report
